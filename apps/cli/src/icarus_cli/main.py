@@ -4,6 +4,8 @@ from typing import Annotated
 
 import typer
 from icarus_contracts.doctor import HealthStatus
+from icarus_core.config import ConfigManager
+from icarus_core.credentials import CredentialResolver
 from icarus_core.doctor import run_doctor_checks
 from icarus_core.persistence.migrations.runner import MigrationRunner
 from rich.console import Console
@@ -18,6 +20,13 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
+config_app = typer.Typer(
+    name="config",
+    help="Inspect and modify Icarus configuration settings.",
+    no_args_is_help=True,
+)
+app.add_typer(config_app, name="config")
+
 console = Console()
 
 
@@ -98,6 +107,122 @@ def doctor() -> None:
         )
         console.print(failure_msg)
         raise typer.Exit(code=1)
+
+
+@app.command(name="init")
+def init_cmd(
+    provider: Annotated[
+        str,
+        typer.Option("--provider", "-p", help="Primary model provider (grok, openrouter)."),
+    ] = "grok",
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", "-k", help="API key for the selected provider."),
+    ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", help="Run without interactive prompts."),
+    ] = False,
+) -> None:
+    """Initialize Icarus local storage, database, and model credentials."""
+    banner = (
+        "[bold cyan]Icarus Initialization[/bold cyan]\n"
+        "Configuring local environment, database migrations, and secure credentials."
+    )
+    console.print(Panel(banner, border_style="cyan"))
+
+    ensure_database_migrated()
+
+    selected_provider = provider.lower().strip()
+    selected_key = api_key
+
+    if not non_interactive:
+        selected_provider = (
+            typer.prompt(
+                "Select default model provider [grok/openrouter]",
+                default=selected_provider,
+            )
+            .lower()
+            .strip()
+        )
+
+        if not selected_key:
+            selected_key = typer.prompt(
+                f"Enter API key for {selected_provider}",
+                hide_input=True,
+            )
+
+    resolver = CredentialResolver()
+    if selected_key and len(selected_key.strip()) > 0:
+        resolver.store(selected_provider, selected_key.strip())
+        console.print(
+            f"[bold green]Securely stored API key for '{selected_provider}' "
+            f"in the OS keyring.[/bold green]"
+        )
+
+    cfg_manager = ConfigManager()
+    cfg = cfg_manager.load_config()
+    cfg.default_provider = selected_provider
+    if selected_provider == "openrouter":
+        cfg.model = "anthropic/claude-3.5-sonnet"
+    else:
+        cfg.model = "grok-2"
+    cfg_manager.save_config(cfg)
+
+    console.print(
+        f"[bold green]Configuration saved to {cfg_manager.config_path.as_posix()}[/bold green]"
+    )
+    console.print(
+        "\n[bold cyan]Icarus initialization complete! Run `icarus doctor` to verify.[/bold cyan]\n"
+    )
+
+
+@config_app.command(name="list")
+def config_list() -> None:
+    """Display active Icarus configuration settings and credential status."""
+    cfg_manager = ConfigManager()
+    settings = cfg_manager.list_settings()
+    active_provider = settings.get("default_provider", "grok")
+
+    resolver = CredentialResolver()
+    cred = resolver.resolve(active_provider)
+
+    table = Table(title="Icarus Configuration", show_header=True, header_style="bold cyan")
+    table.add_column("Setting", width=25, style="bold")
+    table.add_column("Value", style="green")
+
+    for key, value in settings.items():
+        table.add_row(key, str(value))
+
+    cred_status = (
+        f"[bold green]Configured ({cred.masked}, source: {cred.source.value})[/bold green]"
+        if cred.is_available
+        else "[bold yellow]Missing (run 'icarus init')[/bold yellow]"
+    )
+    table.add_row(f"credential ({active_provider})", cred_status)
+
+    console.print(table)
+
+
+@config_app.command(name="set")
+def config_set(
+    key: Annotated[str, typer.Argument(help="Configuration setting name to update.")],
+    val: Annotated[str, typer.Argument(help="New value for the setting.")],
+) -> None:
+    """Update a configuration setting in ~/.icarus/config.toml."""
+    cfg_manager = ConfigManager()
+    try:
+        updated = cfg_manager.set(key, val)
+        new_val = getattr(updated, key)
+        console.print(
+            f"[bold green]Updated[/bold green] [cyan]{key}[/cyan] = [yellow]{new_val}[/yellow]"
+        )
+    except KeyError as exc:
+        console.print(f"[bold red]Configuration error:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        console.print(f"[bold red]Validation error:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
 
 
 if __name__ == "__main__":

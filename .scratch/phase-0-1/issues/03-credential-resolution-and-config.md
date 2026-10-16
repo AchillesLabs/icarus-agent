@@ -4,11 +4,11 @@
 
 **Blocked by:** 01: Monorepo Foundation and Health Doctor Tracer Bullet
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Configuration manager loads and persists non-sensitive settings (default provider, model, temperature, budget) in `~/.icarus/config.toml`.
-- [ ] Credential resolver implements the 4-tier lookup hierarchy without leaking raw keys into logs or config files.
-- [ ] `icarus init` guides the user through setting up their primary provider (default Grok) and securely saves the API key to the OS keyring.
-- [ ] `icarus config list` and `icarus config set <key> <val>` allow inspecting and updating configuration with masked secrets.
-- [ ] `icarus doctor` checks credential availability and masked key display without revealing secret values.
-- [ ] Tests verify credential resolution order and mock keyring behavior.
+- [x] Configuration manager loads and persists non-sensitive settings (default provider, model, temperature, budget) in `~/.icarus/config.toml`.
+- [x] Credential resolver implements the 4-tier lookup hierarchy without leaking raw keys into logs or config files.
+- [x] `icarus init` guides the user through setting up their primary provider (default Grok) and securely saves the API key to the OS keyring.
+- [x] `icarus config list` and `icarus config set <key> <val>` allow inspecting and updating configuration with masked secrets.
+- [x] `icarus doctor` checks credential availability and masked key display without revealing secret values.
+- [x] Tests verify credential resolution order and mock keyring behavior.

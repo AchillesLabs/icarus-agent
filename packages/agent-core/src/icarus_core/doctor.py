@@ -5,9 +5,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from icarus_contracts import IcarusConfig
 from icarus_contracts.doctor import DoctorCheckResult, DoctorReport, HealthStatus
 from sqlalchemy import inspect
 
+from icarus_core.config import ConfigManager
+from icarus_core.credentials import CredentialNotFoundError, CredentialResolver
 from icarus_core.paths import get_icarus_home, get_icarus_logs_dir
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.migrations.runner import MigrationRunner
@@ -172,9 +175,45 @@ def check_database_connectivity(
         )
 
 
+def check_credentials(
+    resolver: CredentialResolver | None = None,
+    config: IcarusConfig | None = None,
+    home_dir: Path | None = None,
+) -> DoctorCheckResult:
+    """Verify presence and accessibility of credentials for the active configured provider."""
+    cfg_manager = (
+        ConfigManager(config_path=home_dir / "config.toml")
+        if home_dir is not None
+        else ConfigManager()
+    )
+    active_config = config or cfg_manager.load_config()
+    active_provider = active_config.default_provider
+
+    res = resolver or CredentialResolver()
+    cred_result = res.resolve(active_provider)
+
+    if cred_result.is_available:
+        return DoctorCheckResult(
+            name="Credentials & Authentication",
+            status=HealthStatus.OK,
+            message=f"Credential configured for provider '{active_provider}'",
+            details=f"Key: {cred_result.masked} (source: {cred_result.source.value})",
+        )
+
+    err = CredentialNotFoundError(active_provider)
+    return DoctorCheckResult(
+        name="Credentials & Authentication",
+        status=HealthStatus.WARNING,
+        message=f"No credential found for default provider '{active_provider}'",
+        details="Model generation and chat require valid API credentials.",
+        fix_hint=err.fix_hint,
+    )
+
+
 def run_doctor_checks(
     home_dir: Path | None = None,
     db_manager: DatabaseManager | None = None,
+    resolver: CredentialResolver | None = None,
 ) -> DoctorReport:
     """Run all standard environment diagnostic checks and return an aggregated DoctorReport."""
     checks = [
@@ -182,5 +221,6 @@ def run_doctor_checks(
         check_storage_directories(home_dir=home_dir),
         check_workspace_integrity(),
         check_database_connectivity(db_manager=db_manager, home_dir=home_dir),
+        check_credentials(resolver=resolver, home_dir=home_dir),
     ]
     return DoctorReport(checks=checks)

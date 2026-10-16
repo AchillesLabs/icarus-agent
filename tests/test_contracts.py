@@ -4,6 +4,9 @@ import uuid
 from datetime import UTC, datetime
 
 from icarus_contracts import (
+    CredentialResult,
+    CredentialSource,
+    IcarusConfig,
     MessageDTO,
     MessageRole,
     RunDTO,
@@ -82,3 +85,32 @@ def test_run_dto_creation():
     assert run.id == run_id
     assert run.status == RunStatus.QUEUED
     assert run.provider == "grok"
+
+
+def test_icarus_config_defaults():
+    cfg = IcarusConfig()
+    assert cfg.default_provider == "grok"
+    assert cfg.model == "grok-2"
+    assert cfg.temperature == 0.7
+    assert cfg.max_turns == 25
+    assert cfg.max_tokens_budget == 128000
+
+
+def test_credential_source_enum():
+    assert CredentialSource.CLI_ARG == "cli_arg"
+    assert CredentialSource.ENV_VAR == "env_var"
+    assert CredentialSource.KEYRING == "keyring"
+    assert CredentialSource.NONE == "none"
+
+
+def test_credential_result_model():
+    res = CredentialResult(
+        provider="grok",
+        secret="xai-secret-12345",
+        source=CredentialSource.ENV_VAR,
+        masked="xai-...2345",
+    )
+    assert res.provider == "grok"
+    assert res.secret == "xai-secret-12345"
+    assert res.source == CredentialSource.ENV_VAR
+    assert res.masked == "xai-...2345"
