@@ -1,0 +1,56 @@
+[project]
+name = "icarus-agent"
+version = "0.1.0"
+description = "Icarus - Modular, open-source, CLI-first AI agent platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "icarus-contracts",
+    "icarus-core",
+    "icarus-cli",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/contracts",
+    "packages/agent-core",
+    "apps/cli",
+]
+
+[tool.uv.sources]
+icarus-contracts = { workspace = true }
+icarus-core = { workspace = true }
+icarus-cli = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = [
+    "packages/contracts/src",
+    "packages/agent-core/src",
+    "apps/cli/src",
+]
+asyncio_mode = "auto"

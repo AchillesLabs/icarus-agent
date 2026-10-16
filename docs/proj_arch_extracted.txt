@@ -1,0 +1,812 @@
+OPENAGENT
+CLI-First AI Agent Platform
+Product Requirements, System Architectureand End-to-End Workflows
+
+
+
+SCOPE DECISION
+CLI remains the first implementation milestone. FastAPI enables self-hosted and managed remote execution. A Windows/macOS/Linux desktop app is approved as a later phase; no browser chat interface is in the current scope.
+
+
+
+Document version
+1.1 - Revised architecture baseline
+Date
+16 October 2026
+Delivery modes
+Local CLI • Self-hosted VPS • Managed AWS API • Planned cross-platform desktop app
+Primary language
+Python, managed with uv
+Owners
+AI/runtime lead: Aakash • Backend/API lead: teammate
+Status
+Architecture proposal for repository initialization
+Architecture choices are intentionally staged: the codebase should be extensible from day one, while infrastructure and operational complexity are introduced only when required.
+
+Contents
+1. Executive summary and decisions
+2. Product scope and deployment modes
+3. Target architecture
+4. Technology choices and rationale
+5. Repository structure
+6. End-to-end workflows
+7. Data model and user isolation
+8. FastAPI surface and CLI commands
+9. Security, reliability and token controls
+10. Deployment and operations
+11. Requirements and acceptance criteria
+12. Team collaboration and Git workflow
+13. Implementation roadmap
+14. Risks and decisions to revisit
+15. Integrations, OAuth and MCP
+16. Cross-platform desktop application
+17. Developer logging and diagnostics
+18. References
+1. Executive summary and decisions
+Build an open-source, CLI-first AI agent that users can run locally or deploy on their own VPS. The same agent-core powers a Typer CLI and a FastAPI service for remote execution, persistent scheduling and managed hosting. Add OAuth integrations and opt-in MCP support through permission-controlled tool adapters. A cross-platform desktop client (Tauri 2 + React/TypeScript, with the Python runtime packaged as a sidecar) is a planned later release; a browser chat UI remains out of current scope. We will operate a managed instance on AWS while users can self-host without depending on our servers.
+ARCHITECTURE IN ONE SENTENCE
+A modular Python monorepo managed by uv, with a shared agent-core package, a Typer CLI, a FastAPI service, and a separate worker/scheduler; SQLite for single-user local mode and PostgreSQL for server mode.
+
+Decision
+Baseline for the first release
+Product scope
+CLI and FastAPI first. Add a cross-platform desktop client after core/runtime and API contracts stabilize. Browser-based chat remains out of current scope.
+Language and packaging
+Python; uv workspace; src/ package layout; locked dependencies and reproducible builds.
+Agent orchestration
+LangGraph for stateful workflows; keep business rules and safety policies in our own runtime layer.
+Model access
+A provider-neutral adapter; LiteLLM may normalize cloud provider calls; support user BYOK and optional local inference.
+Persistence
+SQLite in local single-user mode; PostgreSQL in hosted/self-hosted server mode; Alembic migrations.
+Remote server
+FastAPI over HTTPS; authenticated CLI clients; API and worker share agent-core.
+Self-hosting
+Docker Compose deployment with reverse proxy, persistent database, worker and backup instructions.
+AWS launch
+Start with one appropriately sized EC2 or Lightsail VM for the pilot; keep a migration path to managed database and queue services.
+Public deployment
+Never run arbitrary untrusted shell/code tools in the shared API process. Tenant isolation and explicit tool permissions are release blockers.
+Integrations and MCP
+Use direct, least-privilege OAuth connectors for high-value services and an opt-in MCP client for compatible third-party tools. Curate recommendations; never auto-trust arbitrary servers.
+Desktop app (planned)
+Tauri 2 + React/TypeScript UI with a packaged Python sidecar, or a secure connection to a remote FastAPI server. Ship tested installers for Windows, macOS and selected Linux targets.
+Developer logging
+Human-readable console logs plus rotating local log files; structured request/run IDs, redaction tests, Docker log commands and CloudWatch integration for AWS.
+
+Success criteria for the first public CLI release
+Users can install the CLI, initialize configuration, select a provider/model, and chat without needing our hosted service.
+Users can start or deploy a FastAPI server and connect to it from a separate CLI installation using HTTPS and authentication.
+Conversations, agent runs and scheduled jobs persist across process restarts in server mode.
+API keys are not stored in plaintext, printed in logs, committed to Git, or sent to the model as prompt content.
+Automated tests cover core behavior, provider failures, scheduled-job claiming and cross-user access denial.
+Docker Compose deployment has health checks, migrations, TLS guidance, backup/restore guidance and an upgrade path.
+2. Product scope and deployment modes
+The product has three supported modes. They reuse the same core business logic, but they do not share the same trust boundary or storage configuration.
+2.1 Local CLI mode
+The user runs the agent on their own computer with `openagent chat` or `openagent run`.
+Local sessions and settings are stored under the user profile; SQLite is sufficient for an initial single-user installation.
+Provider keys should be stored in the operating-system credential store when available. Local inference may be configured through a local model server.
+Reminders that must trigger when no terminal is open require an always-running local daemon/service or a scheduler supplied by the operating system. A CLI process that has exited cannot deliver a notification by itself.
+No platform account is required for local mode unless the user chooses to connect to a remote service.
+2.2 Self-hosted VPS mode
+The user deploys their own FastAPI service and worker, normally with Docker Compose.
+The service owns the persistent database and runs scheduled jobs independently of the user laptop.
+The user connects from any CLI installation with a named server profile and a credential: `openagent server add home --url https://agent.example.com`.
+The self-hosting owner controls the VM, backups, TLS, model credentials and notification integrations.
+For the standard multi-process setup, use PostgreSQL. A one-process SQLite mode can be supported as a deliberately limited option, not as the default concurrent server database.
+2.3 Our managed AWS-hosted mode
+The same API and worker code run on infrastructure operated by us.
+Multiple unrelated users share compute and database infrastructure but have logically isolated accounts, data, credentials, runs, reminders and tool permissions.
+The CLI authenticates to our endpoint and sends requests over HTTPS. Every request is scoped to the authenticated identity on the server, not to a caller-supplied user ID.
+BYOK reduces our inference spend, but a remote run requires the service to use the user key. The key must be encrypted at rest and accessed only for that authorized run. A user who does not want the key to leave their device should use local execution.
+Hosting is not free simply because model inference is BYOK: compute, database, storage, egress, observability and backups still incur operating cost.
+2.4 Not in current scope
+No browser-based chat website, mobile application, public plugin marketplace, autonomous multi-agent swarm, arbitrary code execution in shared hosting, Kubernetes rollout, or self-hosted LLM GPU serving is required for the initial CLI/server release. A cross-platform desktop app is approved as a later roadmap phase after the runtime and API contracts stabilize. It will reuse the same Python agent-core rather than implement a second agent.
+3. Target architecture
+The architecture is a modular monolith first: the CLI, API, worker and agent core have clean module boundaries, but we do not split every component into a network service before there is a measured need. uv workspaces allow interconnected packages to share one lockfile while remaining separately testable [1].
+
+Figure 1. One agent core; local execution and remote execution are separate entry points.
+3.1 Main component responsibilities
+Component
+Responsibility / boundary
+CLI (`apps/cli`)
+Command parsing, terminal prompts/output, local/remote selection, authentication commands, cancellation and streamed event display. It must not duplicate the agent loop.
+FastAPI (`apps/api`)
+HTTP validation, authentication, authorization, rate limits, API contracts, SSE streaming and mapping service errors to safe HTTP responses.
+Application services
+Use-case orchestration: create run, append message, schedule task, read run status, manage user provider preferences.
+Agent core
+Agent state, LangGraph graph, context assembly, tool routing, iteration limits, interruption/approval and run finalization.
+Provider adapters
+Normalize model requests/responses and provider errors; expose capability metadata, usage data and configured retry/fallback behavior.
+Tool runtime
+Register only permitted tools, validate arguments, enforce permissions and timeout/resource boundaries, record results.
+Worker/scheduler
+Claim due jobs, resume authorized runs, execute notifications, retry safe failures and persist task outcomes.
+Persistence/repositories
+Database models, transactions, ownership-scoped queries and migrations. Domain services must not build ad hoc cross-tenant SQL.
+Credential manager
+OS keyring for local keys; encrypted storage plus separated key-management for server-side user credentials.
+Observability
+Structured events, correlation/run IDs, latency, token/usage metrics and redacted audit events; no secret or full sensitive prompt logging by default.
+OAuth integration layer
+Provider-specific OAuth flows and least-privilege scopes for Gmail, Calendar, Drive and later services. Credentials stay outside prompts and are resolved only for the authorized user/action.
+MCP client
+Connect to configured local stdio or authenticated remote MCP servers, discover tools, apply per-server/per-tool policies and normalize results. Third-party tools remain untrusted until explicitly approved.
+Desktop client (planned)
+Tauri 2 + React/TypeScript user interface. Starts a bundled Python sidecar for local mode or connects to a chosen remote FastAPI endpoint; does not duplicate agent reasoning.
+Logging and diagnostics
+Console and rotating local files in development, structured records with request/run/tool correlation IDs, redaction, CLI log inspection, and container/CloudWatch collection in deployment.
+
+3.2 Core runtime contract
+A run should be represented by a typed state object and a lifecycle, not a free-form infinite loop. At minimum, run state carries a run ID, owner/tenant context (server mode), session ID, task request, selected provider/model, messages/context references, tool results, approval state, cancellation signal, budget counters and final status.
+Run lifecycle: queued -> running -> waiting_for_approval -> running -> succeeded
+                                               |                     |
+                                               |                     +-> failed
+                                               +-> cancelled / expired
+ 
+Per-run hard limits: max model turns, max tool calls, wall-clock deadline,
+context/input budget, output-token budget, provider retry budget, optional spend cap.
+
+LangGraph is recommended for graph state, checkpoints and interruptible workflows. Keep our own application policies around it: allowed tools, ownership checks, cost/time limits, idempotency, error normalization and API semantics. LangGraph describes checkpointers for thread-level state and stores for longer-term information across threads [7].
+4. Technology choices and rationale
+Area
+Choice
+Why / rule
+Python
+Python 3.12 baseline; CI test 3.12 and 3.13
+Good ecosystem coverage for agent libraries. Re-evaluate interpreter range when all selected dependencies are tested.
+Package management
+uv workspace + committed `uv.lock`
+Reproducible installs and shared dependency resolution for core, CLI, API and worker [1].
+CLI
+Typer + Rich
+Clear command tree, shell-friendly exit codes, readable streaming output and helpful diagnostics.
+HTTP API
+FastAPI + Pydantic v2
+Typed request/response contracts, async endpoints, OpenAPI and streaming support. Use separate routers and application services [2].
+Agent workflow
+LangGraph
+Explicit state transitions, tool cycles, interruption and resumable execution; do not adopt multi-agent features until needed [7].
+LLM adapter
+Internal `ModelProvider` protocol; LiteLLM behind adapter for cloud models
+Normalizes provider calls and supports retries/fallbacks; keep LiteLLM models and exceptions out of domain code [8].
+Local inference
+Optional Ollama/OpenAI-compatible local endpoint
+Lets users run local models; no guarantee that any model supports every tool-calling or structured-output feature.
+Validation
+Pydantic v2
+Validate configuration, API payloads, tool arguments, plugin manifests and persisted task payload versions.
+ORM/migrations
+SQLAlchemy 2 + Alembic
+Explicit transactions, portable repository layer and versioned schema evolution.
+Database
+SQLite local; PostgreSQL server mode
+Simple local install while preserving a robust multi-user server database; test migrations on supported databases.
+Background work
+PostgreSQL-backed job table + worker first
+Avoids Redis dependency for initial single-VPS setup; atomically claim jobs. Migrate to SQS/managed scheduling when load warrants it.
+Secrets
+OS keyring locally; AWS Secrets Manager/KMS or equivalent envelope encryption server-side
+Separate application data from credential material and encryption keys.
+Packaging/deploy
+Python package + Docker Compose
+CLI install through a published package; reproducible self-hosting and one-server pilot [3,4].
+Monitoring
+Structured logs + OpenTelemetry-compatible tracing; CloudWatch on AWS
+Expose run-level latency, tool errors, token usage, task backlog and infrastructure health.
+Tests/quality
+pytest, Ruff, mypy or Pyright; dependency/secret scanning in CI
+Catch regressions without paying for live model API calls during normal CI.
+Desktop (planned)
+Tauri 2 + React/TypeScript; Python service bundled as an OS-specific sidecar
+Cross-platform Windows/macOS/Linux packaging while reusing agent-core. Restrict Tauri capabilities and sidecar commands; bind local service to loopback only [14,15].
+Direct app integrations
+Provider SDK/API adapters with OAuth 2.0/PKCE or appropriate device/local flow
+Users explicitly grant narrow scopes. Keep refresh tokens encrypted and tenant-scoped; Google sensitive/restricted scopes can require OAuth verification [13].
+MCP extensibility
+MCP client adapter; local stdio in local mode, authenticated remote HTTP transport where supported
+Reuse existing compatible servers without hard-coding each vendor. Curate servers and enforce per-tool allowlists, argument validation, output limits and approval policies [11,12].
+Developer logs
+Python logging + rotating files locally; stdout/stderr in containers; CloudWatch on AWS
+Configurable log level and directory, redaction, request/run/tool IDs and actionable failure diagnostics. Do not log secrets or sensitive message bodies by default [16].
+
+WHY NOT DJANGO OR GO NOW?
+Django is strong for admin-heavy web products but unnecessary for this API-first CLI/server MVP. Go can be added later for a measured performance bottleneck. Keeping the runtime and backend in Python reduces cross-language contracts and lets the AI lead and backend lead share types and tests.
+
+5. Repository structure
+Create a single public monorepo. Each Python application/library has its own `pyproject.toml`; the root `uv` workspace shares `uv.lock`. Only create the modules needed for the current milestone, but reserve these stable package boundaries.
+open-agent-platform/
+├── apps/
+│   ├── cli/                         # Typer/Rich terminal product
+│   │   ├── pyproject.toml
+│   │   └── src/openagent_cli/commands/ # init, doctor, chat, run, auth, server, tasks, logs, mcp
+│   ├── api/                         # FastAPI remote/self-hosted service
+│   │   ├── pyproject.toml
+│   │   └── src/openagent_api/       # routes, dependencies, middleware
+│   ├── worker/                      # Reminders and durable background tasks
+│   │   ├── pyproject.toml
+│   │   └── src/openagent_worker/    # scheduler and handlers
+│   └── desktop/                     # Later phase: Tauri 2 + React/TypeScript
+│       ├── package.json
+│       ├── src/                     # Desktop UI; no agent logic here
+│       └── src-tauri/
+│           ├── src/                  # Minimal Rust shell and lifecycle
+│           └── binaries/             # CI-generated OS-specific Python sidecar
+├── packages/
+│   ├── agent-core/                  # Runtime shared by CLI, API, worker and desktop sidecar
+│   │   ├── pyproject.toml
+│   │   └── src/openagent_core/
+│   │       ├── runtime/             # Bounded execution loop/lifecycle
+│   │       ├── graph/               # LangGraph state/nodes
+│   │       ├── context/             # Token budget, prompt assembly, compaction
+│   │       ├── providers/           # Model interface, routing and adapters
+│   │       ├── tools/               # Schemas, registry, executor and policies
+│   │       │   └── mcp/              # MCP client, discovery and transport adapters
+│   │       ├── integrations/        # Gmail, Calendar, Drive, GitHub connectors
+│   │       ├── memory/              # User memory and retrieval
+│   │       ├── persistence/         # Repository interfaces
+│   │       ├── security/            # Permissions, approvals and redaction
+│   │       └── observability/       # Structured logs, metrics and traces
+│   └── contracts/                  # Versioned shared DTOs and event schemas
+├── deploy/
+│   ├── compose/                    # Local and self-host deployment
+│   └── aws/                        # AWS pilot and later infrastructure as code
+├── docs/
+│   ├── architecture/               # ADRs and diagrams
+│   ├── integrations/               # OAuth, provider and MCP server setup
+│   ├── desktop/                    # Build, packaging, signing and release
+│   ├── self-hosting/               # VPS install, upgrade, backup and restore
+│   ├── security/                   # Threat model and incident runbook
+│   └── contributing.md
+├── tests/                          # unit, integration, security, desktop smoke and evals
+├── scripts/
+├── .github/workflows/              # CI matrix + release/build pipelines
+├── pyproject.toml                  # uv workspace and shared tooling
+├── uv.lock
+├── pnpm-workspace.yaml             # Added when desktop UI is bootstrapped
+├── .env.example
+├── .gitignore
+├── README.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
+
+5.1 Package dependency direction
+contracts  <- cli
+contracts  <- api
+contracts  <- worker
+agent-core <- cli
+agent-core <- api
+agent-core <- worker
+ 
+agent-core must not import FastAPI, Typer, web routes, or deployment code.
+API and CLI must call the same application/runtime interfaces, not duplicate the model/tool loop.
+
+Do not share a single global mutable “current user” or conversation object between API requests. Request context and run state are created per request/run, and server-side owner identity is passed explicitly.
+6. End-to-end workflows
+6.1 Local CLI chat
+1. User installs the package and runs `openagent init`. The CLI creates the application data directory, local database and config profile.
+2. User configures a provider/model. The API key is saved in the OS keyring where supported; only a provider reference is written to ordinary config.
+3. `openagent chat` loads the local session and calls the shared agent-core directly (no HTTP round-trip required).
+4. Agent-core assembles context, checks token and run budgets, invokes the selected model adapter, and validates any returned tool calls.
+5. Tool executor enforces a policy and schema before running a tool. Results are persisted and inserted into context within budget.
+6. The runtime finishes, saves the run/session, emits usage metadata and returns a final answer. Exit codes distinguish success, provider failure, cancellation and configuration errors.
+6.2 Self-host on a user's VPS and connect with CLI
+1. User provisions a Linux VPS and installs Docker Engine/Compose, or follows a supported native installation path.
+2. User creates a deployment config, a strong initial admin credential, provider configuration and a persistent data volume. Secrets are permission-restricted.
+3. Compose starts the reverse proxy, FastAPI, worker/scheduler and PostgreSQL. Only HTTPS is public; database and internal service ports remain private.
+4. The owner points DNS at the VPS and configures TLS. The deployment validates migration state and health before accepting client traffic.
+5. On a laptop, the user runs `openagent server add home --url https://agent.example.com`, then authenticates and selects the `home` profile.
+6. CLI requests use HTTPS and the configured token. FastAPI resolves the authenticated identity, authorizes the resource, persists work and streams run events back to the CLI.
+7. Background tasks continue even if the laptop CLI exits. The owner monitors health, performs backups and applies upgrades.
+# Proposed CLI command surface; finalize names against tests and docs
+openagent init
+openagent doctor --verbose
+openagent chat
+openagent run "Summarize these files"
+openagent auth login --server managed
+openagent server add home --url https://agent.example.com
+openagent --server home chat
+openagent tasks list --server home
+openagent mcp list
+openagent mcp add <name> --transport stdio -- <approved-command>
+openagent mcp test <name>
+openagent logs --follow
+openagent serve                        # optional local FastAPI service
+
+6.3 Our managed AWS-hosted CLI service
+1. User obtains an account/CLI credential through the supported enrollment flow. Access tokens are short-lived; refresh/session credentials can be revoked.
+2. CLI posts a run request with an idempotency key and session reference to the HTTPS API.
+3. API derives user_id/tenant_id from authenticated server-side identity, applies rate limits and quota rules, checks request schemas, and persists a run record.
+4. Agent execution runs in the managed worker/runtime with the caller’s approved provider credentials and tool grants. In hosted mode, arbitrary shell/code execution is disabled by default.
+5. Events are persisted or streamed using SSE. If the connection drops, the CLI can query run status and resume streaming without creating a second run.
+6. Usage, outcome, provider/model, token counts and redacted audit metadata are recorded. Data-access and deletion policies are documented for users.
+6.4 Agent tool-call workflow
+User request
+  -> Build bounded context (instructions + relevant history + allowed tools)
+  -> Call model
+  -> If final response: persist result and finish
+  -> If tool call: validate schema and authorize tool/arguments
+  -> If sensitive write: pause for approval unless an explicit policy grants it
+  -> Execute with timeout/resource limits; normalize tool result/error
+  -> Record result; compact context if needed; repeat within budgets
+  -> Persist final status and usage
+
+External web pages, documents, emails and plugin outputs are untrusted input. Never interpret them as policy overrides. Tool permissions are enforced in code, not granted by the model.
+6.5 Reminder and scheduled-task workflow
+
+Figure 2. Reminders are durable jobs, not prompt text the model must remember.
+1. Parse the requested local time and timezone explicitly. Resolve it to an absolute UTC timestamp while retaining the original timezone for display and daylight-saving interpretation.
+2. Write a durable job record: owner_id, task payload, due_at, timezone, status, delivery target, retry policy, idempotency key and schema version.
+3. A scheduler finds due jobs. In PostgreSQL, workers can atomically claim rows in a short transaction (for example using row locks and `SKIP LOCKED`); do not hold a database transaction open while an LLM or external notification call runs.
+4. The worker revalidates the job owner and active permission grants, then executes the reminder/agent workflow. A simple reminder should not require an LLM.
+5. Deliver through a configured channel such as email or webhook. Printing in a terminal is insufficient if the terminal is closed; document what notification channels are configured.
+6. Record success/failure, retry only safe failures with bounded exponential backoff and jitter, and prevent duplicate sends with idempotency or provider-supported delivery IDs.
+For a small self-hosted deployment, a PostgreSQL-backed job table plus worker is a reasonable baseline. At higher AWS scale, use EventBridge Scheduler and SQS for time-triggered dispatch/retries, with a worker consuming the queue [5].
+6.6 BYOK workflow
+Local mode:
+CLI -> OS keyring -> provider adapter -> provider API
+ 
+Hosted/self-hosted remote mode:
+CLI --HTTPS--> API -> credential reference -> decrypt only when needed -> provider adapter
+ 
+Rules:
+- Never send API keys in prompts, tool descriptions or logs.
+- Never expose provider keys to the browser or other tenants.
+- Encrypt server-side secrets at rest with encryption keys stored separately.
+- Never silently switch to a user's paid key after a free provider quota ends.
+- Tell users that remote execution means their key is processed by the server they selected.
+
+7. Data model and user isolation
+Local mode is single-user by default. Server mode is multi-user and must enforce isolation at every layer. PostgreSQL row-level security (RLS) can provide defense in depth, but policies must be correctly configured; database owners/superusers can bypass ordinary RLS behavior unless roles and policies are designed carefully [6].
+Entity/table
+Key fields and purpose
+users / identities
+id, status, created_at, auth subject or local user identifier. Hosted account owner.
+api_credentials
+id, owner_id, provider, encrypted_secret, key_version, masked_suffix, created_at, revoked_at. Never store raw keys.
+sessions
+id, owner_id, mode, title, created_at, updated_at, metadata_version.
+messages
+id, session_id, owner_id, role, content/ref, token estimate, created_at. Apply ownership through session and explicit query scopes.
+agent_runs
+id, owner_id, session_id, status, provider/model, budget counters, timestamps, error category, idempotency key.
+tool_calls
+id, run_id, owner_id, tool name/version, validated arguments reference, result reference, approval state and outcome.
+memories
+id, owner_id, memory type, value or content reference, provenance, retention, embedding reference if enabled.
+scheduled_jobs
+id, owner_id, due_at, timezone, status, payload version, lock/lease, attempts, next_attempt_at, delivery target, idempotency key.
+integration_grants
+id, owner_id, provider, granted scopes, encrypted token reference, expiry, revocation state.
+audit_events
+id, owner_id, actor, action, resource ID, result, timestamp, correlation ID; never include secret values.
+
+7.1 Isolation invariants
+Identify the current owner from a validated session/token; never trust user_id or tenant_id provided in a request body.
+Every read, update and delete is scoped by both resource ID and authenticated owner. A random UUID is not authorization.
+Every background job stores owner_id and rechecks ownership/permission at execution time. Queue messages are hints/identifiers, not proof of authorization.
+Every memory/vector query is filtered to the owner before retrieved text enters the prompt. Test cross-tenant retrieval explicitly.
+Use a restricted application DB role and consider RLS as a second guard. Add tests for policy bypass, transaction-local tenant context and connection-pool reuse.
+Use tenant-scoped quotas and rate limits to prevent one user from starving other users.
+7.2 Data lifecycle
+Define retention and deletion behaviors before public launch. Deleting an account should revoke connected tokens, cancel queued jobs, delete or anonymize conversations/memories according to the documented policy, and remove stored credentials. Backups expire under a published retention schedule; deletion from backups may be delayed until backup rotation completes, and this must be disclosed.
+8. FastAPI surface and CLI commands
+FastAPI is the HTTP boundary, not the agent itself. Keep the endpoint set small and versioned. Use typed request/response models from `packages/contracts`, and do not expose database model objects directly.
+Endpoint (proposed)
+Purpose / rule
+GET /v1/health/live
+Process is alive; no expensive dependency checks.
+GET /v1/health/ready
+Readiness: required database/provider configuration is available; keep response free of secrets.
+POST /v1/runs
+Create a run; accepts session reference, input and idempotency key; server derives owner identity.
+GET /v1/runs/{run_id}
+Read status/result only if caller owns the run.
+GET /v1/runs/{run_id}/events
+Stream token/tool/status events with SSE; support reconnect/Last-Event-ID if implemented.
+POST /v1/runs/{run_id}/cancel
+Request cooperative cancellation for an owned run.
+GET/POST /v1/sessions
+List/create caller-owned sessions.
+GET /v1/sessions/{id}/messages
+Read messages only when session belongs to caller.
+GET/POST /v1/tasks
+List/create reminders or background tasks.
+GET /v1/tasks/{task_id}
+Read task status only for owner.
+POST /v1/tasks/{task_id}/cancel
+Cancel an owned task, subject to current execution state.
+GET /v1/providers/capabilities
+Return supported provider/model capability metadata; never return keys.
+GET/POST/DELETE /v1/provider-configs
+Manage caller's provider selection and secret references with masked responses and explicit deletion.
+
+8.1 API behavior standards
+Use a `/v1` prefix and version contracts deliberately; breaking changes require a new version or migration policy.
+Return a stable error body with a machine-readable code, safe message and correlation ID. Never return stack traces or upstream secret-bearing payloads.
+Support request timeouts, client disconnect/cancellation, rate limits, payload size limits and explicit run budgets.
+Use SSE for incremental run events rather than inventing a custom websocket protocol unless two-way streaming is needed.
+Generate and test the OpenAPI schema in CI. The CLI remote client should consume shared typed contracts or a generated client, not hand-copy request schemas.
+9. Security, reliability and token controls
+9.1 Authentication and authorization
+Mode
+Minimum control
+Local CLI
+No account requirement. Use filesystem permissions and OS account boundaries; local mode warns when exposed services are enabled.
+Private self-host
+Bootstrap a strong initial admin credential; issue revocable client tokens; bind internal ports privately and require HTTPS for remote clients.
+Managed multi-user
+Authenticated account identity, short-lived access tokens, refresh/session revocation, server-derived owner context, per-user quotas and audit events. Prefer a standard OAuth/OIDC/device-login design for CLI rather than inventing an auth protocol.
+Admin/operator
+Separate operator/admin privileges from end-user tools. Operational access must not implicitly grant routine application access to user secrets.
+
+9.2 Tool security
+Filesystem tools are limited to approved roots; resolve paths and reject path traversal and symlink escapes.
+Shell execution is disabled by default in hosted mode. If added later, use an isolated per-run container/VM with CPU, memory, process, time, filesystem and network limits.
+Destructive writes, sending messages and sensitive external actions require explicit approval or a user-defined, narrowly scoped policy.
+Plugins are untrusted by default. A manifest describes tools, schemas and permissions; installing a plugin does not automatically authorize all of its requested permissions.
+External content is prompt-injection-prone. Keep it separate from system policy, and do not allow content to change permissions or credentials.
+9.3 Context/token/cost budget
+input_budget = model_context_window - output_reserve - safety_margin
+ 
+Context order (initial policy):
+1. Non-negotiable system/safety instructions
+2. Current task and constraints
+3. Only the tools allowed for this run
+4. Retrieved owner-scoped memory/documents
+5. Recent conversation messages
+6. Summary of older history
+ 
+Track: estimated input tokens, provider-reported usage, output tokens, model calls,
+tool calls, elapsed time, retries and estimated cost per run.
+
+Use model-specific token counting when possible; provider usage metadata is authoritative when provided. Never assume a single tokenizer fits every model.
+Compact history before the context limit is reached. Preserve task goals, explicit constraints, pending approvals, tool outcomes and unresolved actions.
+Cap tool calls, graph iterations, output tokens, provider attempts, wall-clock duration and optional spend per run.
+Fallback only to a model that supports the needed tool/structured-output capabilities and fits the context budget. Respect retry-after and use bounded exponential backoff with jitter.
+No silent BYOK fallback: if the user's free quota ends, ask or follow an explicit user-selected policy before using a key that may incur a charge.
+9.4 Reliability and idempotency
+Give each run/task a stable ID and each write/action an idempotency key when duplicate execution can cause harm.
+Persist state transitions before acknowledging durable task creation. A successful HTTP response must not claim a reminder was stored unless it is committed.
+Use bounded retries for transient errors only. Do not retry invalid credentials, malformed arguments or non-idempotent side effects blindly.
+Worker leases must expire and be reclaimable after crashes. Record attempt count, last error category and next retry time.
+Use structured JSON logs and correlation IDs; redact provider keys, OAuth tokens, sensitive prompt payloads and private file content.
+10. Deployment and operations
+10.1 Local development workflow
+# Root workspace (example command pattern; final package names are defined in code)
+uv sync --all-packages
+uv run --package openagent-cli openagent doctor
+uv run --package openagent-cli openagent chat
+uv run pytest
+uv run ruff check .
+uv run mypy packages/agent-core/src apps/api/src apps/cli/src
+
+Pin dependency ranges thoughtfully, commit `uv.lock`, and use `uv sync --locked` in CI/release builds. Workspace members need their own `pyproject.toml`; workspace dependencies are declared explicitly [1].
+10.2 Self-hosted VPS deployment
+VPS (single machine for first self-hosted release)
+  Internet
+    -> Caddy / TLS reverse proxy (ports 80/443)
+      -> FastAPI container (private network)
+      -> Worker/scheduler container (private network)
+      -> PostgreSQL container or dedicated database (private network)
+  Persistent volumes: database + configured file/artifact directory
+  Secret config: owner-only file or deployment secret mechanism
+  Backups: encrypted, off-instance, with restore test instructions
+
+Publish one supported Compose file, an environment template, health checks, restart policies, database migration commands and upgrade/rollback notes.
+Expose only 80/443 publicly. Restrict SSH to known addresses or use an appropriate provider management facility. Never expose PostgreSQL, Redis or internal worker ports directly.
+TLS must terminate at a maintained reverse proxy such as Caddy/Nginx/Traefik. Correctly trust forwarded headers only from that proxy [3].
+Use named persistent volumes and documented backup/restore commands. Test restoration to a clean VM before calling backups reliable.
+For private customer deployments, customer operators own their VPS patching, billing, backups, model provider keys and notification credentials. Document these responsibilities clearly.
+Docker documents a single-server Compose deployment as a valid starting pattern, with production-specific settings such as restart policies, external configuration and deployment overlays [4].
+10.3 Our AWS-hosted pilot
+Recommendation: start with a single EC2 VM if we want more direct access to AWS networking, IAM and operational services; Lightsail is a simpler fixed-bundle VPS alternative for a small pilot [9]. No GPU is required if inference uses external BYOK/provider APIs. If a local model is hosted on our server, hardware and cost assumptions change substantially.
+Layer
+Pilot deployment
+Before broad public scale
+Compute
+One EC2 VM with Docker Compose: reverse proxy, API and worker containers.
+Separate/scale API and worker capacity; consider ECS Fargate or equivalent.
+Database
+PostgreSQL with persistent storage and tested off-instance backups; minimize blast radius.
+Managed RDS PostgreSQL, private network access, automated backups, point-in-time recovery and monitoring.
+Jobs
+PostgreSQL-backed durable job table/worker.
+SQS for queue delivery and EventBridge Scheduler for timed jobs where appropriate [5].
+Secrets
+Restricted deployment secret store; no secrets in image/repository.
+AWS Secrets Manager and KMS/envelope encryption, least-privilege IAM role per service.
+Files
+Persistent disk for pilot only where necessary.
+S3 or compatible object storage with lifecycle and access policies.
+TLS/network
+Caddy or managed TLS; database never publicly reachable; restrict admin access.
+Private subnets, security groups, managed ingress/WAF if justified, environment separation.
+Monitoring
+CloudWatch logs/metrics, health checks, disk alerts, failure alarms and cost alarms.
+Dashboards, SLO alerts, queue-backlog alarms, load tests, incident runbooks and recovery drills.
+
+FastAPI deployment guidance emphasizes HTTPS, startup/restarts, replication, memory and proxy configuration as separate operational concerns [2,3]. AWS Systems Manager Session Manager can provide administrative access to supported instances without opening inbound SSH ports when configured correctly [10].
+10.4 Release/deploy pipeline
+1. Pull request: Ruff, static type checks, unit/integration tests, security scanning, secret scanning and package build.
+2. Merge to main: build an immutable container image, tag it with a commit SHA and publish it to a registry such as Amazon ECR when using AWS.
+3. Deploy to staging, run database migrations as a single controlled step, wait for readiness health checks and run a smoke test through the CLI.
+4. Promote the same image to production, monitor 5xx/latency/worker backlog and preserve a rollback plan. Do not run migrations concurrently in every API worker.
+5. Use short-lived CI-to-AWS credentials through an identity federation/OIDC role where possible rather than long-lived access keys in GitHub secrets.
+10.5 Cost boundaries
+The software can be open source and users can bring their own model keys. That does not remove VPS, storage, networking, domain, email/SMS, monitoring or backup costs. Publish a clear local/self-host/managed comparison. The managed service should have hard task/request limits and per-tenant controls so a runaway agent cannot create unbounded infrastructure or provider costs.
+11. Requirements and acceptance criteria
+11.1 Functional requirements
+ID
+Requirement
+Acceptance criterion
+FR-01
+CLI initialization/configuration
+`openagent init` creates a valid profile/data store and validates required values without printing secrets.
+FR-02
+Provider/BYOK configuration
+User can select provider/model and safely add, test, replace and delete their key; provider-specific failure messages are normalized.
+FR-03
+Chat/run
+Agent supports interactive chat and one-shot task execution through the shared runtime.
+FR-04
+Bounded tool calling
+Tools have typed schemas, explicit permissions and execution/time budgets; disallowed tools are rejected regardless of model request.
+FR-05
+Persistence
+Local history persists locally. Server-mode history and runs persist in PostgreSQL through restarts.
+FR-06
+Remote CLI
+CLI stores named server profiles and sends authenticated HTTPS requests; disconnecting the client does not duplicate runs.
+FR-07
+Self-host deployment
+A user can deploy FastAPI + worker + database from documented Compose configuration and access it through TLS.
+FR-08
+Reminders/tasks
+A due job is claimed once, executes with the correct owner and delivery target, and records success/failure/retry state.
+FR-09
+Tenant isolation
+Automated tests prove one user cannot query another user's run, session, memory, credential, or task by guessing an ID.
+FR-10
+Operations
+Health/readiness, structured logs, task status, model usage, graceful shutdown and documented backup/restore are available.
+FR-11
+OAuth integrations
+Users can authorize and revoke a provider connection with least-privilege scopes; credentials are owner-scoped, encrypted where server-side, excluded from prompts and redacted from logs.
+FR-12
+MCP interoperability
+A user can list, test, enable and disable configured MCP servers; tools are discovered but not trusted automatically; per-tool permissions, timeouts, result-size limits and approval policies are enforced.
+FR-13
+Cross-platform desktop (planned)
+A later release builds and smoke-tests Windows, macOS and Linux packages; the desktop UI uses the same agent-core through a bundled Python sidecar or explicit remote API mode.
+FR-14
+Developer diagnostics
+A developer can set log level and log directory, tail CLI/API/worker logs, correlate errors by request/run ID, and export a redacted diagnostic bundle without revealing credentials or private prompts by default.
+
+11.2 Non-functional requirements
+Quality
+Requirement
+Security
+TLS for remote traffic; least privilege; secrets redacted; secure headers/configuration; explicit approvals for sensitive actions; dependency scanning.
+Reliability
+Timeouts, cancellation, retry budgets, idempotency for side effects, worker leases, health checks and recoverable failures.
+Performance
+Async I/O for network calls; bounded concurrency; no blocking LLM/browser call on API event loop; connection pooling; measure before optimizing.
+Scale
+API remains stateless apart from durable stores; run state and scheduled work are persisted; workers can be replicated without duplicate job execution.
+Portability
+CLI and the planned Tauri desktop target supported Windows/macOS/Linux builds; self-host Compose targets supported Linux servers; provider and integration adapters are replaceable.
+Maintainability
+Typed internal contracts, small packages, ADRs, migrations, reproducible lockfile, code owners and tests at boundaries.
+Privacy
+Minimize retained content; document processing/retention; user export/delete flow is specified before managed public launch.
+Observability
+Configurable console/file logs, rotating files in local development, request/run/tool correlation IDs, redaction tests, health checks and CloudWatch collection in AWS. Never log API keys, OAuth tokens or sensitive message bodies by default.
+
+11.3 Release gates
+No critical/high unresolved cross-tenant access bug or secret-leak bug.
+CI passes offline/mock tests without real provider credits.
+Run/task limits and cancellation work under provider timeout and tool failure tests.
+Backup restoration has been tested on an empty environment.
+Self-host guide explains installation, environment setup, TLS, firewall, update, backup, restore and uninstall.
+Provider quotas and pricing are never presented as guaranteed fixed values in code or docs.
+12. Team collaboration and Git workflow
+12.1 Ownership
+Owner
+Primary areas
+Boundary
+Aakash — AI/runtime
+`packages/agent-core`, `apps/cli`, provider/tool/context logic, LangGraph, token/cost budgets, evals.
+Exports typed runtime/application interfaces; does not implement API auth or write database queries in tool code.
+Teammate — backend
+`apps/api`, `apps/worker`, persistence implementation, auth, tenant authorization, schemas/migrations, deployment.
+Uses agent-core interfaces; must not implement a second agent loop inside FastAPI routes.
+Joint
+`packages/contracts`, architecture decisions, threat model, integration tests, release decisions.
+Changes to shared contracts require a PR and a corresponding test/migration note.
+
+12.2 Pull request workflow
+1. Create a short architecture decision record before a decision affects more than one package (for example auth model, job queue, credential encryption or provider abstraction).
+2. Create issues by package and assign one accountable owner. Avoid both developers editing the same core interfaces simultaneously.
+3. Use feature branches and small PRs. Require at least one review for changes to auth, tenant isolation, credentials, tools or migrations.
+4. Every PR includes tests and documentation for behavior changes. Database changes include Alembic migrations and rollback/recovery notes.
+5. CI runs format/lint, types, tests, security scans and build checks. Main should always be installable and runnable at the documented milestone.
+6. Tag releases with semantic versioning once public releases begin; maintain changelog and compatibility policy for CLI config, API and plugin manifests.
+12.3 Definition of done for a module
+A module is done when its interface is documented, typed, tested in isolation, has normalized errors, has no embedded credentials, emits useful redacted telemetry, and is integrated through its intended boundary. A folder containing placeholder files is not an implemented module.
+13. Implementation roadmap
+Phase
+Deliverables
+Done when
+0. Repository foundation
+Public repo, uv workspace, package boundaries, Ruff/type/test config, CI, README, LICENSE, architecture decision records.
+A fresh clone can sync with uv, run tests, and execute CLI/API health smoke tests.
+1. CLI + runtime skeleton
+`init`, `doctor`, config, typed domain errors, provider protocol, one provider adapter, mocked tests.
+Local chat works with one configured model; missing/invalid key fails cleanly.
+2. Agent/tool loop
+LangGraph state, tool registry/schemas, bounded loop, policies, approval interruption, cancellation.
+A model can request one safe tool, receive result and finish; disallowed tools cannot execute.
+3. Context and local persistence
+Token budgeting, conversation history, compaction, usage events, local SQLite.
+Restart preserves history; prompts fit configured budgets; no whole-history growth without compaction.
+4. FastAPI and VPS mode
+API contracts, auth, PostgreSQL/Alembic, remote CLI profiles, worker, reminder jobs, Compose and TLS docs.
+CLI can connect to a self-hosted server; reminders persist and execute after CLI exits; tests prove isolation.
+5. Security hardening + BYOK
+Credential vault, token revocation, rate limiting, tenant-scoped memory and runs, audit events, threat-model tests.
+Security release gates pass; no plaintext key storage/logging; cross-tenant attacks are denied.
+6. AWS pilot
+EC2/Lightsail Compose deploy, TLS, backups/restore, CloudWatch, release pipeline, cost alarms and runbooks.
+A tagged release deploys reproducibly and can roll back; operators can restore data and diagnose failures.
+7. Cross-platform desktop
+Tauri 2 + React/TypeScript UI; bundle Python runtime as per-OS sidecar; add local/remote mode toggle, secure localhost handshake, OS keyring use and CI build matrix.
+Smoke-tested installers work on supported Windows, macOS and Linux targets; local service binds only to loopback; signatures/notarization documented.
+8. Scale when justified
+Managed DB, SQS/EventBridge, object storage, worker/API scaling, load tests and SLOs.
+Performance measurements justify service separation and operational changes; failover/backups are tested.
+
+BUILD ORDER
+Do not start with Kubernetes, a plugin marketplace, multi-agent orchestration or a custom auth platform. First make a single-user local CLI dependable; then add a secure single-owner self-hosted server; then harden tenant isolation before enabling a shared managed instance.
+
+14. Risks and decisions to revisit
+Risk / open question
+Decision / mitigation
+Provider quotas change or free models disappear
+Represent provider/model availability as configurable capability data; handle 429/timeouts; BYOK remains opt-in and no paid fallback is silent.
+Shared-host tool execution is unsafe
+Disable shell and arbitrary code in managed hosting initially; if introduced, isolate per-run with strong sandbox and network/resource controls.
+Reminder executes twice or late
+Use durable DB jobs, atomic claiming, leases, idempotency, retry policy and observable delivery state. State the latency guarantee honestly.
+API key exposure
+Local OS keyring; encrypted server-side credentials; separated encryption keys; masked UI/CLI output; log redaction; rotation and revocation.
+Cross-user data leaks
+Server-derived owner context, tenant-filtered repositories, optional RLS, security tests for every resource type and worker path.
+Single VPS failure
+Treat first AWS deployment as a pilot, not high availability. Back up off-instance, test restoration, monitor disk/CPU/queue/errors; migrate stateful services to managed options as usage grows.
+Complexity creep
+Only add Redis, multiple workers, vector search, Kubernetes or service splits when a measured product requirement exists.
+Model/tool capability mismatch
+Maintain a capability registry (tool calls, context, structured output, vision, streaming); select fallbacks compatible with the requested action.
+CLI key on remote server
+A remote API key must be sent over TLS and is processed/stored by the destination service; clearly describe this and offer local mode for users who keep secrets on their own machine.
+MCP server compromise or prompt injection
+Treat server metadata and tool outputs as untrusted; curate recommendations; pin versions where possible; require user opt-in; use per-tool permission policies, timeouts, output limits and approval for sensitive actions. Never run arbitrary MCP subprocesses inside the shared hosted worker.
+OAuth scope or token misuse
+Use least-privilege scopes, state/PKCE where applicable, encrypted refresh-token storage, revocation handling and owner-bound credentials. Plan provider verification/review for sensitive or restricted Google scopes.
+Desktop localhost API exposure
+Bind the Python sidecar to 127.0.0.1 only on an ephemeral port; use a random per-launch secret, strict origin/CSRF protections, narrow Tauri capabilities and terminate the sidecar on app exit.
+Logs accidentally disclose user data
+Use structured redaction and tests; no tokens, API keys, OAuth refresh tokens or message bodies by default. Make verbose content logging an explicit opt-in with clear warnings.
+Desktop packaging/signing failure
+Build on supported OS runners, test clean installs, keep signing credentials in CI secrets, document macOS notarization and publish checksums/signatures for releases.
+
+15. Integrations, OAuth and MCP
+OpenAgent should offer two complementary integration paths: first-party OAuth connectors for high-value services where we need a predictable security and permission model, and an MCP client for compatible third-party tools. MCP is an interoperability layer, not a trust or safety guarantee.
+15.1 First-party OAuth connectors
+The user starts the connection from the CLI (the flow opens the system browser when needed) or the future desktop UI. The provider displays its consent screen. The app requests only the scopes needed for the chosen features, validates OAuth state/PKCE where applicable, stores tokens in the appropriate local or server-side secret store, and exposes only authorized operations to the tool runtime. Never ask for provider passwords.
+In local CLI/desktop mode, prefer an OS credential store and an installed-app/local callback flow supported by the provider. In remote self-hosted/managed mode, use a registered HTTPS callback, bind the grant to the currently authenticated OpenAgent account, encrypt refresh tokens at rest, and allow revocation. Provider tokens and client secrets must never be included in prompts or ordinary logs. Public Google OAuth use may require verification; Gmail scopes are classified by sensitivity, and restricted-scope handling can trigger additional review requirements [13].
+Connector
+Initial useful actions
+Authorization / safety
+Gmail
+Search/list threads; read selected messages; create drafts; send only after explicit confirmation.
+OAuth; start read-only where possible. Request send scope only when enabled; never copy message bodies into debug logs.
+Google Calendar
+List/search upcoming events; create/update/delete events with a confirmation policy.
+OAuth and narrow Calendar scopes; show event summary/time before write actions.
+Google Drive
+Search/list files; read supported documents; create or upload files in a later connector milestone.
+OAuth scopes limited to required Drive resources; tenant/owner-scoped file references.
+GitHub
+List repositories; inspect issues/PRs; search code; create issues/comments only with policy approval.
+OAuth or a suitable app installation; repo-level permissions; writes require explicit authorization.
+Later providers
+Notion, Slack, Microsoft Outlook/Calendar, task managers and other productivity apps.
+Prefer official APIs/OAuth connectors or audited MCP servers; document each provider's scope and data flow.
+15.2 MCP server compatibility and trust model
+Implement an MCP client adapter in agent-core. Support local stdio servers for local CLI/desktop use and authenticated remote HTTP MCP servers when their authorization and transport are compatible with the client implementation. Each server configuration must record transport, endpoint or command, version/pinning information where available, authentication reference, enabled tool allowlist and permission policy. MCP authorization guidance recommends OAuth-based authorization for remote servers that expose user-specific data or sensitive actions [12].
+Do not install or launch arbitrary community MCP servers automatically. The modelcontextprotocol/servers repository describes its implementations as reference examples, not a blanket production-safe catalog [11]. Start with a small curated set and a user-added-server flow. Discovery means “available for review,” not “trusted to execute.” Bound process permissions, environment variables, timeouts, output sizes and concurrency; treat all tool descriptions and tool results as untrusted input. In a shared hosted service, do not launch an arbitrary user-supplied stdio process inside the API or shared worker. Initially allow only reviewed remote servers or isolated per-user/per-run execution designed for this purpose.
+15.3 Practical first-party tool count and catalog
+Do not promise hundreds of hand-written built-ins in the first release. Target 12 stable, tested core tools for the first usable release, grow toward roughly 24 first-party tools as the runtime matures, then add integration-specific actions and the long tail through MCP. Tool count is a planning target; only ship tools that have tested schemas, permissions, error handling and documentation.
+Milestone
+Approximate tool count
+Tool families
+First usable CLI release: ~12 core tools
+12
+Filesystem: list/search/read/write; web: search/fetch; reminders: create/list/cancel; notes: create/search; runtime: status/diagnostics.
+Core catalog expansion: ~24 tools
+About 24
+Add file move/delete, web extraction, note update, reminder update, personal task CRUD/completion and constrained local Git/test helpers.
+OAuth connectors
+Additional actions per provider
+Gmail search/read/draft/send; Calendar list/search/create/update/delete; Drive search/read/create/upload; GitHub repository/issues/PR workflows.
+MCP ecosystem
+User-configurable; no fixed ceiling
+Compatible third-party tools selected by the user, subject to trust review, per-tool permissions and runtime budgets.
+Only inject relevant tool schemas into each model request. Use capability categories and a tool selector instead of sending every installed MCP tool definition on every turn. This preserves context budget, reduces model confusion and avoids exposing irrelevant capabilities.
+16. Cross-platform desktop application
+A desktop app is approved for the roadmap, while the first implementation remains CLI + FastAPI. The proposed desktop stack is Tauri 2 with React/TypeScript for the UI and the shared Python runtime packaged as a per-platform sidecar. Tauri documents sidecars specifically for bundling external executables such as Python applications or API servers, avoiding a separate Python installation for end users [14].
+The desktop app will support two explicit modes. Local mode launches a bundled OpenAgent service that uses local persistence and the OS credential store. Remote mode connects to a user-selected self-hosted VPS or the managed service over HTTPS. Both modes call the same agent-core contract; the frontend must not implement a second agent loop.
+Area
+Requirement
+Local sidecar security
+Bind only to 127.0.0.1 on an ephemeral port; issue a random per-launch capability token; apply strict origin/CSRF controls; expose no LAN listener; shut the sidecar down when the desktop app exits.
+Tauri permissions
+Allow only explicitly required IPC commands and sidecar operations. Do not expose arbitrary shell execution or unrestricted filesystem APIs to the frontend.
+Windows
+Build and smoke-test x64 installer (MSI and/or NSIS); document signing when distributing publicly.
+macOS
+Build and smoke-test Apple Silicon and Intel targets as supported; package DMG/app; plan Developer ID code signing and notarization for public distribution.
+Linux
+Start with tested AppImage plus a Debian/Ubuntu package; add RPM/other formats only after supported-distro testing. Record needed WebKitGTK/system dependencies.
+Release pipeline
+Use a CI matrix with Windows, macOS and Linux runners; package the Python sidecar for each OS/architecture; run clean-install smoke tests, publish checksums and sign artifacts when possible.
+Tauri supports platform-specific installers and documents code-signing/distribution requirements; macOS distribution outside the App Store requires signing and notarization, while Linux and Windows have their own packaging formats and prerequisites [14,15]. Do not claim “all OS support” until each published build has a clean-install smoke test on its supported OS and architecture.
+17. Developer logging and diagnostics
+Yes: backend logging is a required part of the implementation, not an optional debugging trick. The current architecture already calls for structured logs and CloudWatch monitoring, but this revision makes the concrete file paths, environment variables and inspection commands part of the requirements. Python’s standard logging package supports file handlers and rotating handlers [16].
+17.1 Local development defaults
+Use a configurable log directory. For development, set OPENAGENT_LOG_DIR=.local/logs so files remain easy to find in the repository workspace; add .local/ and *.log to .gitignore. In an installed app, use the platform application-state/log directory (via platformdirs) rather than writing logs beside the executable.
+Environment
+Default installed log directory
+Windows
+%LOCALAPPDATA%\OpenAgent\logs
+macOS
+~/Library/Logs/OpenAgent
+Linux
+platformdirs user_state_dir('OpenAgent')/logs; typically ~/.local/state/OpenAgent/logs
+Development override
+OPENAGENT_LOG_DIR=.local/logs (relative to the project working directory)
+Recommended local files are cli.log, api.log, worker.log, and a redacted audit.jsonl for security-relevant actions. Use rotating files (initial default: 10 MB per file, keep five backups, configurable) and console output at the same time. Configure OPENAGENT_LOG_LEVEL=DEBUG for development; return to INFO/WARNING in routine operation. This logger setup must be implemented and tested—it is specified here but should not be assumed to exist in an unmodified checkout.
+17.2 Commands to inspect failures
+Local Python/API development:
+PowerShell / terminal commands
+$env:OPENAGENT_LOG_LEVEL = "DEBUG"
+$env:OPENAGENT_LOG_DIR = ".local/logs"
+uv run openagent doctor --verbose
+uv run openagent logs --follow
+Get-Content .local/logs/api.log -Wait -Tail 100
+Docker/self-hosted VPS: `docker compose logs -f api worker` and `docker compose logs --tail=200 api worker`. Managed AWS: send container stdout/stderr to CloudWatch Logs and monitor error counts, queue backlog, restart loops, disk/CPU, provider failures and spend. A regular CLI user must not receive raw infrastructure logs from the managed service; provide owner-scoped run diagnostics and a redacted support bundle instead.
+Every structured record should include timestamp, level, service, environment, request_id, run_id and tool_call_id where applicable, plus a normalized error code and duration. Add user/tenant IDs only as safe internal identifiers where authorized. Never log API keys, Authorization headers, OAuth access/refresh tokens, full credential payloads, or user message/email/document bodies by default. Redaction must have automated tests; audit logs are distinct from verbose debug logs.
+18. References
+Official documentation consulted for framework and infrastructure choices. URLs are included so implementation details can be checked when dependencies or services change. Accessed 16 October 2026.
+[1] uv — Using workspaces. https://docs.astral.sh/uv/concepts/projects/workspaces/ — Workspace members, shared lockfile and package boundaries.
+[2] FastAPI — Deployment concepts. https://fastapi.tiangolo.com/deployment/concepts/ — HTTPS, startup/restarts, worker processes, memory and deployment considerations.
+[3] FastAPI — HTTPS. https://fastapi.tiangolo.com/deployment/https/ — TLS termination proxy and trusted forwarded-header configuration.
+[4] Docker — Use Compose in production. https://docs.docker.com/compose/how-tos/production/ — Single-server Compose pattern and production overrides.
+[5] AWS — Getting started with EventBridge Scheduler. https://docs.aws.amazon.com/scheduler/latest/UserGuide/getting-started.html — Timed schedules targeting queues, retries and dead-letter/retention controls.
+[6] PostgreSQL — Row security policies. https://www.postgresql.org/docs/current/ddl-rowsecurity.html — Per-row access policies and important owner/superuser bypass considerations.
+[7] LangGraph — Persistence. https://langchain-ai.github.io/langgraph/concepts/durable_execution/ — Thread checkpoints, memory stores, durable workflows and interrupted-run continuity.
+[8] LiteLLM — Router/load balancing. https://docs.litellm.ai/docs/routing — Provider retries, fallback ordering, cooldowns and routing capabilities.
+[9] AWS — Amazon Lightsail overview. https://docs.aws.amazon.com/lightsail/latest/userguide/ — VPS instances, container services and managed infrastructure options.
+[10] AWS Systems Manager — Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html — Remote instance administration without requiring inbound SSH ports, when configured.
+[11] Model Context Protocol — Reference servers repository. https://github.com/modelcontextprotocol/servers — Reference implementations; evaluate security and production suitability rather than trusting all servers.
+[12] Model Context Protocol — Authorization specification. https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization — Authorization guidance for protected remote MCP servers.
+[13] Google for Developers — OAuth 2.0 scopes for Google APIs. https://developers.google.com/identity/protocols/oauth2/scopes — Gmail/Calendar scopes, sensitivity classifications and verification considerations.
+[14] Tauri v2 — Embedding external binaries / sidecars. https://v2.tauri.app/develop/sidecar/ — Bundle and execute external binaries such as a packaged Python application with explicit capabilities.
+[15] Tauri v2 — Distribute applications. https://v2.tauri.app/distribute/ — Windows, macOS and Linux packaging and code-signing guidance.
+[16] Python — Logging HOWTO. https://docs.python.org/3/howto/logging.html — Console/file logging and rotating handlers.
+End of document
