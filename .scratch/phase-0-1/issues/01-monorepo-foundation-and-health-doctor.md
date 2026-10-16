@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** completed
+**Status:** closed
 
 - [x] Root `pyproject.toml` configures a uv workspace with Python >=3.12 and locked dependencies.
 - [x] Workspace packages `icarus_contracts`, `icarus_core`, and `icarus_cli` are scaffolded with correct dependency boundaries (core and contracts never import CLI).
