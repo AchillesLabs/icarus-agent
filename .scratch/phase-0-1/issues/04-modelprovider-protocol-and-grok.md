@@ -4,11 +4,11 @@
 
 **Blocked by:** 01: Monorepo Foundation and Health Doctor Tracer Bullet
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `ModelProvider` abstract protocol defined with async `generate`, `stream`, and `get_capabilities` methods.
-- [ ] Domain exception hierarchy established (`AuthenticationError`, `RateLimitError`, `ContextLengthExceededError`, `ProviderUnavailableError`).
-- [ ] Deterministic `MockProvider` implemented to simulate token streams, latency, and simulated error conditions for offline testing.
-- [ ] Grok (`xai`) direct provider adapter implemented, supporting models like `grok-2` and `grok-beta` with live streaming.
-- [ ] Provider registry maps provider names to their adapter factories and verifies configured credentials.
-- [ ] Comprehensive test suite validates protocol conformance, token event streaming, and exception normalization.
+- [x] `ModelProvider` abstract protocol defined with async `generate`, `stream`, and `get_capabilities` methods.
+- [x] Domain exception hierarchy established (`AuthenticationError`, `RateLimitError`, `ContextLengthExceededError`, `ProviderUnavailableError`).
+- [x] Deterministic `MockProvider` implemented to simulate token streams, latency, and simulated error conditions for offline testing.
+- [x] Grok (`xai`) direct provider adapter implemented, supporting models like `grok-2` and `grok-beta` with live streaming.
+- [x] Provider registry maps provider names to their adapter factories and verifies configured credentials.
+- [x] Comprehensive test suite validates protocol conformance, token event streaming, and exception normalization.

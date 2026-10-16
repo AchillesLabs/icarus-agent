@@ -2,6 +2,19 @@
 
 from icarus_contracts.config import CredentialResult, CredentialSource, IcarusConfig
 from icarus_contracts.doctor import DoctorCheckResult, DoctorReport, HealthStatus
+from icarus_contracts.exceptions import (
+    AuthenticationError,
+    ContextLengthExceededError,
+    ProviderError,
+    ProviderUnavailableError,
+    RateLimitError,
+)
+from icarus_contracts.provider import (
+    CompletionResult,
+    PromptMessage,
+    ProviderCapabilities,
+    StreamChunk,
+)
 from icarus_contracts.session import (
     MessageCreate,
     MessageDTO,
@@ -18,6 +31,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
+    "AuthenticationError",
+    "CompletionResult",
+    "ContextLengthExceededError",
     "CredentialResult",
     "CredentialSource",
     "DoctorCheckResult",
@@ -27,10 +43,16 @@ __all__ = [
     "MessageCreate",
     "MessageDTO",
     "MessageRole",
+    "PromptMessage",
+    "ProviderCapabilities",
+    "ProviderError",
+    "ProviderUnavailableError",
+    "RateLimitError",
     "RunCreate",
     "RunDTO",
     "RunStatus",
     "SessionCreate",
     "SessionDTO",
     "SessionUpdate",
+    "StreamChunk",
 ]
