@@ -37,3 +37,24 @@ def test_cli_doctor_unhealthy_returns_exit_code_1():
         result = runner.invoke(app, ["doctor"])
         assert result.exit_code == 1
         assert "FAIL" in result.stdout or "incompatible" in result.stdout.lower()
+
+
+def test_cli_doctor_auto_migrates_database(tmp_path: Path):
+    db_file = tmp_path / "icarus.db"
+    assert not db_file.exists()
+
+    with patch("icarus_core.paths.get_icarus_home", return_value=tmp_path):
+        result = runner.invoke(app, ["doctor"])
+        assert result.exit_code == 0
+        assert "Database & Migrations" in result.stdout
+        assert "PASS" in result.stdout
+
+    assert db_file.exists()
+    from icarus_core.persistence.database import DatabaseManager
+    from sqlalchemy import inspect
+
+    manager = DatabaseManager(db_url=f"sqlite:///{db_file.as_posix()}")
+    tables = inspect(manager.engine).get_table_names()
+    assert "sessions" in tables
+    assert "messages" in tables
+    assert "agent_runs" in tables

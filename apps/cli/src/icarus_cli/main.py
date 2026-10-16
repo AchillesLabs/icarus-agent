@@ -5,6 +5,7 @@ from typing import Annotated
 import typer
 from icarus_contracts.doctor import HealthStatus
 from icarus_core.doctor import run_doctor_checks
+from icarus_core.persistence.migrations.runner import MigrationRunner
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -18,6 +19,17 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def ensure_database_migrated() -> None:
+    """Ensure ~/.icarus/ storage is initialized and pending migrations run automatically."""
+    try:
+        runner = MigrationRunner()
+        if not runner.is_migration_up_to_date():
+            runner.run_migrations()
+    except Exception:
+        # Fall through so doctor and commands can report specific diagnostic failures
+        pass
 
 
 def version_callback(value: bool) -> None:
@@ -43,6 +55,7 @@ def main(
     ] = None,
 ) -> None:
     """Icarus root CLI command callback."""
+    ensure_database_migrated()
 
 
 @app.command(name="doctor")

@@ -4,11 +4,11 @@
 
 **Blocked by:** 01: Monorepo Foundation and Health Doctor Tracer Bullet
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] SQLAlchemy 2 mapped entities created for sessions, messages, and agent runs under `icarus_core.persistence`.
-- [ ] Repository interfaces defined for creating, reading, listing, and updating sessions and messages.
-- [ ] SQLite database connection manager defaults to `~/.icarus/icarus.db` with support for test overrides (`sqlite:///:memory:`).
-- [ ] Alembic migrations configured within `icarus_core` and automatically executed on startup when pending revisions exist.
-- [ ] `icarus doctor` inspects database connectivity, table existence, and migration revision status.
-- [ ] Repository and migration tests pass against in-memory and file-based SQLite engines.
+- [x] SQLAlchemy 2 mapped entities created for sessions, messages, and agent runs under `icarus_core.persistence`.
+- [x] Repository interfaces defined for creating, reading, listing, and updating sessions and messages.
+- [x] SQLite database connection manager defaults to `~/.icarus/icarus.db` with support for test overrides (`sqlite:///:memory:`).
+- [x] Alembic migrations configured within `icarus_core` and automatically executed on startup when pending revisions exist.
+- [x] `icarus doctor` inspects database connectivity, table existence, and migration revision status.
+- [x] Repository and migration tests pass against in-memory and file-based SQLite engines.

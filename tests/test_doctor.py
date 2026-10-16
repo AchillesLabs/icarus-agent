@@ -5,11 +5,14 @@ from unittest.mock import patch
 
 from icarus_contracts.doctor import DoctorCheckResult, DoctorReport, HealthStatus
 from icarus_core.doctor import (
+    check_database_connectivity,
     check_python_version,
     check_storage_directories,
     check_workspace_integrity,
     run_doctor_checks,
 )
+from icarus_core.persistence.database import DatabaseManager
+from icarus_core.persistence.migrations.runner import MigrationRunner
 
 
 def test_doctor_report_is_healthy_when_all_pass():
@@ -60,8 +63,39 @@ def test_check_workspace_integrity():
     assert "workspace packages loaded" in result.message.lower()
 
 
+def test_check_database_connectivity_passes_when_migrated(tmp_path: Path):
+    db_file = tmp_path / "doctor_test.db"
+    db_url = f"sqlite:///{db_file.as_posix()}"
+    manager = DatabaseManager(db_url=db_url)
+    runner = MigrationRunner()
+    runner.run_migrations(db_manager=manager)
+
+    result = check_database_connectivity(db_manager=manager)
+    assert result.status == HealthStatus.OK
+    assert "head" in result.message.lower()
+    assert "sessions" in result.details.lower()
+
+
+def test_check_database_connectivity_fails_when_unmigrated(tmp_path: Path):
+    db_file = tmp_path / "unmigrated.db"
+    db_url = f"sqlite:///{db_file.as_posix()}"
+    manager = DatabaseManager(db_url=db_url)
+
+    result = check_database_connectivity(db_manager=manager)
+    assert result.status == HealthStatus.FAIL
+    assert "migration" in result.message.lower() or "table" in result.message.lower()
+    assert result.fix_hint is not None
+
+
 def test_run_doctor_checks_returns_report(tmp_path: Path):
+    # Ensure home has migrated db
+    db_file = tmp_path / "icarus.db"
+    manager = DatabaseManager(db_url=f"sqlite:///{db_file.as_posix()}")
+    MigrationRunner().run_migrations(db_manager=manager)
+
     report = run_doctor_checks(home_dir=tmp_path)
     assert isinstance(report, DoctorReport)
-    assert len(report.checks) >= 3
+    assert len(report.checks) >= 4
+    check_names = [c.name for c in report.checks]
+    assert "Database & Migrations" in check_names
     assert report.is_healthy is True

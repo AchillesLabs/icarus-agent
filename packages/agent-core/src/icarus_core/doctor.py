@@ -6,8 +6,11 @@ import tempfile
 from pathlib import Path
 
 from icarus_contracts.doctor import DoctorCheckResult, DoctorReport, HealthStatus
+from sqlalchemy import inspect
 
 from icarus_core.paths import get_icarus_home, get_icarus_logs_dir
+from icarus_core.persistence.database import DatabaseManager
+from icarus_core.persistence.migrations.runner import MigrationRunner
 
 MINIMUM_PYTHON_VERSION = (3, 12)
 
@@ -95,11 +98,89 @@ def check_workspace_integrity() -> DoctorCheckResult:
     )
 
 
-def run_doctor_checks(home_dir: Path | None = None) -> DoctorReport:
+def check_database_connectivity(
+    db_manager: DatabaseManager | None = None,
+    home_dir: Path | None = None,
+) -> DoctorCheckResult:
+    """Verify database connectivity, table presence, and Alembic migration state."""
+    manager = db_manager or (
+        DatabaseManager(db_url=f"sqlite:///{(home_dir / 'icarus.db').as_posix()}")
+        if home_dir is not None
+        else DatabaseManager()
+    )
+
+    # 1. Test basic connectivity
+    if not manager.is_connected():
+        return DoctorCheckResult(
+            name="Database & Migrations",
+            status=HealthStatus.FAIL,
+            message="Database connectivity check failed.",
+            details=f"URL: {manager.db_url}",
+            fix_hint="Ensure the database file path is writable and not locked.",
+        )
+
+    # 2. Check table existence
+    try:
+        inspector = inspect(manager.engine)
+        existing_tables = set(inspector.get_table_names())
+        required_tables = {"sessions", "messages", "agent_runs"}
+        missing_tables = required_tables - existing_tables
+        if missing_tables:
+            found = ", ".join(sorted(existing_tables)) if existing_tables else "none"
+            return DoctorCheckResult(
+                name="Database & Migrations",
+                status=HealthStatus.FAIL,
+                message=f"Missing required database tables: {', '.join(sorted(missing_tables))}",
+                details=f"Found tables: {found}",
+                fix_hint="Run `icarus init` or restart CLI to apply automatic schema migrations.",
+            )
+    except Exception as exc:
+        return DoctorCheckResult(
+            name="Database & Migrations",
+            status=HealthStatus.FAIL,
+            message=f"Failed to inspect database tables: {exc}",
+            fix_hint="Check database file permissions and integrity.",
+        )
+
+    # 3. Check migration revision status
+    try:
+        runner = MigrationRunner()
+        current_rev = runner.get_current_revision(db_manager=manager)
+        head_rev = runner.get_head_revision()
+
+        if current_rev != head_rev:
+            return DoctorCheckResult(
+                name="Database & Migrations",
+                status=HealthStatus.FAIL,
+                message=f"Database migration revision ({current_rev}) is not at head ({head_rev})",
+                details=f"URL: {manager.db_url}",
+                fix_hint="Run `icarus init` or restart the CLI to execute pending migrations.",
+            )
+
+        return DoctorCheckResult(
+            name="Database & Migrations",
+            status=HealthStatus.OK,
+            message=f"Database connected and migrated to head ({head_rev})",
+            details=f"Tables: {', '.join(sorted(existing_tables))}",
+        )
+    except Exception as exc:
+        return DoctorCheckResult(
+            name="Database & Migrations",
+            status=HealthStatus.FAIL,
+            message=f"Failed to verify migration status: {exc}",
+            fix_hint="Ensure Alembic migrations in icarus_core are intact.",
+        )
+
+
+def run_doctor_checks(
+    home_dir: Path | None = None,
+    db_manager: DatabaseManager | None = None,
+) -> DoctorReport:
     """Run all standard environment diagnostic checks and return an aggregated DoctorReport."""
     checks = [
         check_python_version(),
         check_storage_directories(home_dir=home_dir),
         check_workspace_integrity(),
+        check_database_connectivity(db_manager=db_manager, home_dir=home_dir),
     ]
     return DoctorReport(checks=checks)
