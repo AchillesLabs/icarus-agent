@@ -142,7 +142,7 @@ def init_cmd(
     if not non_interactive:
         selected_provider = (
             typer.prompt(
-                "Select default model provider [grok/openrouter]",
+                "Select default model provider [groq/openrouter/grok]",
                 default=selected_provider,
             )
             .lower()
@@ -168,6 +168,8 @@ def init_cmd(
     cfg.default_provider = selected_provider
     if selected_provider == "openrouter":
         cfg.model = "anthropic/claude-3.5-sonnet"
+    elif selected_provider == "groq":
+        cfg.model = "llama-3.3-70b-versatile"
     else:
         cfg.model = "grok-2"
     cfg_manager.save_config(cfg)

@@ -80,3 +80,12 @@ def test_registry_get_litellm_gateway():
     registry = ProviderRegistry()
     provider = registry.get_provider("litellm")
     assert isinstance(provider, LiteLLMProvider)
+
+
+def test_registry_get_groq_with_explicit_key():
+    from icarus_core.providers.groq import GroqProvider
+
+    registry = ProviderRegistry()
+    provider = registry.get_provider("groq", api_key="gsk_explicit_key")
+    assert isinstance(provider, GroqProvider)
+    assert provider.api_key == "gsk_explicit_key"

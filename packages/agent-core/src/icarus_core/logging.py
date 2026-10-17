@@ -16,6 +16,8 @@ REDACTED_TOKEN = "[REDACTED]"
 SECRET_PATTERNS: list[re.Pattern[str]] = [
     # xAI API keys
     re.compile(r"\bxai-[A-Za-z0-9_\-]{8,}\b"),
+    # Groq API keys
+    re.compile(r"\bgsk_[A-Za-z0-9_\-]{20,}\b"),
     # OpenRouter API keys (e.g. sk-or-v1-... or sk-or-...)
     re.compile(r"\bsk-or-v1-[A-Za-z0-9_\-]+\b"),
     re.compile(r"\bsk-or-[A-Za-z0-9_\-]+\b"),

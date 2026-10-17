@@ -142,13 +142,40 @@ def test_cli_init_openrouter_non_interactive(tmp_path: Path):
         assert result.exit_code == 0
         assert "initialization complete" in result.stdout.lower()
         mock_set_pw.assert_called_once_with("icarus", "openrouter", "sk-or-v1-openrouter-key")
-
         config_path = tmp_path / "config.toml"
         assert config_path.exists()
         content = config_path.read_text(encoding="utf-8")
         assert 'default_provider = "openrouter"' in content
         assert 'model = "anthropic/claude-3.5-sonnet"' in content
         assert "sk-or-v1-openrouter-key" not in content
+
+
+def test_cli_init_groq_non_interactive(tmp_path: Path):
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("keyring.set_password") as mock_set_pw,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "--provider",
+                "groq",
+                "--api-key",
+                "gsk_test_key_12345",
+                "--non-interactive",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "initialization complete" in result.stdout.lower()
+        mock_set_pw.assert_called_once_with("icarus", "groq", "gsk_test_key_12345")
+
+        config_path = tmp_path / "config.toml"
+        assert config_path.exists()
+        content = config_path.read_text(encoding="utf-8")
+        assert 'default_provider = "groq"' in content
+        assert 'model = "llama-3.3-70b-versatile"' in content
+        assert "gsk_test_key_12345" not in content
 
 
 def test_cli_config_set_default_provider_openrouter(tmp_path: Path):

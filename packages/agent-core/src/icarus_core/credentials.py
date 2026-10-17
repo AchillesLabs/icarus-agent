@@ -51,6 +51,8 @@ class CredentialResolver:
         normalized = provider.lower().strip()
         if normalized in {"grok", "xai"}:
             return ["XAI_API_KEY", "ICARUS_API_KEY"]
+        if normalized == "groq":
+            return ["GROQ_API_KEY", "ICARUS_API_KEY"]
         if normalized == "openrouter":
             return ["OPENROUTER_API_KEY", "ICARUS_API_KEY"]
         return [
