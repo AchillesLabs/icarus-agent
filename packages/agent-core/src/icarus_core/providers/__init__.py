@@ -2,7 +2,16 @@
 
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.grok import GrokProvider
+from icarus_core.providers.litellm import LiteLLMProvider
 from icarus_core.providers.mock import MockProvider
+from icarus_core.providers.openrouter import OpenRouterProvider
 from icarus_core.providers.registry import ProviderRegistry
 
-__all__ = ["GrokProvider", "MockProvider", "ModelProvider", "ProviderRegistry"]
+__all__ = [
+    "GrokProvider",
+    "LiteLLMProvider",
+    "MockProvider",
+    "ModelProvider",
+    "OpenRouterProvider",
+    "ProviderRegistry",
+]

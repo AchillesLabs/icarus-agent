@@ -121,3 +121,69 @@ def test_cli_init_interactive(tmp_path: Path):
         result = runner.invoke(app, ["init"], input="grok\nxai-interactive-key\n")
         assert result.exit_code == 0
         mock_set_pw.assert_called_once_with("icarus", "grok", "xai-interactive-key")
+
+
+def test_cli_init_openrouter_non_interactive(tmp_path: Path):
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("keyring.set_password") as mock_set_pw,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "--provider",
+                "openrouter",
+                "--api-key",
+                "sk-or-v1-openrouter-key",
+                "--non-interactive",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "initialization complete" in result.stdout.lower()
+        mock_set_pw.assert_called_once_with("icarus", "openrouter", "sk-or-v1-openrouter-key")
+
+        config_path = tmp_path / "config.toml"
+        assert config_path.exists()
+        content = config_path.read_text(encoding="utf-8")
+        assert 'default_provider = "openrouter"' in content
+        assert 'model = "anthropic/claude-3.5-sonnet"' in content
+        assert "sk-or-v1-openrouter-key" not in content
+
+
+def test_cli_config_set_default_provider_openrouter(tmp_path: Path):
+    with patch("icarus_core.paths.get_icarus_home", return_value=tmp_path):
+        set_res = runner.invoke(app, ["config", "set", "default_provider", "openrouter"])
+        assert set_res.exit_code == 0
+        assert "openrouter" in set_res.stdout
+
+        list_res = runner.invoke(app, ["config", "list"])
+        assert "openrouter" in list_res.stdout
+
+
+def test_cli_doctor_with_openrouter_provider_healthy(tmp_path: Path):
+    import httpx
+    from icarus_contracts import IcarusConfig
+    from icarus_core.config import ConfigManager
+
+    # Prepare home with openrouter config
+    cfg_mgr = ConfigManager(config_path=tmp_path / "config.toml")
+    cfg_mgr.save_config(
+        IcarusConfig(default_provider="openrouter", model="anthropic/claude-3.5-sonnet")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"id": "anthropic/claude-3.5-sonnet"}]})
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("keyring.get_password", return_value="sk-or-v1-testkey"),
+        patch("icarus_core.doctor.httpx.Client", return_value=mock_client),
+    ):
+        result = runner.invoke(app, ["doctor"])
+        assert result.exit_code == 0
+        assert "OpenRouter API Reachability" in result.stdout
+        assert "PASS" in result.stdout
+        assert "anthropic/cla" in result.stdout

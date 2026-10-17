@@ -6,7 +6,9 @@ from typing import Any
 from icarus_core.credentials import CredentialResolver
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.grok import GrokProvider
+from icarus_core.providers.litellm import LiteLLMProvider
 from icarus_core.providers.mock import MockProvider
+from icarus_core.providers.openrouter import OpenRouterProvider
 
 ProviderFactory = Callable[..., ModelProvider]
 
@@ -23,6 +25,15 @@ class ProviderRegistry:
         self.register("mock", lambda **kw: MockProvider(**kw), requires_credentials=False)
         self.register("grok", lambda api_key, **kw: GrokProvider(api_key=api_key, **kw))
         self.register("xai", lambda api_key, **kw: GrokProvider(api_key=api_key, **kw))
+        self.register("openrouter", lambda api_key, **kw: OpenRouterProvider(api_key=api_key, **kw))
+        self.register(
+            "litellm",
+            lambda api_key=None, **kw: LiteLLMProvider(
+                api_key=api_key or self.resolver.resolve("litellm").secret,
+                **kw,
+            ),
+            requires_credentials=False,
+        )
 
     def register(
         self,

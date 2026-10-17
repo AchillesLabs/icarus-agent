@@ -172,3 +172,57 @@ def test_logs_command_displays_records_and_respects_tail(tmp_path: Path):
         assert "line 4" in result.stdout
         assert "line 5" in result.stdout
         assert "line 1" not in result.stdout
+
+
+def test_run_with_openrouter_provider_streams_and_commits(tmp_path: Path):
+    """Running with --provider openrouter streams tokens and persists session."""
+    import httpx
+    db_file = tmp_path / "icarus.db"
+    log_dir = tmp_path / "logs"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer sk-or-test-key"
+        sse_body = (
+            'data: {"choices":[{"delta":{"content":"OpenRouter"},"finish_reason":null}]}\n\n'
+            'data: {"choices":[{"delta":{"content":" success"},"finish_reason":null}]}\n\n'
+            'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        return httpx.Response(200, text=sse_body, headers={"Content-Type": "text/event-stream"})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_logs_dir", return_value=log_dir),
+        patch("keyring.get_password", return_value="sk-or-test-key"),
+        patch(
+            "icarus_core.providers.openrouter.OpenRouterProvider._get_client",
+            return_value=mock_client,
+        ),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "Hello OpenRouter",
+                "--provider",
+                "openrouter",
+                "--model",
+                "anthropic/claude-3.5-sonnet",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "OpenRouter success" in result.stdout
+
+        db_mgr = DatabaseManager(db_url=f"sqlite:///{db_file.as_posix()}")
+        session_repo = SessionRepository(db_mgr)
+        message_repo = MessageRepository(db_mgr)
+
+        sessions = session_repo.list_sessions()
+        assert len(sessions) == 1
+        messages = message_repo.list_messages(sessions[0].id)
+        assert len(messages) == 2
+        assert messages[0].content == "Hello OpenRouter"
+        assert messages[1].content == "OpenRouter success"

@@ -6,10 +6,10 @@
 - 04: Hybrid ModelProvider Protocol with Grok and Mock Adapters
 - 05: Interactive Chat REPL with Session Persistence
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] OpenRouter provider adapter implemented under `icarus_core.providers.openrouter`, supporting model routing and streaming token events.
-- [ ] LiteLLM gateway adapter implemented as an optional provider backend under `icarus_core.providers.litellm`.
-- [ ] `icarus init` and `icarus config` allow selecting OpenRouter and saving the OpenRouter API key in the OS keyring.
-- [ ] `icarus doctor` verifies reachability of OpenRouter API and displays configured models.
-- [ ] Integration tests verify OpenRouter streaming requests and error normalization.
+- [x] OpenRouter provider adapter implemented under `icarus_core.providers.openrouter`, supporting model routing and streaming token events.
+- [x] LiteLLM gateway adapter implemented as an optional provider backend under `icarus_core.providers.litellm`.
+- [x] `icarus init` and `icarus config` allow selecting OpenRouter and saving the OpenRouter API key in the OS keyring.
+- [x] `icarus doctor` verifies reachability of OpenRouter API and displays configured models.
+- [x] Integration tests verify OpenRouter streaming requests and error normalization.

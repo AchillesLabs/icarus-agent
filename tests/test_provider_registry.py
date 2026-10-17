@@ -63,3 +63,20 @@ def test_registry_custom_provider_registration():
     assert "custom-fast" in registry.list_supported_providers()
     provider = registry.get_provider("custom-fast")
     assert provider is custom_mock
+
+
+def test_registry_get_openrouter_with_explicit_key():
+    from icarus_core.providers.openrouter import OpenRouterProvider
+
+    registry = ProviderRegistry()
+    provider = registry.get_provider("openrouter", api_key="sk-or-v1-explicit")
+    assert isinstance(provider, OpenRouterProvider)
+    assert provider.api_key == "sk-or-v1-explicit"
+
+
+def test_registry_get_litellm_gateway():
+    from icarus_core.providers.litellm import LiteLLMProvider
+
+    registry = ProviderRegistry()
+    provider = registry.get_provider("litellm")
+    assert isinstance(provider, LiteLLMProvider)

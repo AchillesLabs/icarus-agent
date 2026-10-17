@@ -306,3 +306,34 @@ def test_chat_sigint_during_streaming_graceful_recovery(tmp_path: Path):
         # Turn 2 user and assistant messages were persisted
         assert any(m.content == "Try again" for m in messages)
         assert any("Recovered answer after interrupt." in m.content for m in messages)
+
+
+def test_chat_with_openrouter_provider(tmp_path: Path):
+    """Running chat with --provider openrouter streams model response cleanly."""
+    import httpx
+    db_file = tmp_path / "icarus.db"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer sk-or-chat-test"
+        sse_body = (
+            'data: {"choices":[{"delta":{"content":"Claude "},"finish_reason":null}]}\n\n'
+            'data: {"choices":[{"delta":{"content":"speaks!"},"finish_reason":null}]}\n\n'
+            'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        return httpx.Response(200, text=sse_body, headers={"Content-Type": "text/event-stream"})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("keyring.get_password", return_value="sk-or-chat-test"),
+        patch(
+            "icarus_core.providers.openrouter.OpenRouterProvider._get_client",
+            return_value=mock_client,
+        ),
+    ):
+        result = runner.invoke(app, ["chat", "--provider", "openrouter"], input="Hello\n/exit\n")
+        assert result.exit_code == 0
+        assert "Claude speaks!" in result.stdout
