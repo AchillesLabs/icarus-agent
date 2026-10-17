@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from icarus_cli import __version__
+from icarus_cli.chat import run_chat
 
 app = typer.Typer(
     name="icarus",
@@ -175,6 +176,44 @@ def init_cmd(
     console.print(
         "\n[bold cyan]Icarus initialization complete! Run `icarus doctor` to verify.[/bold cyan]\n"
     )
+
+
+@app.command(name="chat")
+def chat_cmd(
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", "-r", help="Resume the most recent conversation session."),
+    ] = False,
+    session: Annotated[
+        str | None,
+        typer.Option("--session", "-s", help="Load an existing conversation thread by ID."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Override active model provider (grok, mock, etc.)."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Override active model name."),
+    ] = None,
+    temperature: Annotated[
+        float | None,
+        typer.Option("--temperature", "-t", help="Sampling temperature between 0.0 and 2.0."),
+    ] = None,
+) -> None:
+    """Launch an interactive streaming chat REPL session."""
+    ensure_database_migrated()
+    try:
+        run_chat(
+            provider_name=provider,
+            model_name=model,
+            session_id=session,
+            resume=resume,
+            temperature=temperature,
+            console=console,
+        )
+    except ValueError as exc:
+        raise typer.Exit(code=1) from exc
 
 
 @config_app.command(name="list")

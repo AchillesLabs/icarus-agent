@@ -7,11 +7,11 @@
 - 03: Credential Resolution Pipeline and Interactive Configuration
 - 04: Hybrid ModelProvider Protocol with Grok and Mock Adapters
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `icarus chat` command implemented using Typer and Rich Live display for progressive token streaming.
-- [ ] Session lifecycle managed in SQLite: new session created by default; `--resume` loads the latest session; `--session <id>` loads a specific thread.
-- [ ] REPL slash commands implemented (`/exit`, `/clear`, `/help`, `/session`).
-- [ ] SIGINT (Ctrl+C) during generation interrupts the stream without terminating the REPL loop or corrupting the database.
-- [ ] Provider errors (e.g. rate limit, bad auth) are displayed as friendly terminal panels without stack traces.
-- [ ] End-to-end tests using `CliRunner` and `MockProvider` verify multi-turn conversations and session resumption.
+- [x] `icarus chat` command implemented using Typer and Rich Live display for progressive token streaming.
+- [x] Session lifecycle managed in SQLite: new session created by default; `--resume` loads the latest session; `--session <id>` loads a specific thread.
+- [x] REPL slash commands implemented (`/exit`, `/clear`, `/help`, `/session`).
+- [x] SIGINT (Ctrl+C) during generation interrupts the stream without terminating the REPL loop or corrupting the database.
+- [x] Provider errors (e.g. rate limit, bad auth) are displayed as friendly terminal panels without stack traces.
+- [x] End-to-end tests using `CliRunner` and `MockProvider` verify multi-turn conversations and session resumption.
