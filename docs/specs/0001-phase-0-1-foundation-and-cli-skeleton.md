@@ -1,5 +1,9 @@
 # Spec 0001: Phase 0 & 1 - Monorepo Foundation, CLI Skeleton, and Hybrid Provider Runtime
 
+- **Status**: Completed / Closed
+- **Completion Date**: 2026-10-17
+- **Verification**: 159 tests passing, all 7 tracer-bullet tickets verified and merged to `main`.
+
 ## Problem Statement
 
 Developers and power users currently lack a modular, open-source, CLI-first AI agent platform that can run completely locally on their workstation with zero external service dependencies, while also maintaining an extensible architecture that can seamlessly deploy to a self-hosted VPS, a managed multi-tenant cloud, or a cross-platform desktop app. Existing agent frameworks often suffer from tight vendor lock-in (e.g. hardcoding OpenAI APIs or single-provider SDKs), monolithic package structures that tightly couple web routing to core agent reasoning, unsafe credential handling (leaking plaintext keys in configuration files or logs), and lack of predictable token and execution boundaries. Users need a dependable, testable, CLI-first agent (`icarus`) that they can install with `uv`, configure with their own API keys (BYOK) using Grok, OpenRouter, or other providers, and run interactive or one-shot chats with local session persistence and strict safety controls.
