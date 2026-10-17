@@ -227,3 +227,32 @@ def test_run_with_openrouter_provider_streams_and_commits(tmp_path: Path):
         assert len(messages) == 2
         assert messages[0].content == "Hello OpenRouter"
         assert messages[1].content == "OpenRouter success"
+
+
+def test_run_injects_system_prompt_to_provider(tmp_path: Path):
+    """icarus run prepends structured system prompt before calling provider."""
+    from icarus_contracts.session import MessageRole
+    from icarus_core.providers.mock import MockProvider
+    from icarus_core.providers.registry import ProviderRegistry
+
+    db_file = tmp_path / "icarus.db"
+    log_dir = tmp_path / "logs"
+    mock_prov = MockProvider()
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_logs_dir", return_value=log_dir),
+        patch.object(ProviderRegistry, "get_provider", return_value=mock_prov),
+    ):
+        result = runner.invoke(app, ["run", "What is the capital of France?", "--provider", "mock"])
+        assert result.exit_code == 0
+        assert len(mock_prov.recorded_prompts) == 1
+        sent_messages = mock_prov.recorded_prompts[0]
+        assert len(sent_messages) == 2
+        assert sent_messages[0].role in (MessageRole.SYSTEM, "system")
+        assert "Icarus" in sent_messages[0].content
+        assert "Operating System:" in sent_messages[0].content
+        assert "Working Directory:" in sent_messages[0].content
+        assert sent_messages[1].role in (MessageRole.USER, "user")
+        assert sent_messages[1].content == "What is the capital of France?"

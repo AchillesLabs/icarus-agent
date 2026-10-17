@@ -14,6 +14,7 @@ from icarus_contracts.session import (
     SessionCreate,
     SessionDTO,
 )
+from icarus_core.agent.prompts import inject_system_prompt
 from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
 from icarus_core.persistence.database import DatabaseManager
@@ -170,7 +171,10 @@ def run_chat(
         console.print("[dim]───────────────────────────────────────────────────────[/dim]")
 
     prompt_history: list[PromptMessage] = [
-        PromptMessage(role=msg.role, content=msg.content) for msg in session_messages
+        PromptMessage(role=msg.role, content=msg.content)
+        for msg in session_messages
+        if (msg.role.value if hasattr(msg.role, "value") else str(msg.role))
+        != MessageRole.SYSTEM.value
     ]
 
     while True:
@@ -247,11 +251,12 @@ def run_chat(
 
         # Stream assistant response
         console.print(f"[bold green]{effective_provider} > [/bold green]")
+        turn_messages = inject_system_prompt(prompt_history)
         try:
             assistant_content = asyncio.run(
                 _stream_turn(
                     provider=provider,
-                    prompt_messages=prompt_history,
+                    prompt_messages=turn_messages,
                     model=effective_model,
                     temperature=effective_temp,
                     console=console,

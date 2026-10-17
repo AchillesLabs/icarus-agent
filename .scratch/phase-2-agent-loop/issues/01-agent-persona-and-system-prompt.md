@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] System prompt builder module implemented under `icarus_core.agent.prompts` that dynamically gathers OS, working directory, and agent guidelines.
-- [ ] `icarus chat` and `icarus run` prepend the structured system instruction to prompt message history before calling provider adapters.
-- [ ] In-memory session message lists preserve user and assistant history cleanly while keeping system prompt updated with current runtime context.
-- [ ] Unit and CLI tests verify system instructions are injected in all provider calls and tested against mock providers.
+- [x] System prompt builder module implemented under `icarus_core.agent.prompts` that dynamically gathers OS, working directory, and agent guidelines.
+- [x] `icarus chat` and `icarus run` prepend the structured system instruction to prompt message history before calling provider adapters.
+- [x] In-memory session message lists preserve user and assistant history cleanly while keeping system prompt updated with current runtime context.
+- [x] Unit and CLI tests verify system instructions are injected in all provider calls and tested against mock providers.

@@ -16,6 +16,7 @@ from icarus_contracts.session import (
     RunStatus,
     SessionCreate,
 )
+from icarus_core.agent.prompts import inject_system_prompt
 from icarus_core.config import ConfigManager
 from icarus_core.logging import get_logger, redact_secrets, setup_logging
 from icarus_core.persistence.database import DatabaseManager
@@ -40,7 +41,7 @@ async def _stream_run(
 ) -> str:
     """Stream model response tokens directly to stdout."""
     accumulated: list[str] = []
-    messages = [PromptMessage(role=MessageRole.USER, content=prompt)]
+    messages = inject_system_prompt([PromptMessage(role=MessageRole.USER, content=prompt)])
 
     async for chunk in provider.stream(
         messages=messages,

@@ -338,3 +338,54 @@ def test_chat_with_openrouter_provider(tmp_path: Path):
         result = runner.invoke(app, ["chat", "--provider", "openrouter"], input="Hello\n/exit\n")
         assert result.exit_code == 0
         assert "Claude speaks!" in result.stdout
+
+
+def test_chat_injects_system_prompt_to_provider(tmp_path: Path):
+    """icarus chat prepends dynamic system prompt to provider across multi-turn REPL."""
+    from icarus_contracts.session import MessageRole
+    from icarus_core.providers.mock import MockProvider
+    from icarus_core.providers.registry import ProviderRegistry
+
+    db_file = tmp_path / "icarus.db"
+    mock_prov = MockProvider()
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch.object(ProviderRegistry, "get_provider", return_value=mock_prov),
+    ):
+        result = runner.invoke(
+            app, ["chat", "--provider", "mock"], input="Turn 1 prompt\nTurn 2 prompt\n/exit\n"
+        )
+        assert result.exit_code == 0
+        assert len(mock_prov.recorded_prompts) == 2
+
+        # Turn 1
+        turn1_msgs = mock_prov.recorded_prompts[0]
+        assert len(turn1_msgs) == 2
+        assert turn1_msgs[0].role in (MessageRole.SYSTEM, "system")
+        assert "Icarus" in turn1_msgs[0].content
+        assert "Operating System:" in turn1_msgs[0].content
+        assert turn1_msgs[1].role in (MessageRole.USER, "user")
+        assert turn1_msgs[1].content == "Turn 1 prompt"
+
+        # Turn 2
+        turn2_msgs = mock_prov.recorded_prompts[1]
+        assert len(turn2_msgs) == 4
+        assert turn2_msgs[0].role in (MessageRole.SYSTEM, "system")
+        assert "Icarus" in turn2_msgs[0].content
+        assert turn2_msgs[1].role in (MessageRole.USER, "user")
+        assert turn2_msgs[1].content == "Turn 1 prompt"
+        assert turn2_msgs[2].role in (MessageRole.ASSISTANT, "assistant")
+        assert turn2_msgs[3].role in (MessageRole.USER, "user")
+        assert turn2_msgs[3].content == "Turn 2 prompt"
+
+        # Check SQLite persistence only contains user and assistant messages
+        db_mgr = DatabaseManager(db_url=f"sqlite:///{db_file.as_posix()}")
+        session_repo = SessionRepository(db_mgr)
+        message_repo = MessageRepository(db_mgr)
+        sessions = session_repo.list_sessions()
+        assert len(sessions) == 1
+        persisted = message_repo.list_messages(sessions[0].id)
+        assert len(persisted) == 4
+        assert all(m.role in ("user", "assistant") for m in persisted)
