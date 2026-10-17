@@ -5,10 +5,10 @@
 **Blocked by:**
 - 02: Tool Contracts and Read-Only Filesystem Tools (read_file, list_dir)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `search` tool implemented under `icarus_core.tools.search` supporting regex and literal text queries.
-- [ ] Includes glob inclusion/exclusion filtering (e.g., ignoring `.git/`, `.venv/`, binary files).
-- [ ] Results return structured JSON containing file paths, line numbers, and snippets, bounded to a maximum match limit (default 50 matches).
-- [ ] Registered as a `SAFE_READ` tool in the tool registry.
-- [ ] Comprehensive unit tests verify exact pattern matching, regex mode, glob filtering, and output truncation.
+- [x] `search` tool implemented under `icarus_core.tools.search` supporting regex and literal text queries.
+- [x] Includes glob inclusion/exclusion filtering (e.g., ignoring `.git/`, `.venv/`, binary files).
+- [x] Results return structured JSON containing file paths, line numbers, and snippets, bounded to a maximum match limit (default 50 matches).
+- [x] Registered as a `SAFE_READ` tool in the tool registry.
+- [x] Comprehensive unit tests verify exact pattern matching, regex mode, glob filtering, and output truncation.

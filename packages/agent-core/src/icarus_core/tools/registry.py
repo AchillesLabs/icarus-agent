@@ -9,6 +9,7 @@ from icarus_contracts.tools import ToolCall, ToolDefinition, ToolResult
 
 from icarus_core.tools.base import BaseTool
 from icarus_core.tools.filesystem import ListDirTool, ReadFileTool
+from icarus_core.tools.search import SearchTool
 
 
 class ToolRegistry:
@@ -62,4 +63,5 @@ def create_default_registry() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(ReadFileTool())
     registry.register(ListDirTool())
+    registry.register(SearchTool())
     return registry

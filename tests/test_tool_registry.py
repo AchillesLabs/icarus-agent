@@ -58,11 +58,34 @@ def test_registry_execute_unregistered_tool(tmp_path: Path):
 
 
 def test_create_default_registry():
-    """create_default_registry includes read_file and list_dir."""
+    """create_default_registry includes read_file, list_dir, and search."""
     registry = create_default_registry()
     assert registry.has("read_file")
     assert registry.has("list_dir")
+    assert registry.has("search")
     definitions = registry.list_tools()
     names = [d.name for d in definitions]
     assert "read_file" in names
     assert "list_dir" in names
+    assert "search" in names
+
+    search_def = next(d for d in definitions if d.name == "search")
+    assert search_def.safety_category.value == "safe_read"
+
+
+def test_registry_dispatch_search(tmp_path: Path):
+    """ToolRegistry dispatches search ToolCall to SearchTool and returns results."""
+    (tmp_path / "hello.py").write_text("def find_this_symbol(): pass\n")
+    registry = create_default_registry()
+
+    call = ToolCall(
+        id="call_search_1",
+        name="search",
+        arguments={"query": "find_this_symbol"},
+    )
+    result = registry.execute(call, workspace_root=tmp_path)
+
+    assert result.call_id == "call_search_1"
+    assert result.name == "search"
+    assert result.exit_code == 0
+    assert "find_this_symbol" in result.output
