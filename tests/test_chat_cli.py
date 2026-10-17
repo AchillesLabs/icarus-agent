@@ -311,6 +311,7 @@ def test_chat_sigint_during_streaming_graceful_recovery(tmp_path: Path):
 def test_chat_with_openrouter_provider(tmp_path: Path):
     """Running chat with --provider openrouter streams model response cleanly."""
     import httpx
+
     db_file = tmp_path / "icarus.db"
 
     def handler(request: httpx.Request) -> httpx.Response:

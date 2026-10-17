@@ -177,6 +177,7 @@ def test_logs_command_displays_records_and_respects_tail(tmp_path: Path):
 def test_run_with_openrouter_provider_streams_and_commits(tmp_path: Path):
     """Running with --provider openrouter streams tokens and persists session."""
     import httpx
+
     db_file = tmp_path / "icarus.db"
     log_dir = tmp_path / "logs"
 
