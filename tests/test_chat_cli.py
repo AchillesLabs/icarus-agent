@@ -389,3 +389,28 @@ def test_chat_injects_system_prompt_to_provider(tmp_path: Path):
         persisted = message_repo.list_messages(sessions[0].id)
         assert len(persisted) == 4
         assert all(m.role in ("user", "assistant") for m in persisted)
+
+
+def test_chat_auto_approve_flags_in_help():
+    """`icarus chat --help` documents --auto-approve and -y flags."""
+    result = runner.invoke(app, ["chat", "--help"])
+    assert result.exit_code == 0
+    assert "--auto-approve" in result.stdout
+    assert "-y" in result.stdout
+
+
+def test_chat_with_auto_approve_flags(tmp_path: Path):
+    """`icarus chat` accepts --auto-approve and -y without errors."""
+    db_file = tmp_path / "icarus.db"
+    log_dir = tmp_path / "logs"
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_logs_dir", return_value=log_dir),
+    ):
+        res1 = runner.invoke(app, ["chat", "--provider", "mock", "--auto-approve"], input="/exit\n")
+        assert res1.exit_code == 0
+
+        res2 = runner.invoke(app, ["chat", "--provider", "mock", "-y"], input="/exit\n")
+        assert res2.exit_code == 0

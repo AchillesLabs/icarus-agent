@@ -5,11 +5,12 @@
 **Blocked by:**
 - 02: Tool Contracts and Read-Only Filesystem Tools (read_file, list_dir)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Approval engine implemented under `icarus_core.agent.approvals` supporting `INTERACTIVE`, `AUTO_APPROVE`, and `DENY` policies.
-- [ ] `write_file` tool implemented with path resolution, workspace jailing, directory auto-creation, and content writing.
-- [ ] Marked as `REQUIRES_APPROVAL` in the tool definition.
-- [ ] Interactive terminal prompt in `apps/cli` displays styled action preview and collects `[y/N]` confirmation.
-- [ ] `--auto-approve` / `-y` flag supported in `icarus run` and `icarus chat`.
-- [ ] Unit and CLI tests verify write execution upon approval, clean refusal on user denial, and workspace escape rejection.
+- [x] Approval engine implemented under `icarus_core.agent.approvals` supporting `INTERACTIVE`, `AUTO_APPROVE`, and `DENY` policies.
+- [x] `write_file` tool implemented with path resolution, workspace jailing, directory auto-creation, and content writing.
+- [x] Marked as `REQUIRES_APPROVAL` in the tool definition.
+- [x] Interactive terminal prompt in `apps/cli` displays styled action preview and collects `[y/N]` confirmation.
+- [x] `--auto-approve` / `-y` flag supported in `icarus run` and `icarus chat`.
+- [x] Unit and CLI tests verify write execution upon approval, clean refusal on user denial, and workspace escape rejection.
+

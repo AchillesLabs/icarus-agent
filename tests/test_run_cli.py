@@ -256,3 +256,28 @@ def test_run_injects_system_prompt_to_provider(tmp_path: Path):
         assert "Working Directory:" in sent_messages[0].content
         assert sent_messages[1].role in (MessageRole.USER, "user")
         assert sent_messages[1].content == "What is the capital of France?"
+
+
+def test_run_auto_approve_flags_in_help():
+    """`icarus run --help` documents --auto-approve and -y flags."""
+    result = runner.invoke(app, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--auto-approve" in result.stdout
+    assert "-y" in result.stdout
+
+
+def test_run_with_auto_approve_flags(tmp_path: Path):
+    """`icarus run` accepts --auto-approve and -y without errors."""
+    db_file = tmp_path / "icarus.db"
+    log_dir = tmp_path / "logs"
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_logs_dir", return_value=log_dir),
+    ):
+        res1 = runner.invoke(app, ["run", "Hello", "--provider", "mock", "--auto-approve"])
+        assert res1.exit_code == 0
+
+        res2 = runner.invoke(app, ["run", "Hello", "--provider", "mock", "-y"])
+        assert res2.exit_code == 0

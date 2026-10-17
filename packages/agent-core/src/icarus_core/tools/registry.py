@@ -8,7 +8,7 @@ from typing import Any
 from icarus_contracts.tools import ToolCall, ToolDefinition, ToolResult
 
 from icarus_core.tools.base import BaseTool
-from icarus_core.tools.filesystem import ListDirTool, ReadFileTool
+from icarus_core.tools.filesystem import ListDirTool, ReadFileTool, WriteFileTool
 from icarus_core.tools.search import SearchTool
 
 
@@ -64,4 +64,5 @@ def create_default_registry() -> ToolRegistry:
     registry.register(ReadFileTool())
     registry.register(ListDirTool())
     registry.register(SearchTool())
+    registry.register(WriteFileTool())
     return registry

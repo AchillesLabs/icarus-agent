@@ -332,6 +332,16 @@ def chat_cmd(
         float | None,
         typer.Option("--temperature", "-t", help="Sampling temperature between 0.0 and 2.0."),
     ] = None,
+    auto_approve: Annotated[
+        bool,
+        typer.Option(
+            "--auto-approve",
+            "-y",
+            help=(
+                "Automatically approve actions requiring confirmation without interactive prompts."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Launch an interactive streaming chat REPL session."""
     ensure_database_migrated()
@@ -342,6 +352,7 @@ def chat_cmd(
             session_id=session,
             resume=resume,
             temperature=temperature,
+            auto_approve=auto_approve,
             console=console,
         )
     except ValueError as exc:
@@ -368,6 +379,16 @@ def run_cmd(
         float | None,
         typer.Option("--temperature", "-t", help="Sampling temperature between 0.0 and 2.0."),
     ] = None,
+    auto_approve: Annotated[
+        bool,
+        typer.Option(
+            "--auto-approve",
+            "-y",
+            help=(
+                "Automatically approve actions requiring confirmation without interactive prompts."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Execute a non-interactive one-shot query and stream tokens to stdout."""
     ensure_database_migrated()
@@ -376,6 +397,7 @@ def run_cmd(
         provider_name=provider,
         model_name=model,
         temperature=temperature,
+        auto_approve=auto_approve,
         console=console,
     )
     if exit_code != 0:

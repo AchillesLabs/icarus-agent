@@ -305,3 +305,103 @@ class ListDirTool(BaseTool):
             output=json.dumps(entries, indent=2),
             exit_code=0,
         )
+
+
+class WriteFileTool(BaseTool):
+    """Tool to create or overwrite a file within the workspace."""
+
+    @property
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="write_file",
+            description=(
+                "Write or overwrite text content to a file within the workspace, "
+                "automatically creating parent directories if needed."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path relative to the workspace root",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Text content to write into the file",
+                    },
+                },
+                "required": ["path", "content"],
+            },
+            safety_category=ToolSafetyCategory.REQUIRES_APPROVAL,
+        )
+
+    def execute(
+        self,
+        arguments: dict[str, Any],
+        workspace_root: Path | str,
+        call_id: str = "direct_call",
+    ) -> ToolResult:
+        rel_path = str(arguments.get("path", "")).strip()
+        if not rel_path:
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output="",
+                error="Missing required argument 'path'.",
+                exit_code=1,
+            )
+
+        if "content" not in arguments or arguments.get("content") is None:
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output="",
+                error="Missing required argument 'content'.",
+                exit_code=1,
+            )
+
+        content = str(arguments["content"])
+
+        try:
+            target_file = resolve_workspace_path(rel_path, workspace_root)
+        except WorkspaceJailError as exc:
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output="",
+                error=str(exc),
+                exit_code=1,
+            )
+
+        if target_file.exists() and target_file.is_dir():
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output="",
+                error=f"Path '{rel_path}' is a directory. Cannot overwrite directory with a file.",
+                exit_code=1,
+            )
+
+        try:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            encoded = content.encode("utf-8")
+            target_file.write_bytes(encoded)
+            byte_count = len(encoded)
+            line_count = len(content.splitlines())
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output=(
+                    f"Successfully wrote {byte_count} bytes ({line_count} lines) to '{rel_path}'."
+                ),
+                exit_code=0,
+            )
+
+        except Exception as exc:
+            return ToolResult(
+                call_id=call_id,
+                name="write_file",
+                output="",
+                error=f"Failed to write file '{rel_path}': {exc}",
+                exit_code=1,
+            )

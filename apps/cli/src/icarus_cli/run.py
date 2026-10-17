@@ -29,6 +29,8 @@ from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.registry import ProviderRegistry
 from rich.console import Console
 
+from icarus_cli.approvals import create_cli_approval_engine
+
 logger = get_logger("cli.run")
 
 
@@ -66,6 +68,7 @@ def execute_run(
     provider_name: str | None = None,
     model_name: str | None = None,
     temperature: float | None = None,
+    auto_approve: bool = False,
     console: Console | None = None,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
@@ -82,6 +85,9 @@ def execute_run(
     stdout_stream = stdout or sys.stdout
 
     setup_logging()
+    _approval_engine = create_cli_approval_engine(
+        auto_approve=auto_approve, console=console, stdin=stdin_stream
+    )
 
     # Resolve input prompt from CLI argument or stdin pipe
     effective_prompt = prompt

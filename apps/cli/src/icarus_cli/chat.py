@@ -28,6 +28,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
+from icarus_cli.approvals import create_cli_approval_engine
 from icarus_cli.models_view import render_models_table, select_model_interactive
 
 
@@ -111,14 +112,19 @@ def run_chat(
     session_id: str | None = None,
     resume: bool = False,
     temperature: float | None = None,
+    auto_approve: bool = False,
     console: Console | None = None,
     stdin: TextIO | None = None,
 ) -> None:
     """Execute the interactive chat REPL loop."""
     console = console or Console()
     stdin = stdin or sys.stdin
+    _approval_engine = create_cli_approval_engine(
+        auto_approve=auto_approve, console=console, stdin=stdin
+    )
 
     cfg_manager = ConfigManager()
+
     cfg = cfg_manager.load_config()
 
     effective_provider = provider_name or cfg.default_provider
