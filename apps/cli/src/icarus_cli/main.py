@@ -7,6 +7,7 @@ from icarus_contracts.doctor import HealthStatus
 from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
 from icarus_core.doctor import run_doctor_checks
+from icarus_core.paths import get_icarus_log_file
 from icarus_core.persistence.migrations.runner import MigrationRunner
 from rich.console import Console
 from rich.panel import Panel
@@ -14,6 +15,7 @@ from rich.table import Table
 
 from icarus_cli import __version__
 from icarus_cli.chat import run_chat
+from icarus_cli.run import execute_run
 
 app = typer.Typer(
     name="icarus",
@@ -214,6 +216,59 @@ def chat_cmd(
         )
     except ValueError as exc:
         raise typer.Exit(code=1) from exc
+
+
+@app.command(name="run")
+def run_cmd(
+    prompt: Annotated[
+        str | None,
+        typer.Argument(
+            help="Prompt text to execute. If omitted or '-', reads prompt from standard input.",
+        ),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Override active model provider (grok, mock, etc.)."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Override active model name."),
+    ] = None,
+    temperature: Annotated[
+        float | None,
+        typer.Option("--temperature", "-t", help="Sampling temperature between 0.0 and 2.0."),
+    ] = None,
+) -> None:
+    """Execute a non-interactive one-shot query and stream tokens to stdout."""
+    ensure_database_migrated()
+    exit_code = execute_run(
+        prompt=prompt,
+        provider_name=provider,
+        model_name=model,
+        temperature=temperature,
+        console=console,
+    )
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
+
+
+@app.command(name="logs")
+def logs_cmd(
+    tail: Annotated[
+        int,
+        typer.Option("--tail", "-n", help="Number of recent log lines to display."),
+    ] = 50,
+) -> None:
+    """Inspect recent developer log records from ~/.icarus/logs/cli.log."""
+    log_file = get_icarus_log_file()
+    if not log_file.exists():
+        console.print(f"[dim]No logs found at {log_file.as_posix()}[/dim]")
+        return
+
+    lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    recent = lines[-tail:] if tail > 0 else lines
+    for line in recent:
+        console.print(line)
 
 
 @config_app.command(name="list")

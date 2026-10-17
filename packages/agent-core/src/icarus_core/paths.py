@@ -25,5 +25,13 @@ def get_icarus_db_path() -> Path:
 
 
 def get_icarus_logs_dir() -> Path:
-    """Return path to rotating logs directory."""
+    """Return path to rotating logs directory (~/.icarus/logs or ICARUS_LOG_DIR)."""
+    env_log_dir = os.environ.get("ICARUS_LOG_DIR") or os.environ.get("OPENAGENT_LOG_DIR")
+    if env_log_dir:
+        return Path(env_log_dir).expanduser().resolve()
     return get_icarus_home() / "logs"
+
+
+def get_icarus_log_file() -> Path:
+    """Return path to default cli.log file."""
+    return get_icarus_logs_dir() / "cli.log"

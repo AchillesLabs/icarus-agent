@@ -4,11 +4,12 @@
 
 **Blocked by:** 05: Interactive Chat REPL with Session Persistence
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `icarus run "Prompt"` executes one-shot generation and streams tokens to stdout.
-- [ ] Command supports reading prompts from stdin pipe (e.g. `cat file.txt | icarus run`).
-- [ ] Proper exit codes returned (0 on success, 1 on error, 130 on SIGINT cancellation).
-- [ ] Rotating file logger writes to `~/.icarus/logs/cli.log` (configurable via `ICARUS_LOG_DIR` and `ICARUS_LOG_LEVEL`).
-- [ ] Automated regex redaction filter intercepts and replaces known secret patterns (`xai-...`, `sk-or-...`, `Bearer ...`) with `[REDACTED]`.
-- [ ] Tests verify stdout piping, exit codes, and automated log redaction.
+- [x] `icarus run "Prompt"` executes one-shot generation and streams tokens to stdout.
+- [x] Command supports reading prompts from stdin pipe (e.g. `cat file.txt | icarus run`).
+- [x] Proper exit codes returned (0 on success, 1 on error, 130 on SIGINT cancellation).
+- [x] Rotating file logger writes to `~/.icarus/logs/cli.log` (configurable via `ICARUS_LOG_DIR` and `ICARUS_LOG_LEVEL`).
+- [x] Automated regex redaction filter intercepts and replaces known secret patterns (`xai-...`, `sk-or-...`, `Bearer ...`) with `[REDACTED]`.
+- [x] Tests verify stdout piping, exit codes, and automated log redaction.
+
