@@ -40,3 +40,16 @@ class ProviderCapabilities(BaseModel):
     supports_streaming: bool = True
     supports_tools: bool = False
     supports_vision: bool = False
+
+
+class DiscoveredModel(BaseModel):
+    """Metadata representing a model discovered from a provider's catalog."""
+
+    id: str
+    name: str
+    provider: str
+    context_window: int = 128000
+    is_free: bool = False
+    tier: str = "Paid"
+    pricing_info: str = ""
+    description: str = ""

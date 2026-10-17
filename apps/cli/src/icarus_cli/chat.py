@@ -15,8 +15,10 @@ from icarus_contracts.session import (
     SessionDTO,
 )
 from icarus_core.config import ConfigManager
+from icarus_core.credentials import CredentialResolver
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.repository import MessageRepository, SessionRepository
+from icarus_core.providers import fetch_provider_models
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.registry import ProviderRegistry
 from rich.console import Console
@@ -24,6 +26,8 @@ from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
+
+from icarus_cli.models_view import render_models_table, select_model_interactive
 
 
 class ChatSessionManager:
@@ -191,10 +195,32 @@ def run_chat(
             table.add_column("Command", style="bold yellow", width=15)
             table.add_column("Description")
             table.add_row("/help", "Display available in-chat slash commands")
+            table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
             table.add_row("/clear", "Clear the terminal screen")
             table.add_row("/session", "Show active session details and message count")
             table.add_row("/exit", "Exit the chat REPL")
             console.print(table)
+            continue
+
+        if cleaned == "/models":
+            cred = CredentialResolver().resolve(effective_provider)
+            with console.status(f"[cyan]Fetching models for '{effective_provider}'...[/cyan]"):
+                models_list = fetch_provider_models(effective_provider, api_key=cred.secret)
+            if not models_list:
+                console.print(
+                    f"[yellow]No models found for provider '{effective_provider}'.[/yellow]"
+                )
+            else:
+                render_models_table(
+                    models_list, current_model=effective_model, provider=effective_provider
+                )
+                chosen = select_model_interactive(models_list, current_model=effective_model)
+                if chosen and chosen != effective_model:
+                    effective_model = chosen
+                    cfg = cfg_manager.load_config()
+                    cfg.model = chosen
+                    cfg_manager.save_config(cfg)
+                    console.print(f"[bold green]Switched active model to '{chosen}'![/bold green]")
             continue
 
         if cleaned == "/session":
@@ -242,9 +268,18 @@ def run_chat(
             continue
         except ProviderError as exc:
             err_title = f"{exc.__class__.__name__} ({effective_provider})"
+            hint = ""
+            err_str = str(exc).lower()
+            if "does not exist" in err_str or "not have access" in err_str or "404" in err_str:
+                hint = (
+                    "\n\n[bold yellow]Hint:[/bold yellow] The configured model "
+                    f"[bold]{effective_model}[/bold] is not accessible on your API key.\n"
+                    "Type [bold cyan]/models[/bold cyan] in chat or run "
+                    "[bold cyan]icarus models[/bold cyan] to pick an available model."
+                )
             console.print(
                 Panel(
-                    f"[bold red]{err_title}:[/bold red] {exc}",
+                    f"[bold red]{err_title}:[/bold red] {exc}{hint}",
                     title="Provider Error",
                     border_style="red",
                 )

@@ -117,8 +117,8 @@ def test_cli_init_interactive(tmp_path: Path):
         patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
         patch("keyring.set_password") as mock_set_pw,
     ):
-        # Simulate typing provider then api key
-        result = runner.invoke(app, ["init"], input="grok\nxai-interactive-key\n")
+        # Simulate typing provider, api key, and model choice
+        result = runner.invoke(app, ["init"], input="grok\nxai-interactive-key\n1\n")
         assert result.exit_code == 0
         mock_set_pw.assert_called_once_with("icarus", "grok", "xai-interactive-key")
 
@@ -174,7 +174,7 @@ def test_cli_init_groq_non_interactive(tmp_path: Path):
         assert config_path.exists()
         content = config_path.read_text(encoding="utf-8")
         assert 'default_provider = "groq"' in content
-        assert 'model = "llama-3.3-70b-versatile"' in content
+        assert 'model = "openai/gpt-oss-120b"' in content
         assert "gsk_test_key_12345" not in content
 
 

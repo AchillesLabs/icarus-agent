@@ -27,14 +27,14 @@ async def test_groq_provider_generate_success():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer gsk_test_key"
         payload = json.loads(request.read())
-        assert payload["model"] == "llama-3.3-70b-versatile"
+        assert payload["model"] == GroqProvider.DEFAULT_MODEL
         assert payload["stream"] is False
 
         return httpx.Response(
             200,
             json={
                 "id": "chatcmpl-groq-123",
-                "model": "llama-3.3-70b-versatile",
+                "model": GroqProvider.DEFAULT_MODEL,
                 "choices": [
                     {
                         "message": {
@@ -53,7 +53,7 @@ async def test_groq_provider_generate_success():
 
     result = await provider.generate([PromptMessage(role=MessageRole.USER, content="Hello Groq")])
     assert result.content == "Hello from Groq Cloud!"
-    assert result.model == "llama-3.3-70b-versatile"
+    assert result.model == GroqProvider.DEFAULT_MODEL
     assert result.finish_reason == "stop"
 
 

@@ -25,12 +25,13 @@ class GroqProvider:
     """
 
     DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-    DEFAULT_MODEL = "llama-3.3-70b-versatile"
+    DEFAULT_MODEL = "openai/gpt-oss-120b"
     SUPPORTED_MODELS = [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+        "allam-2-7b",
         "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it",
     ]
 
     def __init__(
@@ -218,3 +219,14 @@ class GroqProvider:
             supports_tools=True,
             supports_vision=False,
         )
+
+
+def fetch_groq_models(
+    api_key: str,
+    base_url: str = GroqProvider.DEFAULT_BASE_URL,
+    client: httpx.Client | None = None,
+) -> list[Any]:
+    """Fetch and filter active text chat models available on Groq Cloud."""
+    from icarus_core.providers.discovery import fetch_groq_models as _discover_groq
+
+    return _discover_groq(api_key=api_key, base_url=base_url, client=client)

@@ -9,12 +9,18 @@ from icarus_core.credentials import CredentialResolver
 from icarus_core.doctor import run_doctor_checks
 from icarus_core.paths import get_icarus_log_file
 from icarus_core.persistence.migrations.runner import MigrationRunner
+from icarus_core.providers import fetch_provider_models
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from icarus_cli import __version__
 from icarus_cli.chat import run_chat
+from icarus_cli.models_view import (
+    render_models_table,
+    resolve_model_by_input,
+    select_model_interactive,
+)
 from icarus_cli.run import execute_run
 
 app = typer.Typer(
@@ -116,8 +122,16 @@ def doctor() -> None:
 def init_cmd(
     provider: Annotated[
         str,
-        typer.Option("--provider", "-p", help="Primary model provider (grok, openrouter)."),
-    ] = "grok",
+        typer.Option("--provider", "-p", help="Primary model provider (groq, openrouter, grok)."),
+    ] = "groq",
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Selected model ID for the provider."),
+    ] = None,
+    number: Annotated[
+        int | None,
+        typer.Option("--number", "-n", help="Model number from discovered list to select."),
+    ] = None,
     api_key: Annotated[
         str | None,
         typer.Option("--api-key", "-k", help="API key for the selected provider."),
@@ -166,20 +180,134 @@ def init_cmd(
     cfg_manager = ConfigManager()
     cfg = cfg_manager.load_config()
     cfg.default_provider = selected_provider
-    if selected_provider == "openrouter":
-        cfg.model = "anthropic/claude-3.5-sonnet"
-    elif selected_provider == "groq":
-        cfg.model = "llama-3.3-70b-versatile"
-    else:
-        cfg.model = "grok-2"
+
+    # Discover models dynamically on the provided key
+    effective_key = selected_key or resolver.resolve(selected_provider).secret
+    discovered = []
+    try:
+        with console.status(f"[cyan]Fetching available models for '{selected_provider}'...[/cyan]"):
+            discovered = fetch_provider_models(selected_provider, api_key=effective_key)
+    except Exception:
+        discovered = []
+
+    chosen_model = model
+    if chosen_model is None and number is not None:
+        try:
+            chosen_model = resolve_model_by_input(discovered, number=number)
+        except ValueError as err:
+            console.print(f"[bold red]Selection Error:[/bold red] {err}")
+            raise typer.Exit(code=1) from None
+
+    if chosen_model is None:
+        if discovered:
+            if not non_interactive:
+                render_models_table(discovered, current_model=cfg.model, provider=selected_provider)
+                chosen_model = select_model_interactive(discovered, current_model=cfg.model)
+            else:
+                if selected_provider == "openrouter":
+                    chosen_model = "anthropic/claude-3.5-sonnet"
+                elif selected_provider == "groq":
+                    chosen_model = "openai/gpt-oss-120b"
+                else:
+                    chosen_model = discovered[0].id
+        else:
+            if selected_provider == "openrouter":
+                chosen_model = "anthropic/claude-3.5-sonnet"
+            elif selected_provider == "groq":
+                chosen_model = "openai/gpt-oss-120b"
+            else:
+                chosen_model = "grok-2"
+
+    cfg.model = chosen_model
     cfg_manager.save_config(cfg)
 
     console.print(
         f"[bold green]Configuration saved to {cfg_manager.config_path.as_posix()}[/bold green]"
     )
     console.print(
-        "\n[bold cyan]Icarus initialization complete! Run `icarus doctor` to verify.[/bold cyan]\n"
+        f"[bold cyan]Active model set to:[/bold cyan] [bold yellow]{cfg.model}[/bold yellow] "
+        f"([dim]{selected_provider}[/dim])"
     )
+    console.print(
+        "\n[bold cyan]Icarus initialization complete! "
+        "Run `icarus doctor` or `icarus chat` to start.[/bold cyan]\n"
+    )
+
+
+@app.command(name="models")
+def models_cmd(
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Provider to inspect (groq, openrouter, grok)."),
+    ] = None,
+    set_model: Annotated[
+        str | None,
+        typer.Option("--set", "-s", help="Model ID to activate and save in config."),
+    ] = None,
+    number: Annotated[
+        int | None,
+        typer.Option("--number", "-n", help="Model number from the list to activate."),
+    ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", help="Display models without interactive prompt."),
+    ] = False,
+) -> None:
+    """List all models available on the provider (Free vs Paid tiers) and switch active model."""
+    cfg_manager = ConfigManager()
+    cfg = cfg_manager.load_config()
+    target_provider = (provider or cfg.default_provider).lower().strip()
+
+    resolver = CredentialResolver()
+    cred = resolver.resolve(target_provider)
+
+    with console.status(f"[cyan]Fetching models for '{target_provider}'...[/cyan]"):
+        models = fetch_provider_models(target_provider, api_key=cred.secret)
+
+    if not models:
+        console.print(
+            f"[yellow]No models found or unable to fetch models for '{target_provider}'.[/yellow]"
+        )
+        if not cred.is_available:
+            console.print(
+                f"[dim]No API key found for '{target_provider}'. "
+                f"Run `icarus init -p {target_provider}` first.[/dim]"
+            )
+        raise typer.Exit(code=1)
+
+    chosen_model: str | None = None
+    if number is not None:
+        try:
+            chosen_model = resolve_model_by_input(models, number=number)
+        except ValueError as err:
+            console.print(f"[bold red]Selection Error:[/bold red] {err}")
+            raise typer.Exit(code=1) from None
+    elif set_model is not None:
+        chosen_model = resolve_model_by_input(models, model_id=set_model)
+
+    if chosen_model is not None:
+        cfg.model = chosen_model
+        cfg.default_provider = target_provider
+        cfg_manager.save_config(cfg)
+        console.print(
+            f"[bold green]Active model switched to '{chosen_model}' "
+            f"for provider '{target_provider}'.[/bold green]"
+        )
+        return
+
+    render_models_table(models, current_model=cfg.model, provider=target_provider)
+
+    if not non_interactive:
+        selected = select_model_interactive(models, current_model=cfg.model)
+        if selected and selected != cfg.model:
+            cfg.model = selected
+            cfg.default_provider = target_provider
+            cfg_manager.save_config(cfg)
+            console.print(
+                f"\n[bold green]Successfully switched active model to '{selected}'![/bold green]\n"
+            )
+        elif selected == cfg.model:
+            console.print(f"\n[dim]Model '{selected}' remains active.[/dim]\n")
 
 
 @app.command(name="chat")

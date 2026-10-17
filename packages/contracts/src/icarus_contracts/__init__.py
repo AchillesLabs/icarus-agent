@@ -11,6 +11,7 @@ from icarus_contracts.exceptions import (
 )
 from icarus_contracts.provider import (
     CompletionResult,
+    DiscoveredModel,
     PromptMessage,
     ProviderCapabilities,
     StreamChunk,
@@ -36,6 +37,7 @@ __all__ = [
     "ContextLengthExceededError",
     "CredentialResult",
     "CredentialSource",
+    "DiscoveredModel",
     "DoctorCheckResult",
     "DoctorReport",
     "HealthStatus",
