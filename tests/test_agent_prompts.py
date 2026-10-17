@@ -21,6 +21,7 @@ def test_system_prompt_builder_contains_identity_and_guidelines():
     assert "Linux 6.1.0" in prompt
     assert "/workspace/project" in prompt
     assert "main" in prompt
+    assert "personal" in prompt.lower()
     assert "safety" in prompt.lower() or "guidelines" in prompt.lower()
 
 

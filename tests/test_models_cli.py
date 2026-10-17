@@ -1,5 +1,6 @@
 """Tests for icarus models CLI command and interactive model selection."""
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,9 +18,10 @@ runner = CliRunner()
 def test_models_cli_help():
     result = runner.invoke(app, ["models", "--help"])
     assert result.exit_code == 0
-    assert "--provider" in result.stdout
-    assert "--set" in result.stdout
-    assert "--number" in result.stdout
+    clean_stdout = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", result.stdout)
+    assert "--provider" in clean_stdout
+    assert "--set" in clean_stdout
+    assert "--number" in clean_stdout
 
 
 def test_models_cli_list_non_interactive(tmp_path: Path):

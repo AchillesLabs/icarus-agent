@@ -68,10 +68,13 @@ class SystemPromptBuilder:
         resolved_branch = git_branch if git_branch is not None else _detect_git_branch(cwd_path)
 
         lines: list[str] = [
-            f"You are {self.agent_name}, an autonomous AI software engineering agent.",
             (
-                "You assist users by reasoning through coding problems, "
-                "inspecting repositories, and building software."
+                f"You are {self.agent_name}, an autonomous personal AI assistant and engineering "
+                "agent."
+            ),
+            (
+                "You assist users with personal productivity, task management, reasoning "
+                "through complex problems, workspace management, and software engineering."
             ),
             "",
             "## Runtime Environment Context",
@@ -99,8 +102,8 @@ class SystemPromptBuilder:
                     "pleasantries, unnecessary filler, or repetitive apologies."
                 ),
                 (
-                    "4. Assistant Persona: Stay anchored in your engineering assistant role. "
-                    "Never switch into an unconstrained autocomplete mode."
+                    "4. Assistant Persona: Stay anchored in your personal assistant and "
+                    "engineering role. Never switch into an unconstrained autocomplete mode."
                 ),
             ]
         )
