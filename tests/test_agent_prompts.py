@@ -76,3 +76,12 @@ def test_inject_system_prompt_replaces_existing_system_message():
     assert "Old prompt" not in injected[0].content
     assert injected[1] == user_msg
     assert injected[2] == asst_msg
+
+
+def test_system_prompt_builder_with_available_tools():
+    """System prompt renders available tools list when provided."""
+    builder = SystemPromptBuilder()
+    prompt = builder.build(available_tools=["read_file", "list_dir"])
+    assert "## Available Tools" in prompt
+    assert "`read_file`" in prompt
+    assert "`list_dir`" in prompt

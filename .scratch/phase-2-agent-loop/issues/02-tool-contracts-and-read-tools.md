@@ -5,10 +5,10 @@
 **Blocked by:**
 - 01: Agent Persona and Dynamic System Instruction Injection
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `ToolDefinition`, `ToolCall`, and `ToolResult` contracts defined in `icarus_contracts` with OpenAI-compatible function schema generation.
-- [ ] Tool registry implemented under `icarus_core.tools.registry` managing registered tool instances and schema exports.
-- [ ] `read_file` tool implemented with path resolution, boundary checks (workspace jailing), and optional line offset/limit slicing.
-- [ ] `list_dir` tool implemented with path resolution, recursive depth control, and entry metadata (size, file/directory).
-- [ ] Unit tests verify schema compliance, tool execution, and rejection of path traversals attempting to escape workspace boundaries.
+- [x] `ToolDefinition`, `ToolCall`, and `ToolResult` contracts defined in `icarus_contracts` with OpenAI-compatible function schema generation.
+- [x] Tool registry implemented under `icarus_core.tools.registry` managing registered tool instances and schema exports.
+- [x] `read_file` tool implemented with path resolution, boundary checks (workspace jailing), and optional line offset/limit slicing.
+- [x] `list_dir` tool implemented with path resolution, recursive depth control, and entry metadata (size, file/directory).
+- [x] Unit tests verify schema compliance, tool execution, and rejection of path traversals attempting to escape workspace boundaries.

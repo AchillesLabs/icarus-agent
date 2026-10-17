@@ -1,7 +1,7 @@
 """Abstract base protocol for LLM model providers."""
 
 from collections.abc import AsyncIterator
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from icarus_contracts.provider import (
     CompletionResult,
@@ -21,6 +21,7 @@ class ModelProvider(Protocol):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> CompletionResult:
         """Generate a complete non-streaming completion."""
         ...
@@ -31,6 +32,7 @@ class ModelProvider(Protocol):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream token deltas asynchronously as they arrive."""
         ...

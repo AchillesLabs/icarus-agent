@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
 from icarus_contracts.provider import (
     CompletionResult,
@@ -34,6 +35,7 @@ class MockProvider:
         self.call_count: int = 0
         self.recorded_prompts: list[list[PromptMessage]] = []
         self.recorded_models: list[str] = []
+        self.recorded_tools: list[list[dict[str, Any]] | None] = []
         self._response_index: int = 0
 
     def _get_next_response(self) -> str:
@@ -49,10 +51,12 @@ class MockProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> CompletionResult:
         """Return a simulated completion."""
         self.call_count += 1
         self.recorded_prompts.append(messages)
+        self.recorded_tools.append(tools)
         target_model = model or "mock-model"
         self.recorded_models.append(target_model)
 
@@ -81,10 +85,12 @@ class MockProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream simulated token deltas asynchronously."""
         self.call_count += 1
         self.recorded_prompts.append(messages)
+        self.recorded_tools.append(tools)
         target_model = model or "mock-model"
         self.recorded_models.append(target_model)
 

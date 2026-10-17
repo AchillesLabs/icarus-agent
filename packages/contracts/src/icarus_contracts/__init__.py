@@ -8,6 +8,7 @@ from icarus_contracts.exceptions import (
     ProviderError,
     ProviderUnavailableError,
     RateLimitError,
+    WorkspaceJailError,
 )
 from icarus_contracts.provider import (
     CompletionResult,
@@ -26,6 +27,12 @@ from icarus_contracts.session import (
     SessionCreate,
     SessionDTO,
     SessionUpdate,
+)
+from icarus_contracts.tools import (
+    ToolCall,
+    ToolDefinition,
+    ToolResult,
+    ToolSafetyCategory,
 )
 
 __version__ = "0.1.0"
@@ -57,4 +64,9 @@ __all__ = [
     "SessionDTO",
     "SessionUpdate",
     "StreamChunk",
+    "ToolCall",
+    "ToolDefinition",
+    "ToolResult",
+    "ToolSafetyCategory",
+    "WorkspaceJailError",
 ]

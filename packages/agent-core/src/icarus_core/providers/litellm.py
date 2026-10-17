@@ -111,6 +111,7 @@ class LiteLLMProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> CompletionResult:
         """Generate a complete non-streaming completion via LiteLLM gateway."""
         target_model = model or self.DEFAULT_MODEL
@@ -122,6 +123,8 @@ class LiteLLMProvider:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
 
         url = f"{self.base_url}/chat/completions"
         client = self._get_client()
@@ -157,6 +160,7 @@ class LiteLLMProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream token deltas from LiteLLM SSE chat completions endpoint."""
         target_model = model or self.DEFAULT_MODEL
@@ -168,6 +172,8 @@ class LiteLLMProvider:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
 
         url = f"{self.base_url}/chat/completions"
         client = self._get_client()

@@ -26,3 +26,7 @@ class ContextLengthExceededError(ProviderError):
 
 class ProviderUnavailableError(ProviderError):
     """Raised when network disconnects, times out, or upstream service is down (5xx)."""
+
+
+class WorkspaceJailError(PermissionError):
+    """Raised when a file or directory operation attempts to escape the jailed workspace root."""
