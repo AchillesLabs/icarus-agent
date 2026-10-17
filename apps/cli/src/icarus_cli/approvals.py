@@ -37,6 +37,17 @@ def format_action_preview(tool_call: ToolCall) -> str:
             f"{preview_text}"
         )
 
+    if tool_call.name == "run_command":
+        cmd = args.get("command", "(unknown command)")
+        cwd = args.get("cwd", ".")
+        timeout = args.get("timeout", 30.0)
+        return (
+            f"[bold cyan]Action:[/bold cyan] Execute Shell Command\n"
+            f"[bold cyan]Command:[/bold cyan] [bold white]{cmd}[/bold white]\n"
+            f"[bold cyan]Working Directory:[/bold cyan] {cwd}\n"
+            f"[bold cyan]Timeout:[/bold cyan] {timeout}s"
+        )
+
     formatted_args = json.dumps(args, indent=2)
     return (
         f"[bold cyan]Tool:[/bold cyan] {tool_call.name}\n"

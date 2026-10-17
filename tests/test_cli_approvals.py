@@ -143,3 +143,58 @@ def test_cli_prompt_eof_safely_defaults_to_no():
 
     approved = prompt_for_approval(call, tool.definition, console=console, stdin=stdin)
     assert approved is False
+
+
+def test_prompt_for_approval_renders_run_command_preview_and_accepts():
+    """prompt_for_approval renders Rich panel with command, cwd, timeout and accepts 'y'."""
+    from icarus_core.tools import RunCommandTool
+
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, width=80)
+    stdin = io.StringIO("y\n")
+
+    tool = RunCommandTool()
+    call = ToolCall(
+        id="call_cli_cmd",
+        name="run_command",
+        arguments={"command": "pytest -v", "cwd": "tests", "timeout": 45.0},
+    )
+
+    approved = prompt_for_approval(
+        tool_call=call,
+        tool_definition=tool.definition,
+        console=console,
+        stdin=stdin,
+    )
+
+    assert approved is True
+    rendered = output.getvalue()
+    assert "Safety Approval Required" in rendered
+    assert "Execute Shell Command" in rendered
+    assert "pytest -v" in rendered
+    assert "tests" in rendered
+    assert "45" in rendered
+
+
+def test_create_cli_approval_engine_interactive_run_command_rejection(tmp_path: Path):
+    """create_cli_approval_engine rejects run_command when user inputs 'n'."""
+    from icarus_core.tools import RunCommandTool
+
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False)
+    stdin = io.StringIO("n\n")
+
+    engine = create_cli_approval_engine(auto_approve=False, console=console, stdin=stdin)
+    tool = RunCommandTool()
+    canary = tmp_path / "cli_rejected.txt"
+    cmd = f"python -c \"from pathlib import Path; Path(r'{canary}').write_text('bad')\""
+    call = ToolCall(
+        id="call_cli_reject",
+        name="run_command",
+        arguments={"command": cmd},
+    )
+
+    result = engine.execute_with_approval(call, tool, workspace_root=tmp_path)
+    assert result.exit_code == 1
+    assert "rejected" in result.error.lower()
+    assert not canary.exists()

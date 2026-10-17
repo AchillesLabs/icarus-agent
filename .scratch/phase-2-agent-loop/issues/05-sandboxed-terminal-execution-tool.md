@@ -5,10 +5,11 @@
 **Blocked by:**
 - 04: Human-in-the-Loop Safety Approvals and Workspace Modification (write_file)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `run_command` tool implemented under `icarus_core.tools.command` executing subcommands asynchronously with shell selection based on OS (PowerShell/cmd on Windows, bash/sh on Unix).
-- [ ] Enforces execution timeout budget (configurable, default 30.0s) and kills runaway processes cleanly.
-- [ ] Captures combined stdout, stderr, and integer exit code into a structured result payload.
-- [ ] Classifies `run_command` as `REQUIRES_APPROVAL`, prompting the user before execution.
-- [ ] Unit tests verify successful command output, non-zero exit code reporting, timeout enforcement, and interactive approval rejection.
+- [x] `run_command` tool implemented under `icarus_core.tools.command` executing subcommands asynchronously with shell selection based on OS (PowerShell/cmd on Windows, bash/sh on Unix).
+- [x] Enforces execution timeout budget (configurable, default 30.0s) and kills runaway processes cleanly.
+- [x] Captures combined stdout, stderr, and integer exit code into a structured result payload.
+- [x] Classifies `run_command` as `REQUIRES_APPROVAL`, prompting the user before execution.
+- [x] Unit tests verify successful command output, non-zero exit code reporting, timeout enforcement, and interactive approval rejection.
+
