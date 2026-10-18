@@ -28,6 +28,7 @@ from icarus_contracts.session import (
     SessionDTO,
     SessionUpdate,
 )
+from icarus_contracts.tokens import TokenUsage
 from icarus_contracts.tools import (
     ToolCall,
     ToolDefinition,
@@ -68,5 +69,6 @@ __all__ = [
     "ToolDefinition",
     "ToolResult",
     "ToolSafetyCategory",
+    "TokenUsage",
     "WorkspaceJailError",
 ]

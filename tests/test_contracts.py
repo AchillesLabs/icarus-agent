@@ -12,6 +12,7 @@ from icarus_contracts import (
     RunDTO,
     RunStatus,
     SessionDTO,
+    TokenUsage,
 )
 
 
@@ -114,3 +115,11 @@ def test_credential_result_model():
     assert res.secret == "xai-secret-12345"
     assert res.source == CredentialSource.ENV_VAR
     assert res.masked == "xai-...2345"
+
+
+def test_token_usage_contract():
+    usage = TokenUsage(prompt_tokens=15, completion_tokens=30)
+    assert usage.prompt_tokens == 15
+    assert usage.completion_tokens == 30
+    assert usage.total_tokens == 45
+

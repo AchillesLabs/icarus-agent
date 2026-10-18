@@ -4,10 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `TokenCounter` interface and implementations (`TiktokenCounter`, `HeuristicTokenCounter`) in `icarus_core`.
-- [ ] Support token estimation for raw strings, `PromptMessage` instances (including role overhead and tool calls), and tool schemas.
-- [ ] Fall back gracefully to character heuristic estimator if `tiktoken` is unavailable or model is unsupported.
-- [ ] Expose token calculation utilities in `icarus_core` for use across the agent loop and persistence layers.
-- [ ] Comprehensive unit tests verify accurate and deterministic token counts for text, messages, and tool definitions.
+- [x] Implement `TokenCounter` interface and implementations (`TiktokenCounter`, `HeuristicTokenCounter`) in `icarus_core`.
+- [x] Support token estimation for raw strings, `PromptMessage` instances (including role overhead and tool calls), and tool schemas.
+- [x] Fall back gracefully to character heuristic estimator if `tiktoken` is unavailable or model is unsupported.
+- [x] Expose token calculation utilities in `icarus_core` for use across the agent loop and persistence layers.
+- [x] Comprehensive unit tests verify accurate and deterministic token counts for text, messages, and tool definitions.
+
