@@ -1,6 +1,6 @@
 # Spec 0003: Phase 3 - Context Management, Token Budgeting, History Compaction, and SQLite Persistence
 
-- **Status**: Draft / In Progress
+- **Status**: Completed
 - **Target**: Phase 3 of Icarus Agent Architecture Roadmap
 - **Estimated Scope**: Token counting, context budgeting, conversation history compaction, run telemetry counters, and local SQLite session inspection
 
