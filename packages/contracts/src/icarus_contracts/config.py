@@ -28,6 +28,14 @@ class CredentialResult(BaseModel):
         return self.secret is not None and len(self.secret.strip()) > 0
 
 
+class ServerProfile(BaseModel):
+    """Remote server connection profile."""
+
+    name: str = Field(default="", description="Unique profile name")
+    url: str = Field(description="Base URL of the remote Icarus API server")
+    active: bool = Field(default=False, description="Whether this server is currently active")
+
+
 class IcarusConfig(BaseModel):
     """Configuration settings stored in ~/.icarus/config.toml (non-sensitive only)."""
 
@@ -58,4 +66,12 @@ class IcarusConfig(BaseModel):
         ge=0.1,
         le=1.0,
         description="Context utilization threshold triggering compaction",
+    )
+    servers: dict[str, ServerProfile] = Field(
+        default_factory=dict,
+        description="Configured remote server profiles",
+    )
+    active_server: str | None = Field(
+        default=None,
+        description="Name of the currently active remote server profile",
     )

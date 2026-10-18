@@ -1,9 +1,9 @@
-"""Entrypoint for the Icarus CLI application."""
-
+import asyncio
 from typing import Annotated
 
 import typer
 from icarus_contracts.doctor import HealthStatus
+from icarus_contracts.session import SessionDTO
 from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
 from icarus_core.doctor import run_doctor_checks
@@ -23,7 +23,9 @@ from icarus_cli.models_view import (
     resolve_model_by_input,
     select_model_interactive,
 )
+from icarus_cli.remote import RemoteAgentClient
 from icarus_cli.run import execute_run
+from icarus_cli.server_cmd import server_app
 from icarus_cli.sessions_view import render_session_history, render_sessions_table
 
 app = typer.Typer(
@@ -38,6 +40,7 @@ config_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(config_app, name="config")
+app.add_typer(server_app, name="server")
 
 console = Console()
 
@@ -345,9 +348,24 @@ def chat_cmd(
             ),
         ),
     ] = False,
+    remote: Annotated[
+        bool,
+        typer.Option("--remote", help="Execute chat session against configured remote API server."),
+    ] = False,
+    server: Annotated[
+        str | None,
+        typer.Option("--server", help="Specific remote server profile to use."),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option(
+            "--local", help="Force local agent execution even if a remote server is active."
+        ),
+    ] = False,
 ) -> None:
     """Launch an interactive streaming chat REPL session."""
-    ensure_database_migrated()
+    if local or (not remote and not server and ConfigManager().get_active_server() is None):
+        ensure_database_migrated()
     try:
         run_chat(
             provider_name=provider,
@@ -357,6 +375,9 @@ def chat_cmd(
             temperature=temperature,
             auto_approve=auto_approve,
             console=console,
+            remote=remote,
+            server_name=server,
+            local=local,
         )
     except ValueError as exc:
         raise typer.Exit(code=1) from exc
@@ -392,9 +413,22 @@ def run_cmd(
             ),
         ),
     ] = False,
+    remote: Annotated[
+        bool,
+        typer.Option("--remote", "-r", help="Execute run against configured remote API server."),
+    ] = False,
+    server: Annotated[
+        str | None,
+        typer.Option("--server", "-s", help="Specific remote server profile to use."),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option("--local", help="Force local execution even if a remote server is active."),
+    ] = False,
 ) -> None:
     """Execute a non-interactive one-shot query and stream tokens to stdout."""
-    ensure_database_migrated()
+    if local or (not remote and not server and ConfigManager().get_active_server() is None):
+        ensure_database_migrated()
     exit_code = execute_run(
         prompt=prompt,
         provider_name=provider,
@@ -402,6 +436,9 @@ def run_cmd(
         temperature=temperature,
         auto_approve=auto_approve,
         console=console,
+        remote=remote,
+        server_name=server,
+        local=local,
     )
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
@@ -432,8 +469,47 @@ def sessions_cmd(
         int,
         typer.Option("--limit", "-n", help="Maximum number of past sessions to display."),
     ] = 20,
+    remote: Annotated[
+        bool,
+        typer.Option("--remote", "-r", help="List sessions from remote API server."),
+    ] = False,
+    server: Annotated[
+        str | None,
+        typer.Option("--server", "-s", help="Specific remote server profile to query."),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option(
+            "--local", help="Force local sessions listing even if remote server is active."
+        ),
+    ] = False,
 ) -> None:
     """List previous conversation sessions with message counts and token estimates."""
+    cfg_mgr = ConfigManager()
+    active_server = cfg_mgr.get_active_server()
+    is_remote = (remote or (server is not None) or (active_server is not None)) and not local
+
+    if is_remote:
+        target_profile = cfg_mgr.get_server(server) if server else active_server
+        if not target_profile:
+            console.print(
+                "[bold red]Error:[/bold red] No remote server profile found.\n"
+                "Use [bold cyan]icarus server add <name> <url>[/bold cyan] "
+                "or pass [bold cyan]--server <name>[/bold cyan]."
+            )
+            raise typer.Exit(code=1)
+        api_key = cfg_mgr.get_server_api_key(target_profile.name)
+        client = RemoteAgentClient(base_url=target_profile.url, api_key=api_key)
+        try:
+            resp = asyncio.run(client.list_sessions(limit=limit))
+            render_sessions_table(resp.items, console=console)
+        except Exception as exc:
+            console.print(f"[bold red]Remote error:[/bold red] {exc}")
+            raise typer.Exit(code=1) from exc
+        finally:
+            asyncio.run(client.close())
+        return
+
     ensure_database_migrated()
     db_mgr = DatabaseManager()
     session_repo = SessionRepository(db_mgr)
@@ -447,8 +523,58 @@ def history_cmd(
         str,
         typer.Argument(help="UUID of the session to inspect."),
     ],
+    remote: Annotated[
+        bool,
+        typer.Option("--remote", "-r", help="Fetch session history from remote API server."),
+    ] = False,
+    server: Annotated[
+        str | None,
+        typer.Option("--server", "-s", help="Specific remote server profile to query."),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option("--local", help="Force local history even if remote server is active."),
+    ] = False,
 ) -> None:
     """Display the formatted chronological transcript of a specific session."""
+    cfg_mgr = ConfigManager()
+    active_server = cfg_mgr.get_active_server()
+    is_remote = (remote or (server is not None) or (active_server is not None)) and not local
+
+    if is_remote:
+        target_profile = cfg_mgr.get_server(server) if server else active_server
+        if not target_profile:
+            console.print(
+                "[bold red]Error:[/bold red] No remote server profile found.\n"
+                "Use [bold cyan]icarus server add <name> <url>[/bold cyan] "
+                "or pass [bold cyan]--server <name>[/bold cyan]."
+            )
+            raise typer.Exit(code=1)
+        api_key = cfg_mgr.get_server_api_key(target_profile.name)
+        client = RemoteAgentClient(base_url=target_profile.url, api_key=api_key)
+        try:
+            session_resp = asyncio.run(client.get_session(session_id))
+            messages = asyncio.run(client.list_messages(session_id))
+            session_dto = SessionDTO(
+                id=session_resp.id,
+                title=session_resp.title,
+                mode=session_resp.mode,
+                created_at=session_resp.created_at,
+                updated_at=session_resp.updated_at,
+            )
+            render_session_history(
+                session_dto,
+                messages,
+                total_tokens=session_resp.total_estimated_tokens or 0,
+                console=console,
+            )
+        except Exception as exc:
+            console.print(f"[bold red]Remote error:[/bold red] {exc}")
+            raise typer.Exit(code=1) from exc
+        finally:
+            asyncio.run(client.close())
+        return
+
     ensure_database_migrated()
     db_mgr = DatabaseManager()
     session_repo = SessionRepository(db_mgr)

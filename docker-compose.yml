@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: icarus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: icarus
+      POSTGRES_USER: icarus
+      POSTGRES_PASSWORD: icarus_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U icarus -d icarus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icarus-api
+    restart: unless-stopped
+    command: ["uvicorn", "icarus_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      ICARUS_DATABASE_URL: postgresql+psycopg://icarus:icarus_secret@postgres:5432/icarus
+      ICARUS_AUTH_ENABLED: "true"
+      ICARUS_API_KEYS: "sk-icarus-admin-key:admin_tenant,sk-icarus-demo-key:demo_tenant"
+      ICARUS_DEFAULT_PROVIDER: "mock"
+      ICARUS_CORS_ORIGINS: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icarus-worker
+    restart: unless-stopped
+    command: ["python", "-m", "icarus_worker.main"]
+    environment:
+      ICARUS_DATABASE_URL: postgresql+psycopg://icarus:icarus_secret@postgres:5432/icarus
+      ICARUS_DEFAULT_PROVIDER: "mock"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: icarus-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

@@ -35,6 +35,7 @@ from rich.table import Table
 
 from icarus_cli.approvals import create_cli_approval_engine
 from icarus_cli.observer import RichAgentObserver
+from icarus_cli.remote import RemoteAgentClient
 
 logger = get_logger("cli.run")
 
@@ -117,6 +118,10 @@ def execute_run(
     console: Console | None = None,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
+    remote: bool = False,
+    server_name: str | None = None,
+    local: bool = False,
+    client: RemoteAgentClient | None = None,
 ) -> int:
     """Execute one-shot prompt execution, stream tokens to stdout, and return POSIX exit code.
 
@@ -163,6 +168,87 @@ def execute_run(
     effective_provider = provider_name or cfg.default_provider
     effective_model = model_name or cfg.model
     effective_temp = temperature if temperature is not None else cfg.temperature
+
+    is_remote = (
+        remote or (server_name is not None) or (cfg_manager.get_active_server() is not None)
+    ) and not local
+
+    if is_remote:
+        should_close_client = False
+        if client is None:
+            if server_name:
+                target_profile = cfg_manager.get_server(server_name)
+                if not target_profile:
+                    console.print(
+                        f"[bold red]Error:[/bold red] Server profile '{server_name}' not found."
+                    )
+                    return 1
+            else:
+                target_profile = cfg_manager.get_active_server()
+                if not target_profile:
+                    console.print(
+                        "[bold red]Error:[/bold red] No remote server profile is active.\n"
+                        "Use [bold cyan]icarus server add <name> <url>[/bold cyan] "
+                        "or pass [bold cyan]--server <name>[/bold cyan]."
+                    )
+                    return 1
+
+            api_key = cfg_manager.get_server_api_key(target_profile.name)
+            remote_client = RemoteAgentClient(base_url=target_profile.url, api_key=api_key)
+            should_close_client = True
+        else:
+            remote_client = client
+
+        logger.info(
+            "Executing remote run via %s (model=%s)",
+            remote_client.base_url,
+            effective_model,
+        )
+
+        observer = RichAgentObserver(
+            console=console,
+            stdout=stdout_stream,
+            stream_tokens=True,
+        )
+
+        try:
+            remote_result = asyncio.run(
+                remote_client.execute_remote_run(
+                    prompt=effective_prompt,
+                    model=effective_model,
+                    provider=effective_provider,
+                    temperature=effective_temp,
+                    max_turns=cfg.max_turns,
+                    auto_approve=auto_approve,
+                    observer=observer,
+                )
+            )
+            if stdout_stream and remote_result.content and not remote_result.content.endswith("\n"):
+                stdout_stream.write("\n")
+                stdout_stream.flush()
+
+            if remote_result.finish_reason == "cancelled" or remote_result.status == "cancelled":
+                console.print("\n[bold yellow]Run interrupted by user.[/bold yellow]")
+                _render_run_summary_panel(remote_result.budget_counters, console=console)
+                return 130
+
+            if remote_result.status == "failed":
+                console.print(f"[bold red]Remote run failed:[/bold red] {remote_result.content}")
+                return 1
+
+            _render_run_summary_panel(remote_result.budget_counters, console=console)
+            return 0
+
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            console.print("\n[bold yellow]Run interrupted by user.[/bold yellow]")
+            return 130
+        except Exception as exc:
+            safe_msg = redact_secrets(str(exc))
+            console.print(f"[bold red]Remote execution error:[/bold red] {safe_msg}")
+            return 1
+        finally:
+            if should_close_client:
+                asyncio.run(remote_client.close())
 
     logger.info(
         "Initiating one-shot run with provider=%s model=%s temp=%.2f",

@@ -9,10 +9,10 @@
 - [#29](https://github.com/AchillesLabs/icarus-agent/issues/29) (04: Server-Sent Events (SSE) Agent Run Streaming and Cancellation)
 - [#31](https://github.com/AchillesLabs/icarus-agent/issues/31) (06: Autonomous Background Worker Daemon and Task Scheduler)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `icarus server add`, `list`, `switch`, and `remove` commands managing remote profiles in `~/.icarus/config.toml`.
-- [ ] Implement `RemoteAgentClient` with SSE streaming parser decoding events and feeding `RichAgentObserver`.
-- [ ] Update `icarus run` and `icarus chat` to execute via `RemoteAgentClient` when `--remote` flag or remote profile is active.
-- [ ] Add production multi-stage `Dockerfile` and `docker-compose.yml` for API, Worker, PostgreSQL, and Caddy reverse proxy.
-- [ ] End-to-end integration tests verify remote CLI streaming, server profile switching, and parity with local UI output.
+- [x] Implement `icarus server add`, `list`, `switch`, and `remove` commands managing remote profiles in `~/.icarus/config.toml`.
+- [x] Implement `RemoteAgentClient` with SSE streaming parser decoding events and feeding `RichAgentObserver`.
+- [x] Update `icarus run` and `icarus chat` to execute via `RemoteAgentClient` when `--remote` flag or remote profile is active.
+- [x] Add production multi-stage `Dockerfile` and `docker-compose.yml` for API, Worker, PostgreSQL, and Caddy reverse proxy.
+- [x] End-to-end integration tests verify remote CLI streaming, server profile switching, and parity with local UI output.

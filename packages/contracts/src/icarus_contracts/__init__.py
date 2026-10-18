@@ -1,6 +1,11 @@
 """Domain contracts and Pydantic schemas for Icarus Agent."""
 
-from icarus_contracts.config import CredentialResult, CredentialSource, IcarusConfig
+from icarus_contracts.config import (
+    CredentialResult,
+    CredentialSource,
+    IcarusConfig,
+    ServerProfile,
+)
 from icarus_contracts.context import (
     CompactionResult,
     ContextBudgetConfig,
@@ -100,6 +105,7 @@ __all__ = [
     "ScheduledJobDTO",
     "ScheduledJobStatus",
     "ScheduledJobUpdate",
+    "ServerProfile",
     "SessionCreate",
     "SessionCreateRequest",
     "SessionDTO",
