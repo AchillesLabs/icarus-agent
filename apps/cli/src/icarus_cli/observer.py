@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from icarus_contracts.tools import ToolCall, ToolResult
 from rich.console import Console
 from rich.panel import Panel
+
+if TYPE_CHECKING:
+    from icarus_contracts.context import CompactionResult
 
 
 class RichAgentObserver:
@@ -84,6 +87,37 @@ class RichAgentObserver:
             Panel(
                 summary,
                 title="[bold yellow]Execution Budget Limit[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+
+    def on_compaction(self, event: CompactionResult) -> None:
+        """Display styled compaction notice when older history is summarized."""
+        summary = (
+            f"[bold magenta]⚡ Context Compaction Executed:[/bold magenta] "
+            f"Summarized older turns "
+            f"({event.original_message_count} → {event.compacted_message_count} messages).\n"
+            f"[dim]Tokens Saved:[/dim] [bold white]~{event.tokens_saved}[/bold white] "
+            f"[dim](reduced from {event.tokens_before} to {event.tokens_after})[/dim]"
+        )
+        self.console.print(
+            Panel(
+                summary,
+                title="[bold magenta]⚡ Context Management[/bold magenta]",
+                border_style="magenta",
+            )
+        )
+
+    def on_max_tokens(self, max_tokens: int) -> None:
+        """Display clear notice panel when maximum token budget is reached."""
+        summary = (
+            f"[bold yellow]Token Budget Ceiling Reached:[/bold yellow] "
+            f"Maximum total tokens ({max_tokens} tokens) reached. Halting loop."
+        )
+        self.console.print(
+            Panel(
+                summary,
+                title="[bold yellow]Token Budget Limit[/bold yellow]",
                 border_style="yellow",
             )
         )

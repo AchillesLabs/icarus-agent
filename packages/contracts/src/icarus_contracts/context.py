@@ -12,7 +12,7 @@ class ContextBudgetConfig(BaseModel):
 
     context_window: int = Field(
         default=128000,
-        ge=1000,
+        ge=100,
         description="Total model context window limit in tokens",
     )
     output_reserve: int = Field(

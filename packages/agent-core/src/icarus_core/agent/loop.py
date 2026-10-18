@@ -8,13 +8,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from icarus_contracts.context import CompactionResult
 from icarus_contracts.provider import PromptMessage
 from icarus_contracts.session import MessageRole
 from icarus_contracts.tools import ToolCall, ToolResult
 
 from icarus_core.agent.approvals import ApprovalEngine
+from icarus_core.agent.compactor import HistoryCompactor
+from icarus_core.agent.context import ContextBudgetManager
 from icarus_core.agent.prompts import inject_system_prompt
 from icarus_core.providers.base import ModelProvider
+from icarus_core.tokens import TokenCounter, get_token_counter
 from icarus_core.tools.registry import ToolRegistry, create_default_registry
 
 
@@ -28,6 +32,11 @@ class AgentLoopResult:
     tool_results: list[ToolResult] = field(default_factory=list)
     total_turns: int = 0
     finish_reason: str = "stop"
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    compaction_count: int = 0
+    budget_counters: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -58,6 +67,14 @@ class AgentLoopObserver(Protocol):
         """Invoked when the loop halts due to reaching the maximum turn budget."""
         ...
 
+    def on_compaction(self, event: CompactionResult) -> None:
+        """Invoked when automated conversation history compaction is executed."""
+        ...
+
+    def on_max_tokens(self, max_tokens: int) -> None:
+        """Invoked when the loop halts due to reaching the maximum token budget."""
+        ...
+
 
 class AgentLoop:
     """Autonomous ReAct state engine managing cycles between LLM reasoning and tool dispatch."""
@@ -73,6 +90,11 @@ class AgentLoop:
         temperature: float = 0.7,
         inject_system: bool = True,
         message_callback: Callable[[PromptMessage], None] | None = None,
+        budget_manager: ContextBudgetManager | None = None,
+        compactor: HistoryCompactor | None = None,
+        max_total_tokens: int | None = None,
+        auto_compact: bool = True,
+        token_counter: TokenCounter | None = None,
     ) -> None:
         self.provider = provider
         self.tool_registry = (
@@ -85,6 +107,23 @@ class AgentLoop:
         self.temperature = temperature
         self.inject_system = inject_system
         self.message_callback = message_callback
+        self.max_total_tokens = max_total_tokens
+        self.auto_compact = auto_compact
+        self.token_counter = (
+            token_counter if token_counter is not None else get_token_counter(model=model)
+        )
+        self.budget_manager = (
+            budget_manager
+            if budget_manager is not None
+            else ContextBudgetManager.from_provider(
+                provider=provider, model=model, token_counter=self.token_counter
+            )
+        )
+        self.compactor = (
+            compactor
+            if compactor is not None
+            else HistoryCompactor(token_counter=self.token_counter)
+        )
 
     async def run(
         self,
@@ -110,6 +149,9 @@ class AgentLoop:
         turn_count = 0
         final_text = ""
         finish_reason = "stop"
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        compaction_count = 0
 
         supports_tools = True
         try:
@@ -122,8 +164,47 @@ class AgentLoop:
         if supports_tools and self.tool_registry:
             tool_schemas = self.tool_registry.export_schemas()
 
+        def _make_budget_counters() -> dict[str, Any]:
+            total_toks = total_prompt_tokens + total_completion_tokens
+            return {
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "total_tokens": total_toks,
+                "turns": turn_count,
+                "tool_calls": len(all_tool_calls),
+                "compactions": compaction_count,
+            }
+
         try:
             while turn_count < self.max_turns:
+                # Check max_total_tokens guardrail before starting turn
+                accumulated_tokens = total_prompt_tokens + total_completion_tokens
+                if (
+                    self.max_total_tokens is not None
+                    and accumulated_tokens >= self.max_total_tokens
+                ):
+                    finish_reason = "max_tokens"
+                    final_text = f"Maximum token budget ({self.max_total_tokens}) reached."
+                    if observer and hasattr(observer, "on_max_tokens"):
+                        observer.on_max_tokens(self.max_total_tokens)
+                    _append_message(PromptMessage(role=MessageRole.ASSISTANT, content=final_text))
+                    break
+
+                # Context Budget & Pre-flight Compaction
+                if self.auto_compact and self.compactor and self.budget_manager:
+                    tool_defs = (
+                        [t for t in self.tool_registry.list_tools()] if self.tool_registry else None
+                    )
+                    if self.budget_manager.is_compaction_needed(history, tools=tool_defs):
+                        compaction_res = self.compactor.compact(history)
+                        if compaction_res.compacted_messages:
+                            compaction_count += 1
+                            history = [
+                                compaction_res.summary_message
+                            ] + compaction_res.retained_messages
+                            if observer and hasattr(observer, "on_compaction"):
+                                observer.on_compaction(compaction_res)
+
                 turn_count += 1
                 if observer and hasattr(observer, "on_turn_start"):
                     observer.on_turn_start(turn_count)
@@ -145,6 +226,7 @@ class AgentLoop:
 
                 accumulated_delta: list[str] = []
                 turn_tool_calls: list[ToolCall] = []
+                chunk_usage: dict[str, Any] | None = None
 
                 stream_kwargs: dict[str, Any] = {
                     "model": self.model,
@@ -177,6 +259,10 @@ class AgentLoop:
 
                         if chunk.finish_reason:
                             finish_reason = chunk.finish_reason
+
+                        if chunk.usage:
+                            chunk_usage = chunk.usage
+
                 except (KeyboardInterrupt, asyncio.CancelledError):
                     accumulated_content = "".join(accumulated_delta)
                     final_text = (
@@ -193,9 +279,41 @@ class AgentLoop:
                         tool_results=all_tool_results,
                         total_turns=turn_count,
                         finish_reason=finish_reason,
+                        total_tokens=total_prompt_tokens + total_completion_tokens,
+                        prompt_tokens=total_prompt_tokens,
+                        completion_tokens=total_completion_tokens,
+                        compaction_count=compaction_count,
+                        budget_counters=_make_budget_counters(),
                     )
 
                 accumulated_content = "".join(accumulated_delta)
+
+                # Accumulate token usage for the turn
+                if chunk_usage:
+                    turn_prompt_tok = chunk_usage.get("prompt_tokens", 0)
+                    turn_comp_tok = chunk_usage.get("completion_tokens", 0)
+                else:
+                    turn_prompt_tok = self.token_counter.count_messages(turn_messages)
+                    turn_comp_tok = self.token_counter.count_text(accumulated_content)
+
+                total_prompt_tokens += turn_prompt_tok
+                total_completion_tokens += turn_comp_tok
+                accumulated_tokens = total_prompt_tokens + total_completion_tokens
+
+                # Check max_total_tokens guardrail after completion
+                if (
+                    self.max_total_tokens is not None
+                    and accumulated_tokens >= self.max_total_tokens
+                ):
+                    finish_reason = "max_tokens"
+                    final_text = (
+                        accumulated_content
+                        or f"Maximum token budget ({self.max_total_tokens}) reached."
+                    )
+                    _append_message(PromptMessage(role=MessageRole.ASSISTANT, content=final_text))
+                    if observer and hasattr(observer, "on_max_tokens"):
+                        observer.on_max_tokens(self.max_total_tokens)
+                    break
 
                 # If the model produced no tool calls, it has finished with a final user response
                 if not turn_tool_calls:
@@ -276,6 +394,11 @@ class AgentLoop:
                             tool_results=all_tool_results,
                             total_turns=turn_count,
                             finish_reason=finish_reason,
+                            total_tokens=total_prompt_tokens + total_completion_tokens,
+                            prompt_tokens=total_prompt_tokens,
+                            completion_tokens=total_completion_tokens,
+                            compaction_count=compaction_count,
+                            budget_counters=_make_budget_counters(),
                         )
 
                     all_tool_results.append(res)
@@ -307,4 +430,9 @@ class AgentLoop:
             tool_results=all_tool_results,
             total_turns=turn_count,
             finish_reason=finish_reason,
+            total_tokens=total_prompt_tokens + total_completion_tokens,
+            prompt_tokens=total_prompt_tokens,
+            completion_tokens=total_completion_tokens,
+            compaction_count=compaction_count,
+            budget_counters=_make_budget_counters(),
         )

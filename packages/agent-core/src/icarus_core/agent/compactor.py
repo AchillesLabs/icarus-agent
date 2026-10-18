@@ -132,7 +132,8 @@ class HistoryCompactor:
 
             # First user prompt captures the initial goal
             if role == MessageRole.USER.value and task_goal == "Not explicitly stated":
-                task_goal = content
+                first_line = content.split("\n")[0].strip()
+                task_goal = first_line if len(first_line) <= 300 else first_line[:300] + "..."
 
             # Assistant messages record decisions and answers
             elif role == MessageRole.ASSISTANT.value and content:

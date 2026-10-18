@@ -4,10 +4,10 @@
 
 **Blocked by:** 03: Turn-Boundary History Compactor with Tool Pairing Protection
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Integrate `ContextBudgetManager` and `HistoryCompactor` into `AgentLoop` in `icarus_core.agent.loop`.
-- [ ] Add `on_compaction(event)` hook to `AgentLoopObserver` protocol and implement Rich styling in `RichAgentObserver`.
-- [ ] Wire automatic pre-flight compaction trigger prior to model provider dispatch.
-- [ ] Enforce configurable `max_total_tokens` ceiling, halting execution cleanly with `finish_reason="max_tokens"` when reached.
-- [ ] Integration tests with `MockModelProvider` verify compaction triggers during execution, preserves tool integrity, and successfully completes runs.
+- [x] Integrate `ContextBudgetManager` and `HistoryCompactor` into `AgentLoop` in `icarus_core.agent.loop`.
+- [x] Add `on_compaction(event)` hook to `AgentLoopObserver` protocol and implement Rich styling in `RichAgentObserver`.
+- [x] Wire automatic pre-flight compaction trigger prior to model provider dispatch.
+- [x] Enforce configurable `max_total_tokens` ceiling, halting execution cleanly with `finish_reason="max_tokens"` when reached.
+- [x] Integration tests with `MockModelProvider` verify compaction triggers during execution, preserves tool integrity, and successfully completes runs.
