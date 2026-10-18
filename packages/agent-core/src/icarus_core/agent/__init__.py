@@ -6,6 +6,7 @@ from icarus_core.agent.approvals import (
     ApprovalPolicy,
     ApprovalPromptCallback,
 )
+from icarus_core.agent.context import ContextBudgetManager
 from icarus_core.agent.loop import (
     AgentLoop,
     AgentLoopObserver,
@@ -25,6 +26,7 @@ __all__ = [
     "ApprovalEngine",
     "ApprovalPolicy",
     "ApprovalPromptCallback",
+    "ContextBudgetManager",
     "SystemPromptBuilder",
     "build_system_prompt",
     "inject_system_prompt",

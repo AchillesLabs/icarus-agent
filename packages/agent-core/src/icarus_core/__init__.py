@@ -1,5 +1,6 @@
 """Core agent runtime, execution engine, and provider abstractions for Icarus Agent."""
 
+from icarus_core.agent.context import ContextBudgetManager
 from icarus_core.logging import (
     RedactingFilter,
     RedactingFormatter,
@@ -17,6 +18,7 @@ from icarus_core.tokens import (
 
 __version__ = "0.1.0"
 __all__ = [
+    "ContextBudgetManager",
     "HeuristicTokenCounter",
     "RedactingFilter",
     "RedactingFormatter",
@@ -28,4 +30,3 @@ __all__ = [
     "redact_secrets",
     "setup_logging",
 ]
-

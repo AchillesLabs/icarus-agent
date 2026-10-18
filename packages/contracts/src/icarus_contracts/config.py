@@ -41,3 +41,21 @@ class IcarusConfig(BaseModel):
         le=2000000,
         description="Maximum context token budget",
     )
+    safety_margin_tokens: int = Field(
+        default=2000,
+        ge=0,
+        le=50000,
+        description="Safety buffer tokens to prevent hitting provider limits",
+    )
+    output_reserve_tokens: int = Field(
+        default=4000,
+        ge=100,
+        le=64000,
+        description="Reserved tokens for model completion generation",
+    )
+    compaction_threshold: float = Field(
+        default=0.8,
+        ge=0.1,
+        le=1.0,
+        description="Context utilization threshold triggering compaction",
+    )

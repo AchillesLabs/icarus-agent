@@ -122,4 +122,3 @@ def test_token_usage_contract():
     assert usage.prompt_tokens == 15
     assert usage.completion_tokens == 30
     assert usage.total_tokens == 45
-

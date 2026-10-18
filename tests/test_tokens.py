@@ -176,9 +176,7 @@ def test_tiktoken_counter_prompt_messages():
     asst_msg = PromptMessage(
         role=MessageRole.ASSISTANT,
         content="Reading file",
-        tool_calls=[
-            ToolCall(id="call_99", name="read_file", arguments={"path": "foo.txt"})
-        ],
+        tool_calls=[ToolCall(id="call_99", name="read_file", arguments={"path": "foo.txt"})],
     )
     tok_asst = counter.count_message(asst_msg)
     assert tok_asst > counter.count_text("Reading file")
@@ -216,7 +214,6 @@ def test_get_token_counter_default_and_force_heuristic():
     heuristic = get_token_counter(force_heuristic=True)
     assert isinstance(heuristic, HeuristicTokenCounter)
     assert isinstance(heuristic, TokenCounter)
-
 
 
 def test_get_token_counter_graceful_fallback_on_import_error():

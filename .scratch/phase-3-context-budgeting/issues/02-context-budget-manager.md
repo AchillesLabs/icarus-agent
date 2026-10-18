@@ -4,10 +4,11 @@
 
 **Blocked by:** 01: Token Counting Engine and Provider-Aware Estimators
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `ContextBudgetConfig` in `icarus_contracts` and `ContextBudgetManager` in `icarus_core`.
-- [ ] Implement input budget calculation from provider model capabilities, output reserves, and safety margins.
-- [ ] Enforce context hierarchy assembly ordering so system prompts and active constraints are prioritized.
-- [ ] Add configuration fields to `config.toml` (e.g. `safety_margin_tokens`, `output_reserve_tokens`, `compaction_threshold`).
-- [ ] Unit tests verify budget calculation, threshold detection, and prompt assembly ordering across various model context limits.
+- [x] Implement `ContextBudgetConfig` in `icarus_contracts` and `ContextBudgetManager` in `icarus_core`.
+- [x] Implement input budget calculation from provider model capabilities, output reserves, and safety margins.
+- [x] Enforce context hierarchy assembly ordering so system prompts and active constraints are prioritized.
+- [x] Add configuration fields to `config.toml` (e.g. `safety_margin_tokens`, `output_reserve_tokens`, `compaction_threshold`).
+- [x] Unit tests verify budget calculation, threshold detection, and prompt assembly ordering across various model context limits.
+

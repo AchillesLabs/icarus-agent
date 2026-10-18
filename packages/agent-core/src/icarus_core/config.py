@@ -44,6 +44,9 @@ class ConfigManager:
             f"temperature = {config.temperature}",
             f"max_turns = {config.max_turns}",
             f"max_tokens_budget = {config.max_tokens_budget}",
+            f"safety_margin_tokens = {config.safety_margin_tokens}",
+            f"output_reserve_tokens = {config.output_reserve_tokens}",
+            f"compaction_threshold = {config.compaction_threshold}",
             "",
         ]
         self.config_path.write_text("\n".join(lines), encoding="utf-8")
