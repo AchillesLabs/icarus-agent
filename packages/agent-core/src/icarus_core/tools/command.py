@@ -22,7 +22,10 @@ from icarus_core.tools.security import resolve_workspace_path
 
 def _build_powershell_args(command: str, exe: str) -> list[str]:
     """Construct PowerShell execution args preserving quotes and propagating native exit code."""
-    script = f"{command}\nif ($LASTEXITCODE -ne $null) {{ exit $LASTEXITCODE }}"
+    cmd_clean = command.strip()
+    if (cmd_clean.startswith('"') or cmd_clean.startswith("'")) and not cmd_clean.startswith("&"):
+        cmd_clean = f"& {cmd_clean}"
+    script = f"{cmd_clean}\nif ($LASTEXITCODE -ne $null) {{ exit $LASTEXITCODE }}"
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
     return [
         exe,

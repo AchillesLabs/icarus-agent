@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from icarus_contracts.provider import PromptMessage
+
 
 class ContextBudgetConfig(BaseModel):
     """Configuration governing context window sizing, reserves, margins, and compaction triggers."""
@@ -54,3 +56,16 @@ class ContextBudgetStatus(BaseModel):
     remaining_budget: int = 0
     utilization_ratio: float = 0.0
     compaction_needed: bool = False
+
+
+class CompactionResult(BaseModel):
+    """Outcome and telemetry of a conversation history compaction cycle."""
+
+    original_message_count: int
+    compacted_message_count: int
+    summary_message: PromptMessage
+    compacted_messages: list[PromptMessage] = Field(default_factory=list)
+    retained_messages: list[PromptMessage] = Field(default_factory=list)
+    tokens_before: int = 0
+    tokens_after: int = 0
+    tokens_saved: int = 0

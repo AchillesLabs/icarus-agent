@@ -4,10 +4,11 @@
 
 **Blocked by:** 01: Token Counting Engine and Provider-Aware Estimators, 02: Context Budget Manager and Context Hierarchy Assembly
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `HistoryCompactor` in `icarus_core.agent` with turn-boundary partitioning logic.
-- [ ] Strictly enforce the tool-call pairing invariant: never slice between an assistant message containing `tool_calls` and its matching `tool` results.
-- [ ] Generate structured markdown summary schema capturing user intent, decisions, touched files, tool results, and open questions.
-- [ ] Replace compacted messages with a single summary message or anchor preserving conversational continuity.
-- [ ] Unit tests verify turn-boundary slicing, tool-pair protection, and summary message formatting across diverse message sequences.
+- [x] Implement `HistoryCompactor` in `icarus_core.agent` with turn-boundary partitioning logic.
+- [x] Strictly enforce the tool-call pairing invariant: never slice between an assistant message containing `tool_calls` and its matching `tool` results.
+- [x] Generate structured markdown summary schema capturing user intent, decisions, touched files, tool results, and open questions.
+- [x] Replace compacted messages with a single summary message or anchor preserving conversational continuity.
+- [x] Unit tests verify turn-boundary slicing, tool-pair protection, and summary message formatting across diverse message sequences.
+

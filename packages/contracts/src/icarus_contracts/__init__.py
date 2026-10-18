@@ -1,7 +1,11 @@
 """Domain contracts and Pydantic schemas for Icarus Agent."""
 
 from icarus_contracts.config import CredentialResult, CredentialSource, IcarusConfig
-from icarus_contracts.context import ContextBudgetConfig, ContextBudgetStatus
+from icarus_contracts.context import (
+    CompactionResult,
+    ContextBudgetConfig,
+    ContextBudgetStatus,
+)
 from icarus_contracts.doctor import DoctorCheckResult, DoctorReport, HealthStatus
 from icarus_contracts.exceptions import (
     AuthenticationError,
@@ -42,6 +46,7 @@ __version__ = "0.1.0"
 __all__ = [
     "__version__",
     "AuthenticationError",
+    "CompactionResult",
     "CompletionResult",
     "ContextBudgetConfig",
     "ContextBudgetStatus",

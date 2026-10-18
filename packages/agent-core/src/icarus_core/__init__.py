@@ -1,6 +1,6 @@
 """Core agent runtime, execution engine, and provider abstractions for Icarus Agent."""
 
-from icarus_core.agent.context import ContextBudgetManager
+from icarus_core.agent import ContextBudgetManager, HistoryCompactor
 from icarus_core.logging import (
     RedactingFilter,
     RedactingFormatter,
@@ -20,6 +20,7 @@ __version__ = "0.1.0"
 __all__ = [
     "ContextBudgetManager",
     "HeuristicTokenCounter",
+    "HistoryCompactor",
     "RedactingFilter",
     "RedactingFormatter",
     "TiktokenCounter",
