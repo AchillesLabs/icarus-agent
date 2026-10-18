@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from icarus_core.persistence import DatabaseManager
 
+from icarus_api.auth import TenantAuthMiddleware
 from icarus_api.config import ApiSettings
 from icarus_api.errors import register_error_handlers
 from icarus_api.lifespan import lifespan
@@ -27,7 +28,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.db_manager = db_manager
 
-    # Configure CORS middleware
+    # Configure CORS and authentication middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,
@@ -35,6 +36,7 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TenantAuthMiddleware)
 
     # Register global structured error handlers
     register_error_handlers(app)

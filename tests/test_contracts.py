@@ -122,3 +122,25 @@ def test_token_usage_contract():
     assert usage.prompt_tokens == 15
     assert usage.completion_tokens == 30
     assert usage.total_tokens == 45
+
+
+def test_tenant_identity_contract_and_immutability():
+    import pytest
+    from icarus_contracts import TenantIdentity
+    from pydantic import ValidationError
+
+    identity = TenantIdentity(owner_id="tenant-123", token="secret-token-xyz")
+    assert identity.owner_id == "tenant-123"
+    assert identity.token == "secret-token-xyz"
+
+    # Verify immutability
+    with pytest.raises(ValidationError):
+        identity.owner_id = "tenant-hacked"
+
+
+def test_tenant_access_denied_error_contract():
+    from icarus_contracts import TenantAccessDeniedError
+
+    err = TenantAccessDeniedError("Cross-tenant access forbidden")
+    assert isinstance(err, PermissionError)
+    assert str(err) == "Cross-tenant access forbidden"

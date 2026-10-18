@@ -1,6 +1,7 @@
-"""Configuration settings for Icarus API server."""
+import json
+from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,3 +21,34 @@ class ApiSettings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     database_url: str | None = None
     auth_token: str | None = None
+    auth_tokens: dict[str, str] = Field(default_factory=dict)
+    default_owner_id: str = "default"
+
+    @field_validator("auth_tokens", mode="before")
+    @classmethod
+    def _parse_auth_tokens(cls, v: Any) -> dict[str, str]:
+        if isinstance(v, dict):
+            return {str(k): str(val) for k, val in v.items()}
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return {}
+            if v.startswith("{"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, dict):
+                        return {str(k): str(val) for k, val in parsed.items()}
+                except json.JSONDecodeError:
+                    pass
+            # Try comma-delimited token:owner pairs
+            mapping: dict[str, str] = {}
+            for item in v.split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                if ":" in item:
+                    tok, _, owner = item.partition(":")
+                    if tok.strip() and owner.strip():
+                        mapping[tok.strip()] = owner.strip()
+            return mapping
+        return {}

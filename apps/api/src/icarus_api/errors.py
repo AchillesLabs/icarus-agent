@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from icarus_contracts import TenantAccessDeniedError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
@@ -32,11 +33,13 @@ def create_error_response(
     message: str,
     code: str | None = None,
     details: Any = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     """Build a standardized JSON error response."""
     error_code = code or STATUS_CODE_TO_ERROR_CODE.get(status_code, "error")
     return JSONResponse(
         status_code=status_code,
+        headers=headers,
         content={
             "error": {
                 "code": error_code,
@@ -55,6 +58,20 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         status_code=exc.status_code,
         message=message,
         details=details,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+async def tenant_access_denied_handler(
+    request: Request,
+    exc: TenantAccessDeniedError,
+) -> JSONResponse:
+    """Handle tenant isolation violations returning 403 Forbidden."""
+    return create_error_response(
+        status_code=403,
+        code="forbidden",
+        message=str(exc),
+        details=None,
     )
 
 
@@ -85,5 +102,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 def register_error_handlers(app: FastAPI) -> None:
     """Register all global error handlers onto the FastAPI application."""
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(TenantAccessDeniedError, tenant_access_denied_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

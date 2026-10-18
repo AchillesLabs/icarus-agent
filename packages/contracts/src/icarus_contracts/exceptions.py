@@ -30,3 +30,7 @@ class ProviderUnavailableError(ProviderError):
 
 class WorkspaceJailError(PermissionError):
     """Raised when a file or directory operation attempts to escape the jailed workspace root."""
+
+
+class TenantAccessDeniedError(PermissionError):
+    """Raised when an operation attempts to access a resource owned by another tenant."""

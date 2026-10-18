@@ -3,25 +3,21 @@
 from collections.abc import Generator
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
+from icarus_contracts import TenantIdentity
+from icarus_contracts.session import SessionDTO
 from icarus_core.persistence import (
     AgentRunRepository,
     DatabaseManager,
     MessageRepository,
     SessionRepository,
+    TenantMessageRepository,
+    TenantRunRepository,
+    TenantSessionRepository,
 )
 from sqlalchemy.orm import Session
 
-from icarus_api.config import ApiSettings
-
-
-def get_settings(request: Request) -> ApiSettings:
-    """Resolve active application settings from request state."""
-    settings = getattr(request.app.state, "settings", None)
-    if settings is None:
-        settings = ApiSettings()
-        request.app.state.settings = settings
-    return settings
+from icarus_api.auth import get_current_tenant, get_settings
 
 
 def get_db_manager(request: Request) -> DatabaseManager:
@@ -61,3 +57,52 @@ def get_run_repository(
 ) -> AgentRunRepository:
     """Provide an AgentRunRepository bound to the current request's session."""
     return AgentRunRepository(session)
+
+
+def get_tenant_db_session(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+) -> Generator[Session, None, None]:
+    """Provide a transactional session scope bound to the authenticated tenant."""
+    with db_manager.session_scope() as session:
+        session.info["owner_id"] = identity.owner_id
+        session.info["tenant_identity"] = identity
+        yield session
+
+
+def get_tenant_session_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+) -> TenantSessionRepository:
+    """Provide a SessionRepository scoped to the authenticated tenant."""
+    return TenantSessionRepository(db_manager=db_manager, owner_id=identity.owner_id)
+
+
+def get_tenant_message_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+) -> TenantMessageRepository:
+    """Provide a MessageRepository scoped to the authenticated tenant."""
+    return TenantMessageRepository(db_manager=db_manager, owner_id=identity.owner_id)
+
+
+def get_tenant_run_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+) -> TenantRunRepository:
+    """Provide an AgentRunRepository scoped to the authenticated tenant."""
+    return TenantRunRepository(db_manager=db_manager, owner_id=identity.owner_id)
+
+
+def get_tenant_session(
+    session_id: str,
+    repo: Annotated[TenantSessionRepository, Depends(get_tenant_session_repository)],
+) -> SessionDTO:
+    """Resolve an existing session ensuring it belongs to the authenticated tenant, or 404."""
+    session = repo.get_session(session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found",
+        )
+    return session

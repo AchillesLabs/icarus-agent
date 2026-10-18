@@ -13,8 +13,10 @@ from icarus_contracts.exceptions import (
     ProviderError,
     ProviderUnavailableError,
     RateLimitError,
+    TenantAccessDeniedError,
     WorkspaceJailError,
 )
+from icarus_contracts.identity import TenantIdentity
 from icarus_contracts.provider import (
     CompletionResult,
     DiscoveredModel,
@@ -76,6 +78,8 @@ __all__ = [
     "SessionSummaryDTO",
     "SessionUpdate",
     "StreamChunk",
+    "TenantAccessDeniedError",
+    "TenantIdentity",
     "ToolCall",
     "ToolDefinition",
     "ToolResult",

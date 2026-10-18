@@ -7,10 +7,11 @@
 
 **Blocked by:** [#26](https://github.com/AchillesLabs/icarus-agent/issues/26) (01: FastAPI Monorepo Application Skeleton and Health Diagnostics)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `HTTPBearer` security dependency validating API tokens against configured service secrets (`ICARUS_API_AUTH_TOKEN`).
-- [ ] Bind authenticated identity into request state with immutable `owner_id` context.
-- [ ] Implement tenant-scoped database session and repository dependencies in `apps/api`.
-- [ ] Verify unauthenticated requests return HTTP 401 with standard error schema.
-- [ ] Security tests prove cross-tenant access rejection (requests for resources owned by another tenant fail with 404/403).
+- [x] Implement `HTTPBearer` security dependency validating API tokens against configured service secrets (`ICARUS_API_AUTH_TOKEN`).
+- [x] Bind authenticated identity into request state with immutable `owner_id` context.
+- [x] Implement tenant-scoped database session and repository dependencies in `apps/api`.
+- [x] Verify unauthenticated requests return HTTP 401 with standard error schema.
+- [x] Security tests prove cross-tenant access rejection (requests for resources owned by another tenant fail with 404/403).
+

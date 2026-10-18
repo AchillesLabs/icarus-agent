@@ -7,6 +7,9 @@ from icarus_core.persistence.repository import (
     AgentRunRepository,
     MessageRepository,
     SessionRepository,
+    TenantMessageRepository,
+    TenantRunRepository,
+    TenantSessionRepository,
 )
 
 __all__ = [
@@ -19,4 +22,7 @@ __all__ = [
     "MigrationRunner",
     "SessionModel",
     "SessionRepository",
+    "TenantMessageRepository",
+    "TenantRunRepository",
+    "TenantSessionRepository",
 ]
