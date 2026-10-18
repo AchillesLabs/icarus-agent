@@ -7,10 +7,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Scaffold `apps/api` package with `pyproject.toml` and wire into monorepo root workspace dependencies.
-- [ ] Create FastAPI application factory with lifespan management, CORS configuration, and structured JSON error handlers.
-- [ ] Implement `GET /health` and `GET /health/ready` endpoints returning status, version, uptime, and database connectivity state.
-- [ ] Implement dependency injection providers for configuration, database session scopes, and repository access.
-- [ ] Integration tests verify application startup, health probes, and database ping behavior via `httpx.AsyncClient` / `TestClient`.
+- [x] Scaffold `apps/api` package with `pyproject.toml` and wire into monorepo root workspace dependencies.
+- [x] Create FastAPI application factory with lifespan management, CORS configuration, and structured JSON error handlers.
+- [x] Implement `GET /health` and `GET /health/ready` endpoints returning status, version, uptime, and database connectivity state.
+- [x] Implement dependency injection providers for configuration, database session scopes, and repository access.
+- [x] Integration tests verify application startup, health probes, and database ping behavior via `httpx.AsyncClient` / `TestClient`.
