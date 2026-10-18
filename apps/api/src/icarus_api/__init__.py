@@ -24,4 +24,3 @@ __all__ = [
     "get_session_repository",
     "get_settings",
 ]
-

@@ -43,4 +43,3 @@ def create_app(
     app.include_router(health_router)
 
     return app
-

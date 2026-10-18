@@ -47,4 +47,3 @@ async def get_health_readiness(request: Request) -> JSONResponse:
     }
 
     return JSONResponse(status_code=status_code, content=payload)
-
