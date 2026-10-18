@@ -73,3 +73,17 @@ class RichAgentObserver:
                 f"[dim]({output_chars} characters captured)[/dim]"
             )
             self.console.print(Panel(summary, border_style="green"))
+
+    def on_max_turns(self, max_turns: int) -> None:
+        """Display clear notice panel when maximum turn budget is reached."""
+        summary = (
+            f"[bold yellow]Execution Budget Limit Reached:[/bold yellow] "
+            f"Maximum turn budget ({max_turns} turns) reached. Halting loop."
+        )
+        self.console.print(
+            Panel(
+                summary,
+                title="[bold yellow]Execution Budget Limit[/bold yellow]",
+                border_style="yellow",
+            )
+        )

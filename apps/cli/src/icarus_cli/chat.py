@@ -4,7 +4,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from icarus_contracts.exceptions import ProviderError
 from icarus_contracts.provider import PromptMessage
@@ -70,13 +70,24 @@ class ChatSessionManager:
         """Fetch all messages for the active session in chronological order."""
         return self.message_repo.list_messages(session_id)
 
-    def append_message(self, session_id: str, role: MessageRole | str, content: str) -> MessageDTO:
+    def append_message(
+        self,
+        session_id: str,
+        role: MessageRole | str,
+        content: str | None = "",
+        tool_calls: list[dict[str, Any]] | list[Any] | None = None,
+        tool_call_id: str | None = None,
+        name: str | None = None,
+    ) -> MessageDTO:
         """Persist a new message into the session thread."""
         return self.message_repo.create_message(
             MessageCreate(
                 session_id=session_id,
                 role=role,
-                content=content,
+                content=content or "",
+                tool_calls=tool_calls,
+                tool_call_id=tool_call_id,
+                name=name,
             )
         )
 
@@ -174,12 +185,26 @@ def run_chat(
             msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             if msg_role == MessageRole.USER.value:
                 console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
-            else:
-                console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
+            elif msg_role == MessageRole.TOOL.value:
+                tool_label = msg.name or "Tool"
+                console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
+            elif msg_role == MessageRole.ASSISTANT.value:
+                if msg.tool_calls:
+                    tc_names = [
+                        tc.get("function", {}).get("name", "tool")
+                        if isinstance(tc, dict)
+                        else getattr(tc, "name", "tool")
+                        for tc in msg.tool_calls
+                    ]
+                    console.print(
+                        f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
+                    )
+                if msg.content:
+                    console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
         console.print("[dim]───────────────────────────────────────────────────────[/dim]")
 
     prompt_history: list[PromptMessage] = [
-        PromptMessage(role=msg.role, content=msg.content)
+        msg.to_prompt_message()
         for msg in session_messages
         if (msg.role.value if hasattr(msg.role, "value") else str(msg.role))
         != MessageRole.SYSTEM.value
@@ -260,13 +285,26 @@ def run_chat(
         # Stream assistant response
         console.print(f"[bold green]{effective_provider} > [/bold green]")
         observer = RichAgentObserver(console=console, stream_tokens=True)
+
+        def on_chat_message(msg: PromptMessage) -> None:
+            session_mgr.append_message(
+                session_id=session.id,
+                role=msg.role,
+                content=msg.content or "",
+                tool_calls=msg.tool_calls,
+                tool_call_id=msg.tool_call_id,
+                name=msg.name,
+            )
+
         agent_loop = AgentLoop(
             provider=provider,
             approval_engine=approval_engine,
             model=effective_model,
             temperature=effective_temp,
+            max_turns=cfg.max_turns,
             workspace_root=Path.cwd(),
             inject_system=True,
+            message_callback=on_chat_message,
         )
         try:
             loop_result = asyncio.run(
@@ -276,9 +314,8 @@ def run_chat(
                 )
             )
             console.print()
-            assistant_content = loop_result.content
-            if assistant_content:
-                session_mgr.append_message(session.id, MessageRole.ASSISTANT, assistant_content)
+            if loop_result.finish_reason == "cancelled":
+                console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
             prompt_history = [
                 m
                 for m in loop_result.messages

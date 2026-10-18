@@ -82,8 +82,11 @@ class MessageModel(Base):
         String(128), nullable=False, default="default", index=True
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True, default="")
     token_estimate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
@@ -99,9 +102,12 @@ class MessageModel(Base):
             role=MessageRole(self.role)
             if self.role in MessageRole._value2member_map_
             else self.role,
-            content=self.content,
+            content=self.content or "",
             token_estimate=self.token_estimate,
             created_at=self.created_at,
+            tool_calls=self.tool_calls,
+            tool_call_id=self.tool_call_id,
+            name=self.name,
         )
 
 

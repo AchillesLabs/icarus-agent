@@ -1,6 +1,7 @@
 """Repository interfaces and implementations for session, message, and run entities."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from icarus_contracts.session import (
     MessageCreate,
@@ -135,12 +136,22 @@ class MessageRepository:
             if hasattr(message_create.role, "value")
             else str(message_create.role)
         )
+        serialized_tool_calls: list[dict[str, Any]] | None = None
+        if message_create.tool_calls:
+            serialized_tool_calls = [
+                tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
+                for tc in message_create.tool_calls
+            ]
+
         msg_model = MessageModel(
             session_id=message_create.session_id,
             owner_id=effective_owner,
             role=role_value,
-            content=message_create.content,
+            content=message_create.content or "",
             token_estimate=message_create.token_estimate,
+            tool_calls=serialized_tool_calls,
+            tool_call_id=message_create.tool_call_id,
+            name=message_create.name,
         )
         with self.db.session_scope() as session:
             # Check session exists for owner and touch updated_at

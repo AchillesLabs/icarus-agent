@@ -227,6 +227,29 @@ class RunCommandTool(BaseTool):
                 error=f"Command execution timed out after {timeout} seconds.",
                 exit_code=124,
             )
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            if sys.platform == "win32":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+            else:
+                try:
+                    import signal
+
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            raise
 
         stdout_str = stdout_data.decode("utf-8", errors="replace")
         stderr_str = stderr_data.decode("utf-8", errors="replace")

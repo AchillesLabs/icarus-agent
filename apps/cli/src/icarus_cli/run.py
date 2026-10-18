@@ -180,13 +180,28 @@ def execute_run(
             stdout=stdout_stream,
             stream_tokens=True,
         )
+
+        def on_run_message(msg: PromptMessage) -> None:
+            message_repo.create_message(
+                MessageCreate(
+                    session_id=session.id,
+                    role=msg.role,
+                    content=msg.content or "",
+                    tool_calls=msg.tool_calls,
+                    tool_call_id=msg.tool_call_id,
+                    name=msg.name,
+                )
+            )
+
         agent_loop = AgentLoop(
             provider=provider,
             approval_engine=approval_engine,
             model=effective_model,
             temperature=effective_temp,
+            max_turns=cfg.max_turns,
             workspace_root=Path.cwd(),
             inject_system=True,
+            message_callback=on_run_message,
         )
 
         loop_result = asyncio.run(
@@ -200,20 +215,28 @@ def execute_run(
             stdout_stream.write("\n")
             stdout_stream.flush()
 
-        # Record assistant message
-        if assistant_content:
-            message_repo.create_message(
-                MessageCreate(
-                    session_id=session.id,
-                    role=MessageRole.ASSISTANT,
-                    content=assistant_content,
-                )
+        if loop_result.finish_reason == "cancelled":
+            console.print("\n[bold yellow]Run interrupted by user.[/bold yellow]")
+            logger.warning("One-shot run interrupted by SIGINT / user cancellation.")
+            run_repo.update_run(
+                run.id,
+                status=RunStatus.CANCELLED,
+                completed=True,
+                budget_counters={
+                    "turns": loop_result.total_turns,
+                    "finish_reason": "cancelled",
+                },
             )
+            return 130
 
         run_repo.update_run(
             run.id,
             status=RunStatus.SUCCEEDED,
             completed=True,
+            budget_counters={
+                "turns": loop_result.total_turns,
+                "finish_reason": loop_result.finish_reason,
+            },
         )
         logger.info("One-shot run completed successfully (chars=%d).", len(assistant_content))
         return 0

@@ -61,9 +61,12 @@ class MessageCreate(BaseModel):
 
     session_id: str
     role: MessageRole | str
-    content: str
+    content: str | None = ""
     owner_id: str = "default"
     token_estimate: int | None = None
+    tool_calls: list[Any] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 class MessageDTO(BaseModel):
@@ -73,9 +76,31 @@ class MessageDTO(BaseModel):
     session_id: str
     owner_id: str = "default"
     role: MessageRole | str
-    content: str
+    content: str | None = ""
     token_estimate: int | None = None
     created_at: datetime
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+
+    def to_prompt_message(self) -> Any:
+        """Convert persisted message DTO into a PromptMessage for model execution."""
+        from icarus_contracts.provider import PromptMessage
+        from icarus_contracts.tools import ToolCall
+
+        tcs: list[ToolCall] | None = None
+        if self.tool_calls:
+            tcs = [
+                tc if isinstance(tc, ToolCall) else ToolCall.model_validate(tc)
+                for tc in self.tool_calls
+            ]
+        return PromptMessage(
+            role=self.role,
+            content=self.content or "",
+            name=self.name,
+            tool_call_id=self.tool_call_id,
+            tool_calls=tcs,
+        )
 
 
 class RunCreate(BaseModel):

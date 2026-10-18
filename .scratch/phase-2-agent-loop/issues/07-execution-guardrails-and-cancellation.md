@@ -5,10 +5,10 @@
 **Blocked by:**
 - 06: Autonomous Multi-Turn ReAct Execution Loop with Live UI Streaming
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Hard turn limit enforcement (configurable in `config.toml`, default 25 turns) that halts loop with a clear user notice when reached.
-- [ ] Session database schema and repositories support persisting tool calls, tool responses, and call IDs in `MessageModel` with `MessageRole.TOOL`.
-- [ ] Session resumption (`icarus chat -r` or `icarus chat -s <id>`) cleanly reconstructs prior tool-turn history for resumed conversations.
-- [ ] SIGINT / Ctrl+C signal handling during tool execution or model streaming halts the current turn gracefully and saves partial session state without database corruption.
-- [ ] End-to-end integration tests verifying turn limit termination, tool message persistence and reload, and cancellation resilience.
+- [x] Hard turn limit enforcement (configurable in `config.toml`, default 25 turns) that halts loop with a clear user notice when reached.
+- [x] Session database schema and repositories support persisting tool calls, tool responses, and call IDs in `MessageModel` with `MessageRole.TOOL`.
+- [x] Session resumption (`icarus chat -r` or `icarus chat -s <id>`) cleanly reconstructs prior tool-turn history for resumed conversations.
+- [x] SIGINT / Ctrl+C signal handling during tool execution or model streaming halts the current turn gracefully and saves partial session state without database corruption.
+- [x] End-to-end integration tests verifying turn limit termination, tool message persistence and reload, and cancellation resilience.
