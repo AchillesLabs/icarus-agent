@@ -279,7 +279,11 @@ class HistoryCompactor:
             )
 
         summary_text = self.format_summary(compacted)
-        summary_message = PromptMessage(role=MessageRole.SYSTEM, content=summary_text)
+        summary_message = PromptMessage(
+            role=MessageRole.SYSTEM,
+            content=summary_text,
+            name=f"compaction_summary:retained={len(retained)}",
+        )
 
         tokens_before = self.token_counter.count_messages(msg_list)
         reconstructed = [summary_message] + retained
@@ -296,3 +300,62 @@ class HistoryCompactor:
             tokens_after=tokens_after,
             tokens_saved=tokens_saved,
         )
+
+
+def reconstruct_session_prompt_history(
+    messages: Sequence[Any],
+) -> list[PromptMessage]:
+    """Reconstruct active prompt history from a session's messages, honoring compaction boundaries.
+
+    If a compaction summary exists, older compacted messages before the retained boundary
+    are pruned, and the summary message is positioned at the head of the active conversation.
+    """
+    if not messages:
+        return []
+
+    def _to_prompt(m: Any) -> PromptMessage:
+        return m.to_prompt_message() if hasattr(m, "to_prompt_message") else m
+
+    def _is_chat_msg(m: Any) -> bool:
+        role = getattr(m, "role", None)
+        role_val = role.value if hasattr(role, "value") else str(role)
+        content = getattr(m, "content", "") or ""
+        if role_val in (MessageRole.SYSTEM.value, "system"):
+            return "[Previous Conversation Summary]" in content
+        return True
+
+    # Find the last compaction summary message (if any)
+    last_summary_idx = -1
+    retained_count = 0
+    for idx, m in enumerate(messages):
+        role_val = m.role.value if hasattr(m.role, "value") else str(m.role)
+        content = getattr(m, "content", "") or ""
+        if (
+            role_val in (MessageRole.SYSTEM.value, "system")
+            and "[Previous Conversation Summary]" in content
+        ):
+            last_summary_idx = idx
+            name_val = getattr(m, "name", "") or ""
+            if "retained=" in name_val:
+                try:
+                    retained_count = int(name_val.split("retained=")[-1])
+                except (ValueError, TypeError):
+                    retained_count = 0
+            else:
+                retained_count = 0
+
+    if last_summary_idx == -1:
+        return [_to_prompt(m) for m in messages if _is_chat_msg(m)]
+
+    summary_msg = messages[last_summary_idx]
+    summary_prompt = _to_prompt(summary_msg)
+
+    start_retained = max(0, last_summary_idx - retained_count)
+    pre_summary_retained = [
+        _to_prompt(m) for m in messages[start_retained:last_summary_idx] if _is_chat_msg(m)
+    ]
+    post_summary_messages = [
+        _to_prompt(m) for m in messages[last_summary_idx + 1 :] if _is_chat_msg(m)
+    ]
+
+    return [summary_prompt] + pre_summary_retained + post_summary_messages

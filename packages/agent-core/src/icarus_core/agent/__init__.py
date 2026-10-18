@@ -6,7 +6,10 @@ from icarus_core.agent.approvals import (
     ApprovalPolicy,
     ApprovalPromptCallback,
 )
-from icarus_core.agent.compactor import HistoryCompactor
+from icarus_core.agent.compactor import (
+    HistoryCompactor,
+    reconstruct_session_prompt_history,
+)
 from icarus_core.agent.context import ContextBudgetManager
 from icarus_core.agent.loop import (
     AgentLoop,
@@ -32,4 +35,5 @@ __all__ = [
     "SystemPromptBuilder",
     "build_system_prompt",
     "inject_system_prompt",
+    "reconstruct_session_prompt_history",
 ]

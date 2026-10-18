@@ -15,6 +15,7 @@ from icarus_contracts.session import (
     SessionCreate,
     SessionDTO,
 )
+from icarus_core.agent import reconstruct_session_prompt_history
 from icarus_core.agent.loop import AgentLoop
 from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
@@ -70,6 +71,11 @@ class ChatSessionManager:
         """Fetch all messages for the active session in chronological order."""
         return self.message_repo.list_messages(session_id)
 
+    def get_prompt_history(self, session_id: str) -> list[PromptMessage]:
+        """Fetch and reconstruct active prompt history for the session honoring compactions."""
+        session_messages = self.get_messages(session_id)
+        return reconstruct_session_prompt_history(session_messages)
+
     def append_message(
         self,
         session_id: str,
@@ -90,6 +96,16 @@ class ChatSessionManager:
                 name=name,
             )
         )
+
+
+def _is_chat_prompt_message(msg: MessageDTO | PromptMessage) -> bool:
+    """Return True if message should be preserved in prompt history for next chat turn."""
+    role = getattr(msg, "role", None)
+    role_val = role.value if hasattr(role, "value") else str(role)
+    content = getattr(msg, "content", "") or ""
+    if role_val in (MessageRole.SYSTEM.value, "system"):
+        return "[Previous Conversation Summary]" in content
+    return True
 
 
 async def _stream_turn(
@@ -201,14 +217,13 @@ def run_chat(
                     )
                 if msg.content:
                     console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
+            elif msg_role in (MessageRole.SYSTEM.value, "system") and (
+                "[Previous Conversation Summary]" in (msg.content or "")
+            ):
+                console.print("[dim italic]📝 [Compacted Context Summary Restored][/dim italic]")
         console.print("[dim]───────────────────────────────────────────────────────[/dim]")
 
-    prompt_history: list[PromptMessage] = [
-        msg.to_prompt_message()
-        for msg in session_messages
-        if (msg.role.value if hasattr(msg.role, "value") else str(msg.role))
-        != MessageRole.SYSTEM.value
-    ]
+    prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
 
     while True:
         try:
@@ -316,12 +331,7 @@ def run_chat(
             console.print()
             if loop_result.finish_reason == "cancelled":
                 console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
-            prompt_history = [
-                m
-                for m in loop_result.messages
-                if (m.role.value if hasattr(m.role, "value") else str(m.role))
-                != MessageRole.SYSTEM.value
-            ]
+            prompt_history = [m for m in loop_result.messages if _is_chat_prompt_message(m)]
         except (KeyboardInterrupt, asyncio.CancelledError):
             console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
             continue

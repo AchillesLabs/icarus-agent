@@ -178,12 +178,11 @@ def inject_system_prompt(
 
     message_list = list(messages)
     if message_list:
-        first_role = (
-            message_list[0].role.value
-            if hasattr(message_list[0].role, "value")
-            else str(message_list[0].role)
-        )
+        first = message_list[0]
+        first_role = first.role.value if hasattr(first.role, "value") else str(first.role)
         if first_role == MessageRole.SYSTEM.value:
+            if "[Previous Conversation Summary]" in (first.content or ""):
+                return [system_msg] + message_list
             return [system_msg] + message_list[1:]
 
     return [system_msg] + message_list

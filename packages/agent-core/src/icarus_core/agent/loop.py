@@ -212,6 +212,8 @@ class AgentLoop:
                             history = [
                                 compaction_res.summary_message
                             ] + compaction_res.retained_messages
+                            if effective_callback:
+                                effective_callback(compaction_res.summary_message)
                             if observer and hasattr(observer, "on_compaction"):
                                 observer.on_compaction(compaction_res)
 

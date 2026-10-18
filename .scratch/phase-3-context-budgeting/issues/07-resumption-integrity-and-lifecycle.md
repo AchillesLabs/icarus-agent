@@ -4,9 +4,9 @@
 
 **Blocked by:** 06: Session Management CLI Commands (icarus sessions and icarus history)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] End-to-end integration test verifying that a session undergoing compaction can be resumed and continue interacting with models and tools.
-- [ ] Verify that resumed sessions do not repeat previous compacted tool executions or drop safety guidelines.
-- [ ] Verify that cumulative budget counters across resumed runs correctly aggregate tokens, model calls, and tool calls in SQLite.
-- [ ] Verify that all 7 tracer-bullet tickets for Spec 0003 pass and that CI quality gates (`pytest`, `ruff check`, `ruff format`) are 100% green.
+- [x] End-to-end integration test verifying that a session undergoing compaction can be resumed and continue interacting with models and tools.
+- [x] Verify that resumed sessions do not repeat previous compacted tool executions or drop safety guidelines.
+- [x] Verify that cumulative budget counters across resumed runs correctly aggregate tokens, model calls, and tool calls in SQLite.
+- [x] Verify that all 7 tracer-bullet tickets for Spec 0003 pass and that CI quality gates (`pytest`, `ruff check`, `ruff format`) are 100% green.
