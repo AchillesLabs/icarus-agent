@@ -1,8 +1,11 @@
 # 04: Server-Sent Events (SSE) Agent Run Streaming and Cancellation
 
+**GitHub Issue:** [#29](https://github.com/AchillesLabs/icarus-agent/issues/29)
+**Parent Spec:** [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
+
 **What to build:** Real-time Server-Sent Events (SSE) streaming endpoint (`POST /v1/sessions/{id}/runs/stream`) that executes the `AgentLoop` in the background and streams live events to clients: turn beginnings, streaming token deltas, tool execution progress, compaction alerts, and terminal completion payloads. Includes `POST /v1/runs/{id}/cancel` to halt active remote runs cleanly mid-flight.
 
-**Blocked by:** 03: RESTful Session and Message Management Endpoints
+**Blocked by:** [#28](https://github.com/AchillesLabs/icarus-agent/issues/28) (03: RESTful Session and Message Management Endpoints)
 
 **Status:** ready-for-agent
 

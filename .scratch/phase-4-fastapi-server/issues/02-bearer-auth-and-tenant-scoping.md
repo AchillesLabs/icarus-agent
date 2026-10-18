@@ -1,8 +1,11 @@
 # 02: Bearer Authentication Middleware and Tenant-Isolated Request Scoping
 
+**GitHub Issue:** [#27](https://github.com/AchillesLabs/icarus-agent/issues/27)
+**Parent Spec:** [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
+
 **What to build:** Implement HTTP Bearer and API key authentication middleware for `apps/api`. Authenticated requests are bound to a verified `TenantIdentity` with an immutable `owner_id`. Enforce strict tenant isolation across all route dependencies so that missing/invalid credentials yield HTTP 401, and cross-tenant resource requests yield HTTP 404/403.
 
-**Blocked by:** 01: FastAPI Monorepo Application Skeleton and Health Diagnostics
+**Blocked by:** [#26](https://github.com/AchillesLabs/icarus-agent/issues/26) (01: FastAPI Monorepo Application Skeleton and Health Diagnostics)
 
 **Status:** ready-for-agent
 

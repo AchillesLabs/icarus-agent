@@ -1,5 +1,6 @@
 # Spec 0004: Phase 4 - Remote FastAPI Server, Authenticated SSE Streaming, Dual-Engine PostgreSQL Persistence, and Background Worker Scheduler
 
+- **GitHub Issue**: [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
 - **Status**: ready-for-agent
 - **Target**: Phase 4 of Icarus Agent Architecture Roadmap
 - **Estimated Scope**: Remote execution API, HTTP/SSE streaming, bearer token auth, tenant isolation, PostgreSQL database support, background worker daemon, durable reminder jobs, and Docker Compose deployment.
@@ -162,10 +163,10 @@ Build **Phase 4: Remote FastAPI Server, Authenticated SSE Streaming, Dual-Engine
 ## Further Notes
 
 ### Tracer-Bullet Implementation Plan (7 Tickets)
-1. **Ticket 1: FastAPI Monorepo Application Skeleton & Health Diagnostics** (`apps/api` initialization, configuration, dependency injection, and `/health` probes).
-2. **Ticket 2: Bearer Authentication & Tenant-Isolated Resource Dependencies** (API key authentication middleware and tenant-filtered request scoping).
-3. **Ticket 3: RESTful Session & Message HTTP Endpoints** (`GET/POST /v1/sessions` and `/v1/sessions/{id}/messages` with validation and pagination).
-4. **Ticket 4: Server-Sent Events (SSE) Agent Run Streaming & Cancellation** (`POST /v1/sessions/{id}/runs/stream` emitting live tokens, tool progress, and cancel endpoint).
-5. **Ticket 5: Dual-Engine PostgreSQL Support & Alembic Scheduled Jobs Migration** (`DatabaseManager` Postgres pooling, `ScheduledJobModel`, and Alembic migration).
-6. **Ticket 6: Autonomous Background Worker & Durable Job Scheduler** (`apps/worker` daemon, atomic job claiming, lease timeout handling, and run dispatch).
-7. **Ticket 7: Remote CLI Profile Management & Remote Execution Streaming** (`icarus server` commands and `--remote` execution parity with Rich console UI).
+1. **[Ticket 1: FastAPI Monorepo Application Skeleton & Health Diagnostics](https://github.com/AchillesLabs/icarus-agent/issues/26)** (`#26` - `apps/api` initialization, configuration, dependency injection, and `/health` probes).
+2. **[Ticket 2: Bearer Authentication & Tenant-Isolated Resource Dependencies](https://github.com/AchillesLabs/icarus-agent/issues/27)** (`#27` - API key authentication middleware and tenant-filtered request scoping).
+3. **[Ticket 3: RESTful Session & Message HTTP Endpoints](https://github.com/AchillesLabs/icarus-agent/issues/28)** (`#28` - `GET/POST /v1/sessions` and `/v1/sessions/{id}/messages` with validation and pagination).
+4. **[Ticket 4: Server-Sent Events (SSE) Agent Run Streaming & Cancellation](https://github.com/AchillesLabs/icarus-agent/issues/29)** (`#29` - `POST /v1/sessions/{id}/runs/stream` emitting live tokens, tool progress, and cancel endpoint).
+5. **[Ticket 5: Dual-Engine PostgreSQL Support & Alembic Scheduled Jobs Migration](https://github.com/AchillesLabs/icarus-agent/issues/30)** (`#30` - `DatabaseManager` Postgres pooling, `ScheduledJobModel`, and Alembic migration).
+6. **[Ticket 6: Autonomous Background Worker & Durable Job Scheduler](https://github.com/AchillesLabs/icarus-agent/issues/31)** (`#31` - `apps/worker` daemon, atomic job claiming, lease timeout handling, and run dispatch).
+7. **[Ticket 7: Remote CLI Profile Management & Remote Execution Streaming](https://github.com/AchillesLabs/icarus-agent/issues/32)** (`#32` - `icarus server` commands and `--remote` execution parity with Rich console UI).

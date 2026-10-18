@@ -1,8 +1,11 @@
 # 05: Dual-Engine PostgreSQL Persistence and Scheduled Jobs Migration
 
+**GitHub Issue:** [#30](https://github.com/AchillesLabs/icarus-agent/issues/30)
+**Parent Spec:** [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
+
 **What to build:** Enhance `DatabaseManager` to natively support PostgreSQL connection pooling (`postgresql+psycopg://...`) alongside SQLite. Introduce `ScheduledJobModel` with Alembic migration `0004_scheduled_jobs_and_postgres.py` supporting one-shot reminders, scheduled tasks, status tracking (`pending`, `claimed`, `completed`, `failed`), and lease management.
 
-**Blocked by:** 01: FastAPI Monorepo Application Skeleton and Health Diagnostics
+**Blocked by:** [#26](https://github.com/AchillesLabs/icarus-agent/issues/26) (01: FastAPI Monorepo Application Skeleton and Health Diagnostics)
 
 **Status:** ready-for-agent
 

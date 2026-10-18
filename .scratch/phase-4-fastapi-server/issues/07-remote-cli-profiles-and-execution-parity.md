@@ -1,10 +1,13 @@
 # 07: Remote CLI Server Profile Management and Remote Execution Parity
 
+**GitHub Issue:** [#32](https://github.com/AchillesLabs/icarus-agent/issues/32)
+**Parent Spec:** [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
+
 **What to build:** Add `icarus server` CLI management commands (`add`, `list`, `switch`, `remove`) in `apps/cli`. Implement `RemoteAgentClient` connecting to `apps/api` via HTTPS and parsing SSE event streams. When `--remote` or an active remote server profile is used, `icarus run` and `icarus chat` stream tokens, execute tools, and render Rich markdown identically to local execution. Include Docker Compose and self-hosting documentation.
 
 **Blocked by:**
-- 04: Server-Sent Events (SSE) Agent Run Streaming and Cancellation
-- 06: Autonomous Background Worker Daemon and Task Scheduler
+- [#29](https://github.com/AchillesLabs/icarus-agent/issues/29) (04: Server-Sent Events (SSE) Agent Run Streaming and Cancellation)
+- [#31](https://github.com/AchillesLabs/icarus-agent/issues/31) (06: Autonomous Background Worker Daemon and Task Scheduler)
 
 **Status:** ready-for-agent
 

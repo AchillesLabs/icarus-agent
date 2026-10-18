@@ -1,8 +1,11 @@
 # 06: Autonomous Background Worker Daemon and Task Scheduler
 
+**GitHub Issue:** [#31](https://github.com/AchillesLabs/icarus-agent/issues/31)
+**Parent Spec:** [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
+
 **What to build:** Implement `apps/worker` as an independent async daemon process that polls and claims pending scheduled jobs atomically using `SELECT ... FOR UPDATE SKIP LOCKED` on PostgreSQL (and serialized locks on SQLite). Executes headless `AgentLoop` tasks and reminder dispatches, recovers expired leases after crashes, and persists execution results.
 
-**Blocked by:** 05: Dual-Engine PostgreSQL Persistence and Scheduled Jobs Migration
+**Blocked by:** [#30](https://github.com/AchillesLabs/icarus-agent/issues/30) (05: Dual-Engine PostgreSQL Persistence and Scheduled Jobs Migration)
 
 **Status:** ready-for-agent
 
