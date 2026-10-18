@@ -6,7 +6,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from icarus_contracts.exceptions import ProviderError
 from icarus_contracts.provider import PromptMessage
@@ -30,6 +30,8 @@ from icarus_core.persistence.repository import (
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.registry import ProviderRegistry
 from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from icarus_cli.approvals import create_cli_approval_engine
 from icarus_cli.observer import RichAgentObserver
@@ -64,6 +66,46 @@ async def _stream_run(
         stdout.flush()
 
     return result
+
+
+def _render_run_summary_panel(
+    counters: dict[str, Any] | None, console: Console | None = None
+) -> None:
+    """Render a styled Rich summary panel showing run execution telemetry."""
+    if not counters:
+        return
+    con = console or Console()
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style="bold cyan")
+    table.add_column()
+
+    turns = counters.get("model_calls", 0)
+    prompt_tokens = counters.get("prompt_tokens", 0)
+    completion_tokens = counters.get("completion_tokens", 0)
+    total_tokens = counters.get("total_tokens", 0)
+    tool_calls = counters.get("tool_calls", 0)
+    compactions = counters.get("compaction_count", 0)
+    duration = counters.get("elapsed_time_seconds", 0.0)
+
+    table.add_row("Turns / Calls:", f"[magenta]{turns}[/magenta]")
+    tok_summary = (
+        f"[green]{total_tokens:,}[/green] total "
+        f"[dim]({prompt_tokens:,} prompt, {completion_tokens:,} completion)[/dim]"
+    )
+    table.add_row("Tokens:", tok_summary)
+    table.add_row("Tool Calls:", f"[yellow]{tool_calls}[/yellow]")
+    if compactions > 0:
+        table.add_row("Compactions:", f"[bold red]{compactions}[/bold red]")
+    table.add_row("Duration:", f"[cyan]{duration:.2f}s[/cyan]")
+
+    con.print(
+        Panel(
+            table,
+            title="[bold]Run Summary[/bold]",
+            border_style="green",
+            expand=False,
+        )
+    )
 
 
 def execute_run(
@@ -224,6 +266,7 @@ def execute_run(
                 completed=True,
                 budget_counters=loop_result.budget_counters,
             )
+            _render_run_summary_panel(loop_result.budget_counters, console=console)
             return 130
 
         run_repo.update_run(
@@ -233,6 +276,7 @@ def execute_run(
             budget_counters=loop_result.budget_counters,
         )
         logger.info("One-shot run completed successfully (chars=%d).", len(assistant_content))
+        _render_run_summary_panel(loop_result.budget_counters, console=console)
         return 0
 
     except (KeyboardInterrupt, asyncio.CancelledError):

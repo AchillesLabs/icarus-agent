@@ -8,7 +8,9 @@ from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
 from icarus_core.doctor import run_doctor_checks
 from icarus_core.paths import get_icarus_log_file
+from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.migrations.runner import MigrationRunner
+from icarus_core.persistence.repository import MessageRepository, SessionRepository
 from icarus_core.providers import fetch_provider_models
 from rich.console import Console
 from rich.panel import Panel
@@ -22,6 +24,7 @@ from icarus_cli.models_view import (
     select_model_interactive,
 )
 from icarus_cli.run import execute_run
+from icarus_cli.sessions_view import render_session_history, render_sessions_table
 
 app = typer.Typer(
     name="icarus",
@@ -421,6 +424,44 @@ def logs_cmd(
     recent = lines[-tail:] if tail > 0 else lines
     for line in recent:
         console.print(line)
+
+
+@app.command(name="sessions")
+def sessions_cmd(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-n", help="Maximum number of past sessions to display."),
+    ] = 20,
+) -> None:
+    """List previous conversation sessions with message counts and token estimates."""
+    ensure_database_migrated()
+    db_mgr = DatabaseManager()
+    session_repo = SessionRepository(db_mgr)
+    summaries = session_repo.list_session_summaries(limit=limit)
+    render_sessions_table(summaries, console=console)
+
+
+@app.command(name="history")
+def history_cmd(
+    session_id: Annotated[
+        str,
+        typer.Argument(help="UUID of the session to inspect."),
+    ],
+) -> None:
+    """Display the formatted chronological transcript of a specific session."""
+    ensure_database_migrated()
+    db_mgr = DatabaseManager()
+    session_repo = SessionRepository(db_mgr)
+    message_repo = MessageRepository(db_mgr)
+
+    session = session_repo.get_session(session_id)
+    if not session:
+        console.print(f"[bold red]Error:[/bold red] Session with ID '{session_id}' not found.")
+        raise typer.Exit(code=1)
+
+    messages = message_repo.list_messages(session_id)
+    total_tokens = message_repo.get_session_token_total(session_id)
+    render_session_history(session, messages, total_tokens=total_tokens, console=console)
 
 
 @config_app.command(name="list")

@@ -4,10 +4,10 @@
 
 **Blocked by:** 05: Run Telemetry Accumulation and SQLite Budget Persistence
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Add `icarus sessions` command in `icarus_cli` with `--limit` option, rendering a styled Rich table of past sessions.
-- [ ] Add `icarus history <session_id>` command displaying formatted message history, tool calls, tool results, and token estimates.
-- [ ] Enhance session repository queries to aggregate session message counts, run counts, and token totals efficiently.
-- [ ] Render a summary telemetry panel at the conclusion of `icarus run` showing turns, token usage, tool calls, and duration.
-- [ ] CLI tests verify output formatting and error handling for nonexistent sessions.
+- [x] Add `icarus sessions` command in `icarus_cli` with `--limit` option, rendering a styled Rich table of past sessions.
+- [x] Add `icarus history <session_id>` command displaying formatted message history, tool calls, tool results, and token estimates.
+- [x] Enhance session repository queries to aggregate session message counts, run counts, and token totals efficiently.
+- [x] Render a summary telemetry panel at the conclusion of `icarus run` showing turns, token usage, tool calls, and duration.
+- [x] CLI tests verify output formatting and error handling for nonexistent sessions.
