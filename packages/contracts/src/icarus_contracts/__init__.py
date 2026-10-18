@@ -31,9 +31,10 @@ from icarus_contracts.session import (
     RunStatus,
     SessionCreate,
     SessionDTO,
+    SessionSummaryDTO,
     SessionUpdate,
 )
-from icarus_contracts.tokens import TokenUsage
+from icarus_contracts.tokens import RunBudgetCounters, TokenUsage
 from icarus_contracts.tools import (
     ToolCall,
     ToolDefinition,
@@ -66,11 +67,13 @@ __all__ = [
     "ProviderError",
     "ProviderUnavailableError",
     "RateLimitError",
+    "RunBudgetCounters",
     "RunCreate",
     "RunDTO",
     "RunStatus",
     "SessionCreate",
     "SessionDTO",
+    "SessionSummaryDTO",
     "SessionUpdate",
     "StreamChunk",
     "ToolCall",

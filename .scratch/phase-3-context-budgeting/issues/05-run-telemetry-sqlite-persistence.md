@@ -4,10 +4,11 @@
 
 **Blocked by:** 04: Agent Loop Compaction Integration and Token Guardrails
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Compute and record `token_estimate` on `MessageModel` upon every message creation via `MessageRepository`.
-- [ ] Accumulate prompt, completion, and total tokens from provider responses or local token estimators during `AgentLoop`.
-- [ ] Persist complete `budget_counters` payload into `AgentRunModel` upon run completion or failure.
-- [ ] Add Alembic migration if needed to index token estimates and budget counter fields.
-- [ ] Unit and persistence tests verify that token estimates and budget counters are accurately stored and queryable in SQLite.
+- [x] Compute and record `token_estimate` on `MessageModel` upon every message creation via `MessageRepository`.
+- [x] Accumulate prompt, completion, and total tokens from provider responses or local token estimators during `AgentLoop`.
+- [x] Persist complete `budget_counters` payload into `AgentRunModel` upon run completion or failure.
+- [x] Add Alembic migration if needed to index token estimates and budget counter fields.
+- [x] Unit and persistence tests verify that token estimates and budget counters are accurately stored and queryable in SQLite.
+

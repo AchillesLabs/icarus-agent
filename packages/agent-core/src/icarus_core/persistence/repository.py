@@ -11,12 +11,14 @@ from icarus_contracts.session import (
     RunStatus,
     SessionCreate,
     SessionDTO,
+    SessionSummaryDTO,
     SessionUpdate,
 )
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.models import AgentRunModel, MessageModel, SessionModel
+from icarus_core.tokens import TokenCounter, get_token_counter
 
 
 class SessionRepository:
@@ -117,12 +119,141 @@ class SessionRepository:
             session.delete(model)
             return True
 
+    def list_session_summaries(
+        self,
+        owner_id: str = "default",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[SessionSummaryDTO]:
+        """List session summaries with message counts, run counts, and token totals."""
+        with self.db.session_scope() as session:
+            msg_subq = (
+                select(
+                    MessageModel.session_id,
+                    func.count(MessageModel.id).label("message_count"),
+                    func.coalesce(func.sum(MessageModel.token_estimate), 0).label("token_total"),
+                )
+                .where(MessageModel.owner_id == owner_id)
+                .group_by(MessageModel.session_id)
+                .subquery()
+            )
+
+            run_subq = (
+                select(
+                    AgentRunModel.session_id,
+                    func.count(AgentRunModel.id).label("run_count"),
+                )
+                .where(AgentRunModel.owner_id == owner_id)
+                .group_by(AgentRunModel.session_id)
+                .subquery()
+            )
+
+            stmt = (
+                select(
+                    SessionModel,
+                    func.coalesce(msg_subq.c.message_count, 0).label("message_count"),
+                    func.coalesce(msg_subq.c.token_total, 0).label("token_total"),
+                    func.coalesce(run_subq.c.run_count, 0).label("run_count"),
+                )
+                .outerjoin(msg_subq, SessionModel.id == msg_subq.c.session_id)
+                .outerjoin(run_subq, SessionModel.id == run_subq.c.session_id)
+                .where(SessionModel.owner_id == owner_id)
+                .order_by(SessionModel.updated_at.desc(), SessionModel.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+
+            rows = session.execute(stmt).all()
+            summaries = []
+            for sess_model, msg_cnt, tok_total, run_cnt in rows:
+                summaries.append(
+                    SessionSummaryDTO(
+                        id=sess_model.id,
+                        owner_id=sess_model.owner_id,
+                        mode=sess_model.mode,
+                        title=sess_model.title,
+                        created_at=sess_model.created_at,
+                        updated_at=sess_model.updated_at,
+                        message_count=int(msg_cnt),
+                        run_count=int(run_cnt),
+                        total_estimated_tokens=int(tok_total),
+                    )
+                )
+            return summaries
+
+    def get_session_summary(
+        self,
+        session_id: str,
+        owner_id: str = "default",
+    ) -> SessionSummaryDTO | None:
+        """Retrieve aggregated summary for a specific session."""
+        with self.db.session_scope() as session:
+            msg_subq = (
+                select(
+                    MessageModel.session_id,
+                    func.count(MessageModel.id).label("message_count"),
+                    func.coalesce(func.sum(MessageModel.token_estimate), 0).label("token_total"),
+                )
+                .where(MessageModel.session_id == session_id, MessageModel.owner_id == owner_id)
+                .group_by(MessageModel.session_id)
+                .subquery()
+            )
+
+            run_subq = (
+                select(
+                    AgentRunModel.session_id,
+                    func.count(AgentRunModel.id).label("run_count"),
+                )
+                .where(AgentRunModel.session_id == session_id, AgentRunModel.owner_id == owner_id)
+                .group_by(AgentRunModel.session_id)
+                .subquery()
+            )
+
+            stmt = (
+                select(
+                    SessionModel,
+                    func.coalesce(msg_subq.c.message_count, 0).label("message_count"),
+                    func.coalesce(msg_subq.c.token_total, 0).label("token_total"),
+                    func.coalesce(run_subq.c.run_count, 0).label("run_count"),
+                )
+                .outerjoin(msg_subq, SessionModel.id == msg_subq.c.session_id)
+                .outerjoin(run_subq, SessionModel.id == run_subq.c.session_id)
+                .where(SessionModel.id == session_id, SessionModel.owner_id == owner_id)
+            )
+
+            row = session.execute(stmt).first()
+            if row is None:
+                return None
+            sess_model, msg_cnt, tok_total, run_cnt = row
+            return SessionSummaryDTO(
+                id=sess_model.id,
+                owner_id=sess_model.owner_id,
+                mode=sess_model.mode,
+                title=sess_model.title,
+                created_at=sess_model.created_at,
+                updated_at=sess_model.updated_at,
+                message_count=int(msg_cnt),
+                run_count=int(run_cnt),
+                total_estimated_tokens=int(tok_total),
+            )
+
 
 class MessageRepository:
     """Repository handling message appending and retrieval for conversation threads."""
 
-    def __init__(self, db_manager: DatabaseManager) -> None:
+    def __init__(
+        self,
+        db_manager: DatabaseManager,
+        token_counter: TokenCounter | None = None,
+    ) -> None:
         self.db = db_manager
+        self._token_counter = token_counter
+
+    @property
+    def token_counter(self) -> TokenCounter:
+        if self._token_counter is None:
+            self._token_counter = get_token_counter()
+        return self._token_counter
 
     def create_message(
         self,
@@ -143,12 +274,16 @@ class MessageRepository:
                 for tc in message_create.tool_calls
             ]
 
+        token_estimate = message_create.token_estimate
+        if token_estimate is None:
+            token_estimate = self.token_counter.count_message(message_create)
+
         msg_model = MessageModel(
             session_id=message_create.session_id,
             owner_id=effective_owner,
             role=role_value,
             content=message_create.content or "",
-            token_estimate=message_create.token_estimate,
+            token_estimate=token_estimate,
             tool_calls=serialized_tool_calls,
             tool_call_id=message_create.tool_call_id,
             name=message_create.name,
@@ -209,6 +344,19 @@ class MessageRepository:
             )
             result = session.execute(stmt)
             return result.rowcount  # type: ignore[return-value]
+
+    def get_session_token_total(
+        self,
+        session_id: str,
+        owner_id: str = "default",
+    ) -> int:
+        """Calculate total estimated tokens across all messages in a session."""
+        with self.db.session_scope() as session:
+            stmt = select(func.coalesce(func.sum(MessageModel.token_estimate), 0)).where(
+                MessageModel.session_id == session_id,
+                MessageModel.owner_id == owner_id,
+            )
+            return int(session.execute(stmt).scalar() or 0)
 
 
 class AgentRunRepository:
@@ -308,3 +456,35 @@ class AgentRunRepository:
             )
             results = session.execute(stmt).scalars().all()
             return [model.to_dto() for model in results]
+
+    def get_session_budget_totals(
+        self,
+        session_id: str,
+        owner_id: str = "default",
+    ) -> dict[str, Any]:
+        """Aggregate cumulative budget counters across all runs for a session."""
+        runs = self.list_runs_for_session(session_id, owner_id=owner_id)
+        totals: dict[str, Any] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model_calls": 0,
+            "tool_calls": 0,
+            "compaction_count": 0,
+            "elapsed_time_seconds": 0.0,
+            "run_count": len(runs),
+        }
+        for r in runs:
+            if r.budget_counters:
+                totals["prompt_tokens"] += r.budget_counters.get("prompt_tokens", 0)
+                totals["completion_tokens"] += r.budget_counters.get("completion_tokens", 0)
+                totals["total_tokens"] += r.budget_counters.get("total_tokens", 0)
+                totals["model_calls"] += r.budget_counters.get("model_calls", 0)
+                totals["tool_calls"] += r.budget_counters.get("tool_calls", 0)
+                totals["compaction_count"] += r.budget_counters.get("compaction_count", 0)
+                totals["elapsed_time_seconds"] = round(
+                    totals["elapsed_time_seconds"]
+                    + float(r.budget_counters.get("elapsed_time_seconds", 0.0)),
+                    4,
+                )
+        return totals

@@ -29,3 +29,25 @@ class TokenUsage(BaseModel):
         if isinstance(other, TokenUsage):
             return self.add(other)
         return NotImplemented
+
+
+class RunBudgetCounters(BaseModel):
+    """Aggregated execution telemetry and token budget counters for an agent run."""
+
+    prompt_tokens: int = Field(default=0, ge=0)
+    completion_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    model_calls: int = Field(default=0, ge=0)
+    tool_calls: int = Field(default=0, ge=0)
+    compaction_count: int = Field(default=0, ge=0)
+    elapsed_time_seconds: float = Field(default=0.0, ge=0.0)
+    turns: int = Field(default=0, ge=0)
+    compactions: int = Field(default=0, ge=0)
+    finish_reason: str | None = None
+
+    def model_post_init(self, __context: object) -> None:
+        """Ensure total_tokens reflects prompt + completion if not set."""
+        if self.total_tokens == 0 and (self.prompt_tokens > 0 or self.completion_tokens > 0):
+            self.total_tokens = self.prompt_tokens + self.completion_tokens
+        if self.compactions == 0 and self.compaction_count > 0:
+            self.compactions = self.compaction_count

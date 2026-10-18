@@ -83,7 +83,7 @@ class MessageModel(Base):
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True, default="")
-    token_estimate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    token_estimate: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     tool_call_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     name: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -126,7 +126,8 @@ class AgentRunModel(Base):
         nullable=True,
         index=True,
     )
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
+
     provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     budget_counters: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

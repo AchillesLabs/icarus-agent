@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +37,8 @@ class AgentLoopResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     compaction_count: int = 0
+    model_calls: int = 0
+    elapsed_time_seconds: float = 0.0
     budget_counters: dict[str, Any] = field(default_factory=dict)
 
 
@@ -151,7 +154,9 @@ class AgentLoop:
         finish_reason = "stop"
         total_prompt_tokens = 0
         total_completion_tokens = 0
+        model_calls = 0
         compaction_count = 0
+        start_time = time.perf_counter()
 
         supports_tools = True
         try:
@@ -166,13 +171,18 @@ class AgentLoop:
 
         def _make_budget_counters() -> dict[str, Any]:
             total_toks = total_prompt_tokens + total_completion_tokens
+            elapsed = round(time.perf_counter() - start_time, 4)
             return {
                 "prompt_tokens": total_prompt_tokens,
                 "completion_tokens": total_completion_tokens,
                 "total_tokens": total_toks,
-                "turns": turn_count,
+                "model_calls": model_calls,
                 "tool_calls": len(all_tool_calls),
+                "compaction_count": compaction_count,
+                "elapsed_time_seconds": elapsed,
+                "turns": turn_count,
                 "compactions": compaction_count,
+                "finish_reason": finish_reason,
             }
 
         try:
@@ -245,6 +255,7 @@ class AgentLoop:
                         stream_kwargs["tools"] = tool_schemas
 
                 try:
+                    model_calls += 1
                     async for chunk in self.provider.stream(
                         messages=turn_messages,
                         **stream_kwargs,
@@ -283,6 +294,8 @@ class AgentLoop:
                         prompt_tokens=total_prompt_tokens,
                         completion_tokens=total_completion_tokens,
                         compaction_count=compaction_count,
+                        model_calls=model_calls,
+                        elapsed_time_seconds=round(time.perf_counter() - start_time, 4),
                         budget_counters=_make_budget_counters(),
                     )
 
@@ -290,8 +303,17 @@ class AgentLoop:
 
                 # Accumulate token usage for the turn
                 if chunk_usage:
-                    turn_prompt_tok = chunk_usage.get("prompt_tokens", 0)
-                    turn_comp_tok = chunk_usage.get("completion_tokens", 0)
+                    if isinstance(chunk_usage, dict):
+                        turn_prompt_tok = chunk_usage.get("prompt_tokens", 0)
+                        turn_comp_tok = chunk_usage.get("completion_tokens", 0)
+                    else:
+                        turn_prompt_tok = getattr(chunk_usage, "prompt_tokens", 0)
+                        turn_comp_tok = getattr(chunk_usage, "completion_tokens", 0)
+
+                    if turn_prompt_tok == 0:
+                        turn_prompt_tok = self.token_counter.count_messages(turn_messages)
+                    if turn_comp_tok == 0:
+                        turn_comp_tok = self.token_counter.count_text(accumulated_content)
                 else:
                     turn_prompt_tok = self.token_counter.count_messages(turn_messages)
                     turn_comp_tok = self.token_counter.count_text(accumulated_content)
@@ -398,6 +420,8 @@ class AgentLoop:
                             prompt_tokens=total_prompt_tokens,
                             completion_tokens=total_completion_tokens,
                             compaction_count=compaction_count,
+                            model_calls=model_calls,
+                            elapsed_time_seconds=round(time.perf_counter() - start_time, 4),
                             budget_counters=_make_budget_counters(),
                         )
 
@@ -434,5 +458,7 @@ class AgentLoop:
             prompt_tokens=total_prompt_tokens,
             completion_tokens=total_completion_tokens,
             compaction_count=compaction_count,
+            model_calls=model_calls,
+            elapsed_time_seconds=round(time.perf_counter() - start_time, 4),
             budget_counters=_make_budget_counters(),
         )

@@ -212,3 +212,50 @@ def test_file_based_sqlite_engine(file_based_db: DatabaseManager):
     assert msg.id is not None
     assert session_repo.get_session(sess.id) is not None
     assert len(message_repo.list_messages(sess.id)) == 1
+
+
+def test_message_repository_computes_token_estimate_automatically(in_memory_db: DatabaseManager):
+    """Verify MessageRepository computes and records token_estimate if omitted."""
+    session_repo = SessionRepository(in_memory_db)
+    message_repo = MessageRepository(in_memory_db)
+
+    sess = session_repo.create_session(SessionCreate(title="Telemetry Test"))
+
+    # 1. Message without token_estimate: should be automatically computed
+    msg_user = message_repo.create_message(
+        MessageCreate(
+            session_id=sess.id,
+            role=MessageRole.USER,
+            content="Count my tokens please!",
+        )
+    )
+    assert msg_user.token_estimate is not None
+    assert msg_user.token_estimate > 0
+
+    # Retrieve from DB to verify persistence
+    retrieved = message_repo.get_message(msg_user.id)
+    assert retrieved is not None
+    assert retrieved.token_estimate == msg_user.token_estimate
+
+    # 2. Assistant message with tool_calls: should include tool framing in token estimate
+    msg_asst = message_repo.create_message(
+        MessageCreate(
+            session_id=sess.id,
+            role=MessageRole.ASSISTANT,
+            content="Invoking tools",
+            tool_calls=[{"id": "c1", "name": "run_command", "arguments": {"cmd": "ls"}}],
+        )
+    )
+    assert msg_asst.token_estimate is not None
+    assert msg_asst.token_estimate > msg_user.token_estimate
+
+    # 3. Explicit token_estimate is preserved
+    msg_explicit = message_repo.create_message(
+        MessageCreate(
+            session_id=sess.id,
+            role=MessageRole.USER,
+            content="Preset token count",
+            token_estimate=42,
+        )
+    )
+    assert msg_explicit.token_estimate == 42

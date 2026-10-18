@@ -222,10 +222,7 @@ def execute_run(
                 run.id,
                 status=RunStatus.CANCELLED,
                 completed=True,
-                budget_counters={
-                    "turns": loop_result.total_turns,
-                    "finish_reason": "cancelled",
-                },
+                budget_counters=loop_result.budget_counters,
             )
             return 130
 
@@ -233,10 +230,7 @@ def execute_run(
             run.id,
             status=RunStatus.SUCCEEDED,
             completed=True,
-            budget_counters={
-                "turns": loop_result.total_turns,
-                "finish_reason": loop_result.finish_reason,
-            },
+            budget_counters=loop_result.budget_counters,
         )
         logger.info("One-shot run completed successfully (chars=%d).", len(assistant_content))
         return 0
@@ -248,6 +242,18 @@ def execute_run(
             run.id,
             status=RunStatus.CANCELLED,
             completed=True,
+            budget_counters={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "model_calls": 0,
+                "tool_calls": 0,
+                "compaction_count": 0,
+                "elapsed_time_seconds": 0.0,
+                "turns": 0,
+                "compactions": 0,
+                "finish_reason": "cancelled",
+            },
         )
         return 130
 
@@ -261,6 +267,18 @@ def execute_run(
             status=RunStatus.FAILED,
             error_category=err_type,
             completed=True,
+            budget_counters={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "model_calls": 0,
+                "tool_calls": 0,
+                "compaction_count": 0,
+                "elapsed_time_seconds": 0.0,
+                "turns": 0,
+                "compactions": 0,
+                "finish_reason": "error",
+            },
         )
         return 1
 
@@ -273,5 +291,17 @@ def execute_run(
             status=RunStatus.FAILED,
             error_category="UnexpectedError",
             completed=True,
+            budget_counters={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "model_calls": 0,
+                "tool_calls": 0,
+                "compaction_count": 0,
+                "elapsed_time_seconds": 0.0,
+                "turns": 0,
+                "compactions": 0,
+                "finish_reason": "error",
+            },
         )
         return 1

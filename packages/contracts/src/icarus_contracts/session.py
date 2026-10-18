@@ -130,3 +130,17 @@ class RunDTO(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
+
+
+class SessionSummaryDTO(BaseModel):
+    """High-level session metadata and aggregated telemetry."""
+
+    id: str
+    owner_id: str = "default"
+    mode: str = "chat"
+    title: str = "New Session"
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+    run_count: int = 0
+    total_estimated_tokens: int = 0
