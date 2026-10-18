@@ -9,6 +9,7 @@ dependencies = [
     "icarus-core",
     "icarus-cli",
     "icarus-api",
+    "icarus-worker",
 ]
 
 [tool.uv.workspace]
@@ -17,6 +18,7 @@ members = [
     "packages/agent-core",
     "apps/cli",
     "apps/api",
+    "apps/worker",
 ]
 
 [tool.uv.sources]
@@ -24,6 +26,7 @@ icarus-contracts = { workspace = true }
 icarus-core = { workspace = true }
 icarus-cli = { workspace = true }
 icarus-api = { workspace = true }
+icarus-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -56,5 +59,6 @@ pythonpath = [
     "packages/agent-core/src",
     "apps/cli/src",
     "apps/api/src",
+    "apps/worker/src",
 ]
 asyncio_mode = "auto"

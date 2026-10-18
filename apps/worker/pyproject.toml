@@ -1,0 +1,25 @@
+[project]
+name = "icarus-worker"
+version = "0.1.0"
+description = "Autonomous background worker daemon and task scheduler for Icarus Agent"
+requires-python = ">=3.12"
+dependencies = [
+    "icarus-contracts",
+    "icarus-core",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+]
+
+[project.scripts]
+icarus-worker = "icarus_worker.main:main"
+
+[tool.uv.sources]
+icarus-contracts = { workspace = true }
+icarus-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/icarus_worker"]

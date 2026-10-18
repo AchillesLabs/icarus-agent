@@ -9,6 +9,7 @@ members = [
     "icarus-cli",
     "icarus-contracts",
     "icarus-core",
+    "icarus-worker",
 ]
 
 [[package]]
@@ -473,6 +474,7 @@ dependencies = [
     { name = "icarus-cli" },
     { name = "icarus-contracts" },
     { name = "icarus-core" },
+    { name = "icarus-worker" },
 ]
 
 [package.dev-dependencies]
@@ -488,6 +490,7 @@ requires-dist = [
     { name = "icarus-cli", editable = "apps/cli" },
     { name = "icarus-contracts", editable = "packages/contracts" },
     { name = "icarus-core", editable = "packages/agent-core" },
+    { name = "icarus-worker", editable = "apps/worker" },
 ]
 
 [package.metadata.requires-dev]
@@ -579,6 +582,25 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "tiktoken", specifier = ">=0.14.0" },
+]
+
+[[package]]
+name = "icarus-worker"
+version = "0.1.0"
+source = { editable = "apps/worker" }
+dependencies = [
+    { name = "icarus-contracts" },
+    { name = "icarus-core" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "icarus-contracts", editable = "packages/contracts" },
+    { name = "icarus-core", editable = "packages/agent-core" },
+    { name = "pydantic", specifier = ">=2.7.0" },
+    { name = "pydantic-settings", specifier = ">=2.2.0" },
 ]
 
 [[package]]

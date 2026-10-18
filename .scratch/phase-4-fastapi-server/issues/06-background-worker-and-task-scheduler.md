@@ -7,10 +7,11 @@
 
 **Blocked by:** [#30](https://github.com/AchillesLabs/icarus-agent/issues/30) (05: Dual-Engine PostgreSQL Persistence and Scheduled Jobs Migration)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Scaffold `apps/worker` package with async worker daemon lifecycle and polling loop.
-- [ ] Implement atomic job claiming logic (`claim_next_job`) using `SKIP LOCKED` to prevent duplicate concurrent execution.
-- [ ] Implement job lease timeout and orphan recovery mechanism for crashed worker runs.
-- [ ] Implement job dispatch execution handler running headless `AgentLoop` or notification handlers.
-- [ ] Unit and concurrency tests verify atomic claiming, lease expiration recovery, and result persistence.
+- [x] Scaffold `apps/worker` package with async worker daemon lifecycle and polling loop.
+- [x] Implement atomic job claiming logic (`claim_next_job`) using `SKIP LOCKED` to prevent duplicate concurrent execution.
+- [x] Implement job lease timeout and orphan recovery mechanism for crashed worker runs.
+- [x] Implement job dispatch execution handler running headless `AgentLoop` or notification handlers.
+- [x] Unit and concurrency tests verify atomic claiming, lease expiration recovery, and result persistence.
+
