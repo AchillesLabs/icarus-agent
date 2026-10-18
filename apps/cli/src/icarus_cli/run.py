@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import TextIO
 
 from icarus_contracts.exceptions import ProviderError
@@ -16,6 +17,7 @@ from icarus_contracts.session import (
     RunStatus,
     SessionCreate,
 )
+from icarus_core.agent.loop import AgentLoop
 from icarus_core.agent.prompts import inject_system_prompt
 from icarus_core.config import ConfigManager
 from icarus_core.logging import get_logger, redact_secrets, setup_logging
@@ -30,6 +32,7 @@ from icarus_core.providers.registry import ProviderRegistry
 from rich.console import Console
 
 from icarus_cli.approvals import create_cli_approval_engine
+from icarus_cli.observer import RichAgentObserver
 
 logger = get_logger("cli.run")
 
@@ -169,15 +172,34 @@ def execute_run(
         return 1
 
     try:
-        assistant_content = asyncio.run(
-            _stream_run(
-                provider=provider,
+        approval_engine = create_cli_approval_engine(
+            auto_approve=auto_approve, console=console, stdin=stdin_stream
+        )
+        observer = RichAgentObserver(
+            console=console,
+            stdout=stdout_stream,
+            stream_tokens=True,
+        )
+        agent_loop = AgentLoop(
+            provider=provider,
+            approval_engine=approval_engine,
+            model=effective_model,
+            temperature=effective_temp,
+            workspace_root=Path.cwd(),
+            inject_system=True,
+        )
+
+        loop_result = asyncio.run(
+            agent_loop.run(
                 prompt=effective_prompt,
-                model=effective_model,
-                temperature=effective_temp,
-                stdout=stdout_stream,
+                observer=observer,
             )
         )
+        assistant_content = loop_result.content
+        if stdout_stream and assistant_content and not assistant_content.endswith("\n"):
+            stdout_stream.write("\n")
+            stdout_stream.flush()
+
         # Record assistant message
         if assistant_content:
             message_repo.create_message(

@@ -3,6 +3,7 @@
 import asyncio
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import TextIO
 
 from icarus_contracts.exceptions import ProviderError
@@ -14,7 +15,7 @@ from icarus_contracts.session import (
     SessionCreate,
     SessionDTO,
 )
-from icarus_core.agent.prompts import inject_system_prompt
+from icarus_core.agent.loop import AgentLoop
 from icarus_core.config import ConfigManager
 from icarus_core.credentials import CredentialResolver
 from icarus_core.persistence.database import DatabaseManager
@@ -30,6 +31,7 @@ from rich.table import Table
 
 from icarus_cli.approvals import create_cli_approval_engine
 from icarus_cli.models_view import render_models_table, select_model_interactive
+from icarus_cli.observer import RichAgentObserver
 
 
 class ChatSessionManager:
@@ -119,7 +121,7 @@ def run_chat(
     """Execute the interactive chat REPL loop."""
     console = console or Console()
     stdin = stdin or sys.stdin
-    _approval_engine = create_cli_approval_engine(
+    approval_engine = create_cli_approval_engine(
         auto_approve=auto_approve, console=console, stdin=stdin
     )
 
@@ -257,24 +259,33 @@ def run_chat(
 
         # Stream assistant response
         console.print(f"[bold green]{effective_provider} > [/bold green]")
-        turn_messages = inject_system_prompt(prompt_history)
+        observer = RichAgentObserver(console=console, stream_tokens=True)
+        agent_loop = AgentLoop(
+            provider=provider,
+            approval_engine=approval_engine,
+            model=effective_model,
+            temperature=effective_temp,
+            workspace_root=Path.cwd(),
+            inject_system=True,
+        )
         try:
-            assistant_content = asyncio.run(
-                _stream_turn(
-                    provider=provider,
-                    prompt_messages=turn_messages,
-                    model=effective_model,
-                    temperature=effective_temp,
-                    console=console,
+            loop_result = asyncio.run(
+                agent_loop.run(
+                    messages=prompt_history,
+                    observer=observer,
                 )
             )
+            console.print()
+            assistant_content = loop_result.content
             if assistant_content:
-                # Persist assistant message
                 session_mgr.append_message(session.id, MessageRole.ASSISTANT, assistant_content)
-                prompt_history.append(
-                    PromptMessage(role=MessageRole.ASSISTANT, content=assistant_content)
-                )
-        except KeyboardInterrupt:
+            prompt_history = [
+                m
+                for m in loop_result.messages
+                if (m.role.value if hasattr(m.role, "value") else str(m.role))
+                != MessageRole.SYSTEM.value
+            ]
+        except (KeyboardInterrupt, asyncio.CancelledError):
             console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
             continue
         except ProviderError as exc:

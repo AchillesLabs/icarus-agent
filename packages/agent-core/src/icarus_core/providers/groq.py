@@ -17,6 +17,12 @@ from icarus_contracts import (
     StreamChunk,
 )
 
+from icarus_core.providers.utils import (
+    ToolCallAccumulator,
+    format_chat_messages,
+    parse_response_tool_calls,
+)
+
 
 class GroqProvider:
     """Direct adapter for Groq Cloud models.
@@ -57,15 +63,8 @@ class GroqProvider:
             timeout=self.timeout,
         )
 
-    def _format_messages(self, messages: list[PromptMessage]) -> list[dict[str, str]]:
-        formatted = []
-        for m in messages:
-            role_str = m.role.value if hasattr(m.role, "value") else str(m.role)
-            item: dict[str, str] = {"role": role_str, "content": m.content}
-            if m.name:
-                item["name"] = m.name
-            formatted.append(item)
-        return formatted
+    def _format_messages(self, messages: list[PromptMessage]) -> list[dict[str, Any]]:
+        return format_chat_messages(messages)
 
     def _handle_error_response(self, response: httpx.Response) -> None:
         try:
@@ -144,11 +143,16 @@ class GroqProvider:
 
         data = response.json()
         choice = data["choices"][0]
+        message = choice.get("message", {})
+        raw_tools = message.get("tool_calls")
+        parsed_tools = parse_response_tool_calls(raw_tools)
+
         return CompletionResult(
-            content=choice["message"]["content"],
+            content=message.get("content") or "",
             model=data.get("model", target_model),
             finish_reason=choice.get("finish_reason", "stop"),
             usage=data.get("usage"),
+            tool_calls=parsed_tools,
         )
 
     async def stream(
@@ -174,6 +178,7 @@ class GroqProvider:
 
         url = f"{self.base_url}/chat/completions"
         client = self._get_client()
+        tool_accumulator = ToolCallAccumulator()
 
         try:
             async with client.stream(
@@ -202,12 +207,35 @@ class GroqProvider:
                     if not choices:
                         continue
                     choice = choices[0]
-                    delta_text = choice.get("delta", {}).get("content", "")
+                    delta = choice.get("delta", {})
+                    delta_text = delta.get("content") or ""
                     finish_reason = choice.get("finish_reason")
+                    raw_tool_deltas = delta.get("tool_calls")
+
+                    if raw_tool_deltas:
+                        tool_accumulator.update(raw_tool_deltas)
+
+                    accumulated_tools = []
+                    if finish_reason == "tool_calls" or (
+                        finish_reason and tool_accumulator.get_tool_calls()
+                    ):
+                        accumulated_tools = tool_accumulator.get_tool_calls()
+
                     yield StreamChunk(
                         delta=delta_text,
                         finish_reason=finish_reason,
                         usage=chunk_dict.get("usage"),
+                        tool_calls=accumulated_tools,
+                        tool_call_deltas=raw_tool_deltas,
+                    )
+
+                # If stream finished and tool calls were accumulated but not yet yielded
+                remaining_tools = tool_accumulator.get_tool_calls()
+                if remaining_tools and not accumulated_tools:
+                    yield StreamChunk(
+                        delta="",
+                        finish_reason="tool_calls",
+                        tool_calls=remaining_tools,
                     )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise ProviderUnavailableError(

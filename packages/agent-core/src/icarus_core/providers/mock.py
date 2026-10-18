@@ -10,6 +10,7 @@ from icarus_contracts.provider import (
     ProviderCapabilities,
     StreamChunk,
 )
+from icarus_contracts.tools import ToolCall
 
 
 class MockProvider:
@@ -24,6 +25,7 @@ class MockProvider:
         canned_chunks: list[str] | None = None,
         should_fail: Exception | None = None,
         latency: float = 0.0,
+        tool_calls_sequence: list[list[ToolCall] | None] | None = None,
     ) -> None:
         self.responses = (
             list(responses) if responses is not None else ["Mock response from Icarus agent."]
@@ -31,12 +33,25 @@ class MockProvider:
         self.canned_chunks = list(canned_chunks) if canned_chunks is not None else None
         self.should_fail = should_fail
         self.latency = latency
+        self.tool_calls_sequence = (
+            list(tool_calls_sequence) if tool_calls_sequence is not None else None
+        )
 
         self.call_count: int = 0
         self.recorded_prompts: list[list[PromptMessage]] = []
         self.recorded_models: list[str] = []
         self.recorded_tools: list[list[dict[str, Any]] | None] = []
         self._response_index: int = 0
+        self._tool_calls_index: int = 0
+
+    def _get_next_tool_calls(self) -> list[ToolCall] | None:
+        if not self.tool_calls_sequence:
+            return None
+        if self._tool_calls_index < len(self.tool_calls_sequence):
+            res = self.tool_calls_sequence[self._tool_calls_index]
+            self._tool_calls_index += 1
+            return res
+        return None
 
     def _get_next_response(self) -> str:
         if not self.responses:
@@ -65,6 +80,16 @@ class MockProvider:
 
         if self.latency > 0:
             await asyncio.sleep(self.latency)
+
+        tool_calls = self._get_next_tool_calls()
+        if tool_calls is not None:
+            return CompletionResult(
+                content="",
+                model=target_model,
+                finish_reason="tool_calls",
+                usage={"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
+                tool_calls=tool_calls,
+            )
 
         text = self._get_next_response()
         word_count = len(text.split())
@@ -96,6 +121,18 @@ class MockProvider:
 
         if self.should_fail is not None:
             raise self.should_fail
+
+        tool_calls = self._get_next_tool_calls()
+        if tool_calls is not None:
+            if self.latency > 0:
+                await asyncio.sleep(self.latency)
+            yield StreamChunk(
+                delta="",
+                finish_reason="tool_calls",
+                tool_calls=tool_calls,
+                usage={"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
+            )
+            return
 
         if self.canned_chunks is not None:
             chunks = list(self.canned_chunks)

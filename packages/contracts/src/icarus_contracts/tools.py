@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from icarus_contracts.provider import PromptMessage
 from icarus_contracts.session import MessageRole
+
+if TYPE_CHECKING:
+    from icarus_contracts.provider import PromptMessage
 
 
 class ToolSafetyCategory(StrEnum):
@@ -70,7 +72,14 @@ class ToolResult(BaseModel):
 
     def to_prompt_message(self) -> PromptMessage:
         """Convert result into a PromptMessage for model history."""
+        from icarus_contracts.provider import PromptMessage
+
         content = self.output
         if self.error:
             content = f"Error: {self.error}" if not content else f"{content}\nError: {self.error}"
-        return PromptMessage(role=MessageRole.TOOL, content=content, name=self.name)
+        return PromptMessage(
+            role=MessageRole.TOOL,
+            content=content,
+            name=self.name,
+            tool_call_id=self.call_id,
+        )

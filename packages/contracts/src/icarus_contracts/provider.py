@@ -1,18 +1,21 @@
-"""Contracts and schemas for model provider operations and streaming events."""
+from __future__ import annotations
 
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from icarus_contracts.session import MessageRole
+from icarus_contracts.tools import ToolCall
 
 
 class PromptMessage(BaseModel):
     """Normalized message input sent to a model provider."""
 
     role: MessageRole | str
-    content: str
+    content: str | None = ""
     name: str | None = None
+    tool_call_id: str | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class StreamChunk(BaseModel):
@@ -21,6 +24,8 @@ class StreamChunk(BaseModel):
     delta: str
     finish_reason: str | None = None
     usage: dict[str, Any] | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    tool_call_deltas: list[dict[str, Any]] | None = None
 
 
 class CompletionResult(BaseModel):
@@ -30,6 +35,7 @@ class CompletionResult(BaseModel):
     model: str
     finish_reason: str = "stop"
     usage: dict[str, Any] | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class ProviderCapabilities(BaseModel):

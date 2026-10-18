@@ -5,10 +5,10 @@
 **Blocked by:**
 - 05: Sandboxed Terminal Execution Tool (run_command) with Timeout Controls
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `AgentLoop` state engine implemented under `icarus_core.agent.loop` managing the multi-step cycle between LLM reasoning and tool dispatch.
-- [ ] Provider adapters extended to accept tool definitions and parse structured tool-call deltas during streaming.
-- [ ] Terminal UI displays real-time tool execution status, tool names, arguments, and outcome summaries using Rich console panels and spinners.
-- [ ] Verified end-to-end: a user prompt (e.g. "read pyproject.toml and tell me what the version is") triggers `read_file`, receives output, and answers accurately.
-- [ ] Comprehensive unit and integration tests using `MockProvider` asserting multi-turn tool calling cycles and terminal outputs.
+- [x] `AgentLoop` state engine implemented under `icarus_core.agent.loop` managing the multi-step cycle between LLM reasoning and tool dispatch.
+- [x] Provider adapters extended to accept tool definitions and parse structured tool-call deltas during streaming.
+- [x] Terminal UI displays real-time tool execution status, tool names, arguments, and outcome summaries using Rich console panels and spinners.
+- [x] Verified end-to-end: a user prompt (e.g. "read pyproject.toml and tell me what the version is") triggers `read_file`, receives output, and answers accurately.
+- [x] Comprehensive unit and integration tests using `MockProvider` asserting multi-turn tool calling cycles and terminal outputs.
