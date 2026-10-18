@@ -7,10 +7,11 @@
 
 **Blocked by:** [#26](https://github.com/AchillesLabs/icarus-agent/issues/26) (01: FastAPI Monorepo Application Skeleton and Health Diagnostics)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Extend `DatabaseManager` to configure connection pooling (`QueuePool`) when connected to PostgreSQL engines.
-- [ ] Define `ScheduledJobModel` with columns (`id`, `owner_id`, `job_type`, `scheduled_at`, `status`, `payload`, `claimed_by`, `claimed_at`, `completed_at`, `error_message`, `retry_count`).
-- [ ] Create `ScheduledJobRepository` for creating, querying, and updating scheduled tasks and reminders.
-- [ ] Add Alembic migration `0004_scheduled_jobs.py` compatible across both SQLite and PostgreSQL.
-- [ ] Integration tests verify database engine switching, migrations, and job model persistence.
+- [x] Extend `DatabaseManager` to configure connection pooling (`QueuePool`) when connected to PostgreSQL engines.
+- [x] Define `ScheduledJobModel` with columns (`id`, `owner_id`, `job_type`, `scheduled_at`, `status`, `payload`, `claimed_by`, `claimed_at`, `completed_at`, `error_message`, `retry_count`).
+- [x] Create `ScheduledJobRepository` for creating, querying, and updating scheduled tasks and reminders.
+- [x] Add Alembic migration `0004_scheduled_jobs.py` compatible across both SQLite and PostgreSQL.
+- [x] Integration tests verify database engine switching, migrations, and job model persistence.
+

@@ -2,10 +2,16 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from icarus_contracts import TenantAccessDeniedError
+from icarus_contracts.jobs import (
+    ScheduledJobCreate,
+    ScheduledJobDTO,
+    ScheduledJobStatus,
+    ScheduledJobUpdate,
+)
 from icarus_contracts.session import (
     MessageCreate,
     MessageDTO,
@@ -17,11 +23,16 @@ from icarus_contracts.session import (
     SessionSummaryDTO,
     SessionUpdate,
 )
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from icarus_core.persistence.database import DatabaseManager
-from icarus_core.persistence.models import AgentRunModel, MessageModel, SessionModel
+from icarus_core.persistence.models import (
+    AgentRunModel,
+    MessageModel,
+    ScheduledJobModel,
+    SessionModel,
+)
 from icarus_core.tokens import TokenCounter, get_token_counter
 
 
@@ -752,3 +763,354 @@ class TenantRunRepository(AgentRunRepository):
         owner_id: str | None = None,
     ) -> dict[str, Any]:
         return super().get_session_budget_totals(session_id, owner_id=self.owner_id)
+
+
+class ScheduledJobRepository:
+    """Repository handling scheduled job registration, queries, and lease claims."""
+
+    def __init__(self, db_manager: DatabaseManager | Session) -> None:
+        self.db = db_manager
+
+    @contextmanager
+    def _session_scope(self) -> Generator[Session, None, None]:
+        if hasattr(self.db, "session_scope"):
+            with self.db.session_scope() as session:
+                yield session
+        else:
+            yield self.db  # type: ignore[misc]
+
+    def create_job(
+        self,
+        job_create: ScheduledJobCreate,
+        owner_id: str | None = None,
+    ) -> ScheduledJobDTO:
+        """Register and persist a new scheduled job or reminder."""
+        effective_owner = owner_id or job_create.owner_id or "default"
+        job_model = ScheduledJobModel(
+            owner_id=effective_owner,
+            job_type=job_create.job_type,
+            scheduled_at=job_create.scheduled_at,
+            payload=job_create.payload,
+        )
+        with self._session_scope() as session:
+            session.add(job_model)
+            session.flush()
+            session.refresh(job_model)
+            return job_model.to_dto()
+
+    def get_job(self, job_id: str, owner_id: str = "default") -> ScheduledJobDTO | None:
+        """Retrieve a scheduled job by its ID and owner."""
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(
+                ScheduledJobModel.id == job_id,
+                ScheduledJobModel.owner_id == owner_id,
+            )
+            result = session.execute(stmt).scalar_one_or_none()
+            return result.to_dto() if result is not None else None
+
+    def list_jobs(
+        self,
+        owner_id: str = "default",
+        status: ScheduledJobStatus | str | None = None,
+        job_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ScheduledJobDTO]:
+        """List scheduled jobs ordered by scheduled_at ascending."""
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(ScheduledJobModel.owner_id == owner_id)
+            if status is not None:
+                status_str = status.value if hasattr(status, "value") else str(status)
+                stmt = stmt.where(ScheduledJobModel.status == status_str)
+            if job_type is not None:
+                stmt = stmt.where(ScheduledJobModel.job_type == job_type)
+
+            stmt = (
+                stmt.order_by(
+                    ScheduledJobModel.scheduled_at.asc(),
+                    ScheduledJobModel.created_at.asc(),
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            results = session.execute(stmt).scalars().all()
+            return [model.to_dto() for model in results]
+
+    def update_job(
+        self,
+        job_id: str,
+        update: ScheduledJobUpdate | None = None,
+        *,
+        status: ScheduledJobStatus | str | None = None,
+        error_message: str | None = None,
+        retry_count: int | None = None,
+        payload: dict[str, Any] | None = None,
+        scheduled_at: datetime | None = None,
+        completed: bool = False,
+        owner_id: str = "default",
+    ) -> ScheduledJobDTO | None:
+        """Update mutable fields on an existing scheduled job."""
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(
+                ScheduledJobModel.id == job_id,
+                ScheduledJobModel.owner_id == owner_id,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+
+            now = datetime.now(UTC)
+            if update is not None:
+                if update.status is not None:
+                    status = update.status
+                if update.error_message is not None:
+                    error_message = update.error_message
+                if update.retry_count is not None:
+                    retry_count = update.retry_count
+                if update.payload is not None:
+                    payload = update.payload
+                if update.scheduled_at is not None:
+                    scheduled_at = update.scheduled_at
+                if update.claimed_by is not None:
+                    model.claimed_by = update.claimed_by
+                if update.claimed_at is not None:
+                    model.claimed_at = update.claimed_at
+                if update.completed_at is not None:
+                    model.completed_at = update.completed_at
+
+            if status is not None:
+                status_str = status.value if hasattr(status, "value") else str(status)
+                model.status = status_str
+                if status_str == ScheduledJobStatus.COMPLETED.value:
+                    model.completed_at = now
+
+            if completed:
+                model.status = ScheduledJobStatus.COMPLETED.value
+                model.completed_at = now
+
+            if error_message is not None:
+                model.error_message = error_message
+            if retry_count is not None:
+                model.retry_count = retry_count
+            if payload is not None:
+                model.payload = payload
+            if scheduled_at is not None:
+                model.scheduled_at = scheduled_at
+
+            model.updated_at = now
+            session.flush()
+            session.refresh(model)
+            return model.to_dto()
+
+    def claim_next_job(
+        self,
+        worker_id: str,
+        job_type: str | None = None,
+        lease_duration_seconds: int = 300,
+        owner_id: str | None = None,
+        now: datetime | None = None,
+    ) -> ScheduledJobDTO | None:
+        """Atomically claim the next eligible pending or lease-expired scheduled job."""
+        current_time = now or datetime.now(UTC)
+        lease_threshold = current_time - timedelta(seconds=lease_duration_seconds)
+
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(
+                or_(
+                    (ScheduledJobModel.status == ScheduledJobStatus.PENDING.value)
+                    & (ScheduledJobModel.scheduled_at <= current_time),
+                    (ScheduledJobModel.status == ScheduledJobStatus.CLAIMED.value)
+                    & (ScheduledJobModel.claimed_at <= lease_threshold),
+                )
+            )
+            if job_type is not None:
+                stmt = stmt.where(ScheduledJobModel.job_type == job_type)
+            if owner_id is not None:
+                stmt = stmt.where(ScheduledJobModel.owner_id == owner_id)
+
+            stmt = stmt.order_by(
+                ScheduledJobModel.scheduled_at.asc(),
+                ScheduledJobModel.created_at.asc(),
+            ).limit(1)
+
+            bind = session.get_bind()
+            if bind is not None and getattr(bind.dialect, "name", None) == "postgresql":
+                stmt = stmt.with_for_update(skip_locked=True)
+
+            candidate = session.execute(stmt).scalar_one_or_none()
+            if candidate is None:
+                return None
+
+            candidate.status = ScheduledJobStatus.CLAIMED.value
+            candidate.claimed_by = worker_id
+            candidate.claimed_at = current_time
+            candidate.updated_at = current_time
+
+            session.flush()
+            session.refresh(candidate)
+            return candidate.to_dto()
+
+    def complete_job(
+        self,
+        job_id: str,
+        owner_id: str = "default",
+    ) -> ScheduledJobDTO | None:
+        """Mark a claimed job as successfully completed."""
+        return self.update_job(
+            job_id=job_id,
+            status=ScheduledJobStatus.COMPLETED,
+            completed=True,
+            owner_id=owner_id,
+        )
+
+    def fail_job(
+        self,
+        job_id: str,
+        error_message: str,
+        retry: bool = False,
+        retry_delay_seconds: int = 60,
+        owner_id: str = "default",
+    ) -> ScheduledJobDTO | None:
+        """Mark a job as failed, or reschedule it for retry with backoff."""
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(
+                ScheduledJobModel.id == job_id,
+                ScheduledJobModel.owner_id == owner_id,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+
+            now = datetime.now(UTC)
+            model.error_message = error_message
+            model.updated_at = now
+
+            if retry:
+                model.status = ScheduledJobStatus.PENDING.value
+                model.retry_count += 1
+                model.scheduled_at = now + timedelta(seconds=retry_delay_seconds)
+                model.claimed_by = None
+                model.claimed_at = None
+            else:
+                model.status = ScheduledJobStatus.FAILED.value
+                model.completed_at = now
+
+            session.flush()
+            session.refresh(model)
+            return model.to_dto()
+
+    def delete_job(self, job_id: str, owner_id: str = "default") -> bool:
+        """Delete a scheduled job by ID and owner."""
+        with self._session_scope() as session:
+            stmt = select(ScheduledJobModel).where(
+                ScheduledJobModel.id == job_id,
+                ScheduledJobModel.owner_id == owner_id,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return False
+            session.delete(model)
+            return True
+
+
+class TenantScheduledJobRepository(ScheduledJobRepository):
+    """Tenant-scoped repository for scheduled jobs strictly enforcing owner isolation."""
+
+    def __init__(self, db_manager: DatabaseManager | Session, owner_id: str) -> None:
+        super().__init__(db_manager)
+        if not owner_id or not isinstance(owner_id, str):
+            raise ValueError("owner_id must be a non-empty string")
+        self.owner_id = owner_id
+
+    def create_job(
+        self,
+        job_create: ScheduledJobCreate,
+        owner_id: str | None = None,
+    ) -> ScheduledJobDTO:
+        return super().create_job(job_create, owner_id=self.owner_id)
+
+    def get_job(self, job_id: str, owner_id: str | None = None) -> ScheduledJobDTO | None:
+        return super().get_job(job_id, owner_id=self.owner_id)
+
+    def list_jobs(
+        self,
+        owner_id: str | None = None,
+        status: ScheduledJobStatus | str | None = None,
+        job_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ScheduledJobDTO]:
+        return super().list_jobs(
+            owner_id=self.owner_id,
+            status=status,
+            job_type=job_type,
+            limit=limit,
+            offset=offset,
+        )
+
+    def update_job(
+        self,
+        job_id: str,
+        update: ScheduledJobUpdate | None = None,
+        *,
+        status: ScheduledJobStatus | str | None = None,
+        error_message: str | None = None,
+        retry_count: int | None = None,
+        payload: dict[str, Any] | None = None,
+        scheduled_at: datetime | None = None,
+        completed: bool = False,
+        owner_id: str | None = None,
+    ) -> ScheduledJobDTO | None:
+        return super().update_job(
+            job_id,
+            update,
+            status=status,
+            error_message=error_message,
+            retry_count=retry_count,
+            payload=payload,
+            scheduled_at=scheduled_at,
+            completed=completed,
+            owner_id=self.owner_id,
+        )
+
+    def claim_next_job(
+        self,
+        worker_id: str,
+        job_type: str | None = None,
+        lease_duration_seconds: int = 300,
+        owner_id: str | None = None,
+        now: datetime | None = None,
+    ) -> ScheduledJobDTO | None:
+        return super().claim_next_job(
+            worker_id=worker_id,
+            job_type=job_type,
+            lease_duration_seconds=lease_duration_seconds,
+            owner_id=self.owner_id,
+            now=now,
+        )
+
+    def complete_job(
+        self,
+        job_id: str,
+        owner_id: str | None = None,
+    ) -> ScheduledJobDTO | None:
+        return super().complete_job(job_id=job_id, owner_id=self.owner_id)
+
+    def fail_job(
+        self,
+        job_id: str,
+        error_message: str,
+        retry: bool = False,
+        retry_delay_seconds: int = 60,
+        owner_id: str | None = None,
+    ) -> ScheduledJobDTO | None:
+        return super().fail_job(
+            job_id=job_id,
+            error_message=error_message,
+            retry=retry,
+            retry_delay_seconds=retry_delay_seconds,
+            owner_id=self.owner_id,
+        )
+
+    def delete_job(self, job_id: str, owner_id: str | None = None) -> bool:
+        return super().delete_job(job_id=job_id, owner_id=self.owner_id)

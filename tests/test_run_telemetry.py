@@ -231,12 +231,9 @@ def test_migration_0003_telemetry_indexes(tmp_path):
     db_url = f"sqlite:///{db_file.as_posix()}"
     runner = MigrationRunner()
 
-    # Migrate up to head (which is now 0003_telemetry_persistence)
-    head = runner.get_head_revision()
-    assert head == "0003_telemetry_persistence"
-
-    runner.run_migrations(db_url=db_url)
-    assert runner.is_migration_up_to_date(db_url=db_url) is True
+    # Migrate up to 0003_telemetry_persistence
+    runner.run_migrations(db_url=db_url, target_revision="0003_telemetry_persistence")
+    assert runner.get_current_revision(db_url=db_url) == "0003_telemetry_persistence"
 
     db_manager = DatabaseManager(db_url=db_url)
     inspector = inspect(db_manager.engine)

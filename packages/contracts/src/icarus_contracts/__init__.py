@@ -17,6 +17,12 @@ from icarus_contracts.exceptions import (
     WorkspaceJailError,
 )
 from icarus_contracts.identity import TenantIdentity
+from icarus_contracts.jobs import (
+    ScheduledJobCreate,
+    ScheduledJobDTO,
+    ScheduledJobStatus,
+    ScheduledJobUpdate,
+)
 from icarus_contracts.provider import (
     CompletionResult,
     DiscoveredModel,
@@ -90,6 +96,10 @@ __all__ = [
     "RunStatus",
     "SSEEventPayload",
     "SSEEventType",
+    "ScheduledJobCreate",
+    "ScheduledJobDTO",
+    "ScheduledJobStatus",
+    "ScheduledJobUpdate",
     "SessionCreate",
     "SessionCreateRequest",
     "SessionDTO",

@@ -310,3 +310,58 @@ def test_sse_and_run_contracts():
     )
     assert cancel_resp.run_id == "run-1"
     assert cancel_resp.cancelled is True
+
+
+def test_scheduled_job_contracts():
+    from icarus_contracts import (
+        ScheduledJobCreate,
+        ScheduledJobDTO,
+        ScheduledJobStatus,
+        ScheduledJobUpdate,
+    )
+
+    # Status enum
+    assert ScheduledJobStatus.PENDING == "pending"
+    assert ScheduledJobStatus.CLAIMED == "claimed"
+    assert ScheduledJobStatus.COMPLETED == "completed"
+    assert ScheduledJobStatus.FAILED == "failed"
+    assert ScheduledJobStatus.CANCELLED == "cancelled"
+
+    # ScheduledJobCreate
+    now = datetime.now(UTC)
+    create_dto = ScheduledJobCreate(
+        job_type="reminder",
+        scheduled_at=now,
+        payload={"note": "hello"},
+        owner_id="tenant-1",
+    )
+    assert create_dto.job_type == "reminder"
+    assert create_dto.scheduled_at == now
+    assert create_dto.payload == {"note": "hello"}
+    assert create_dto.owner_id == "tenant-1"
+
+    # ScheduledJobUpdate
+    update_dto = ScheduledJobUpdate(
+        status=ScheduledJobStatus.COMPLETED,
+        error_message="none",
+        retry_count=1,
+    )
+    assert update_dto.status == ScheduledJobStatus.COMPLETED
+    assert update_dto.error_message == "none"
+    assert update_dto.retry_count == 1
+
+    # ScheduledJobDTO
+    job_dto = ScheduledJobDTO(
+        id="job-123",
+        owner_id="tenant-1",
+        job_type="reminder",
+        scheduled_at=now,
+        status=ScheduledJobStatus.PENDING,
+        payload={"note": "hello"},
+    )
+    assert job_dto.id == "job-123"
+    assert job_dto.owner_id == "tenant-1"
+    assert job_dto.job_type == "reminder"
+    assert job_dto.status == ScheduledJobStatus.PENDING
+    assert job_dto.retry_count == 0
+    assert job_dto.created_at is not None

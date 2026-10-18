@@ -48,3 +48,37 @@ def test_database_manager_foreign_keys_enabled():
     with manager.session_scope() as session:
         fk_status = session.execute(text("PRAGMA foreign_keys")).scalar_one()
         assert fk_status == 1
+
+
+def test_database_manager_postgres_engine_configuration():
+    manager = DatabaseManager(
+        db_url="postgresql://user:pass@localhost:5432/testdb",
+        pool_size=15,
+        max_overflow=25,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_timeout=45,
+    )
+    assert manager.is_postgres is True
+    assert manager.is_sqlite is False
+
+    from sqlalchemy.pool import QueuePool
+
+    engine = manager.engine
+    assert isinstance(engine.pool, QueuePool)
+    assert engine.pool.size() == 15
+    assert engine.pool._max_overflow == 25
+    assert engine.pool._recycle == 3600
+    assert engine.pool._timeout == 45
+    assert engine.pool._pre_ping is True
+    assert str(engine.url).startswith("postgresql+psycopg://")
+    manager.close()
+
+
+def test_database_manager_postgres_deprecated_url_normalization():
+    manager = DatabaseManager(db_url="postgres://user:pass@localhost:5432/testdb")
+    assert manager.is_postgres is True
+    assert manager.is_sqlite is False
+    engine = manager.engine
+    assert str(engine.url).startswith("postgresql+psycopg://")
+    manager.close()

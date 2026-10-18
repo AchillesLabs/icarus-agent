@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from icarus_contracts.jobs import ScheduledJobDTO, ScheduledJobStatus
 from icarus_contracts.session import MessageDTO, MessageRole, RunDTO, RunStatus, SessionDTO
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -15,6 +16,14 @@ def _generate_uuid() -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _ensure_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 class Base(DeclarativeBase):
@@ -158,4 +167,55 @@ class AgentRunModel(Base):
             created_at=self.created_at,
             started_at=self.started_at,
             completed_at=self.completed_at,
+        )
+
+
+class ScheduledJobModel(Base):
+    """Persistent scheduled task or reminder."""
+
+    __tablename__ = "scheduled_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_generate_uuid)
+    owner_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="default", index=True
+    )
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    claimed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        onupdate=_utcnow,
+    )
+
+    def to_dto(self) -> ScheduledJobDTO:
+        """Convert ORM model to immutable Pydantic ScheduledJobDTO."""
+        return ScheduledJobDTO(
+            id=self.id,
+            owner_id=self.owner_id,
+            job_type=self.job_type,
+            scheduled_at=_ensure_utc(self.scheduled_at),  # type: ignore[arg-type]
+            status=ScheduledJobStatus(self.status)
+            if self.status in ScheduledJobStatus._value2member_map_
+            else self.status,
+            payload=self.payload,
+            claimed_by=self.claimed_by,
+            claimed_at=_ensure_utc(self.claimed_at),
+            completed_at=_ensure_utc(self.completed_at),
+            error_message=self.error_message,
+            retry_count=self.retry_count,
+            created_at=_ensure_utc(self.created_at),  # type: ignore[arg-type]
+            updated_at=_ensure_utc(self.updated_at),  # type: ignore[arg-type]
         )
