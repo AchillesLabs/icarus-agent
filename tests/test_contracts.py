@@ -206,3 +206,107 @@ def test_session_and_message_api_response_contracts():
     assert msg_resp.id == "msg-1"
     assert msg_resp.role == "user"
     assert msg_resp.content == "Hello!"
+
+
+def test_sse_and_run_contracts():
+    from datetime import UTC, datetime
+
+    from icarus_contracts import (
+        RunCancelResponse,
+        RunCreateRequest,
+        RunResponse,
+        RunStatus,
+        SSEEventPayload,
+        SSEEventType,
+    )
+
+    # 1. SSE event types
+    assert SSEEventType.TURN_START == "turn_start"
+    assert SSEEventType.TOKEN == "token"
+    assert SSEEventType.TOOL_START == "tool_start"
+    assert SSEEventType.TOOL_END == "tool_end"
+    assert SSEEventType.COMPACTION == "compaction"
+    assert SSEEventType.RUN_COMPLETED == "run_completed"
+    assert SSEEventType.RUN_CANCELLED == "run_cancelled"
+    assert SSEEventType.RUN_FAILED == "run_failed"
+
+    # 2. SSEEventPayload formatting
+    token_event = SSEEventPayload.token(delta="Hello", run_id="run-1")
+    assert token_event.event == SSEEventType.TOKEN
+    assert token_event.data["delta"] == "Hello"
+    assert token_event.data["run_id"] == "run-1"
+    msg_str = token_event.to_sse_message()
+    assert msg_str.startswith("event: token\n")
+    assert 'data: {"delta": "Hello", "run_id": "run-1"}\n\n' in msg_str
+
+    # 3. Tool events
+    tool_start_ev = SSEEventPayload.tool_start(
+        tool_name="read_file",
+        arguments={"path": "README.md"},
+        tool_call_id="call-123",
+        run_id="run-1",
+    )
+    assert tool_start_ev.event == SSEEventType.TOOL_START
+    assert tool_start_ev.data["tool_name"] == "read_file"
+
+    tool_end_ev = SSEEventPayload.tool_end(
+        tool_name="read_file",
+        output="file content",
+        tool_call_id="call-123",
+        run_id="run-1",
+    )
+    assert tool_end_ev.event == SSEEventType.TOOL_END
+    assert tool_end_ev.data["output"] == "file content"
+
+    # 4. Compaction event
+    comp_ev = SSEEventPayload.compaction(
+        tokens_saved=120,
+        original_message_count=10,
+        compacted_message_count=4,
+        run_id="run-1",
+    )
+    assert comp_ev.event == SSEEventType.COMPACTION
+    assert comp_ev.data["tokens_saved"] == 120
+
+    # 5. Terminal events
+    completed_ev = SSEEventPayload.run_completed(
+        run_id="run-1",
+        result="Done!",
+        budget_counters={"total_tokens": 150},
+    )
+    assert completed_ev.event == SSEEventType.RUN_COMPLETED
+    assert completed_ev.data["result"] == "Done!"
+
+    cancelled_ev = SSEEventPayload.run_cancelled(run_id="run-1", message="Interrupted")
+    assert cancelled_ev.event == SSEEventType.RUN_CANCELLED
+
+    failed_ev = SSEEventPayload.run_failed(
+        run_id="run-1", error="API timeout", error_category="TimeoutError"
+    )
+    assert failed_ev.event == SSEEventType.RUN_FAILED
+    assert failed_ev.data["error_category"] == "TimeoutError"
+
+    # 6. RunCreateRequest & RunResponse & RunCancelResponse
+    req = RunCreateRequest(prompt="Summarize repo", model="mock-model", auto_approve=True)
+    assert req.prompt == "Summarize repo"
+    assert req.auto_approve is True
+
+    now = datetime.now(UTC)
+    resp = RunResponse(
+        id="run-1",
+        owner_id="tenant-1",
+        session_id="sess-1",
+        status=RunStatus.RUNNING,
+        created_at=now,
+    )
+    assert resp.id == "run-1"
+    assert resp.status == RunStatus.RUNNING
+
+    cancel_resp = RunCancelResponse(
+        run_id="run-1",
+        status=RunStatus.CANCELLED,
+        cancelled=True,
+        message="Active run cancelled successfully.",
+    )
+    assert cancel_resp.run_id == "run-1"
+    assert cancel_resp.cancelled is True

@@ -1,5 +1,6 @@
 """Domain schemas, DTOs, and enums for sessions, messages, and agent runs."""
 
+import json
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -200,3 +201,192 @@ class MessageCreateRequest(BaseModel):
     tool_calls: list[Any] | None = None
     tool_call_id: str | None = None
     name: str | None = None
+
+
+class SSEEventType(StrEnum):
+    """Event types emitted during Server-Sent Events (SSE) agent run streaming."""
+
+    TURN_START = "turn_start"
+    TOKEN = "token"
+    TOOL_START = "tool_start"
+    TOOL_END = "tool_end"
+    COMPACTION = "compaction"
+    RUN_COMPLETED = "run_completed"
+    RUN_CANCELLED = "run_cancelled"
+    RUN_FAILED = "run_failed"
+
+
+class SSEEventPayload(BaseModel):
+    """Payload envelope for real-time Server-Sent Events streamed during an agent run."""
+
+    event: SSEEventType | str
+    data: dict[str, Any] = Field(default_factory=dict)
+    id: str | None = None
+    retry: int | None = None
+
+    def to_sse_message(self) -> str:
+        """Format as an RFC-compliant Server-Sent Event string."""
+        event_str = self.event.value if hasattr(self.event, "value") else str(self.event)
+        data_json = json.dumps(self.data)
+        lines: list[str] = []
+        if self.id is not None:
+            lines.append(f"id: {self.id}")
+        lines.append(f"event: {event_str}")
+        lines.append(f"data: {data_json}")
+        if self.retry is not None:
+            lines.append(f"retry: {self.retry}")
+        return "\n".join(lines) + "\n\n"
+
+    @classmethod
+    def turn_start(cls, turn: int, run_id: str | None = None) -> "SSEEventPayload":
+        return cls(event=SSEEventType.TURN_START, data={"turn": turn, "run_id": run_id})
+
+    @classmethod
+    def token(cls, delta: str, run_id: str | None = None) -> "SSEEventPayload":
+        return cls(event=SSEEventType.TOKEN, data={"delta": delta, "run_id": run_id})
+
+    @classmethod
+    def tool_start(
+        cls,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+        tool_call_id: str | None = None,
+        run_id: str | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.TOOL_START,
+            data={
+                "tool_name": tool_name,
+                "arguments": arguments or {},
+                "tool_call_id": tool_call_id,
+                "run_id": run_id,
+            },
+        )
+
+    @classmethod
+    def tool_end(
+        cls,
+        tool_name: str,
+        output: str = "",
+        error: str | None = None,
+        tool_call_id: str | None = None,
+        run_id: str | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.TOOL_END,
+            data={
+                "tool_name": tool_name,
+                "output": output,
+                "error": error,
+                "tool_call_id": tool_call_id,
+                "run_id": run_id,
+            },
+        )
+
+    @classmethod
+    def compaction(
+        cls,
+        tokens_saved: int,
+        original_message_count: int,
+        compacted_message_count: int,
+        run_id: str | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.COMPACTION,
+            data={
+                "tokens_saved": tokens_saved,
+                "original_message_count": original_message_count,
+                "compacted_message_count": compacted_message_count,
+                "run_id": run_id,
+            },
+        )
+
+    @classmethod
+    def run_completed(
+        cls,
+        run_id: str,
+        result: str = "",
+        budget_counters: dict[str, Any] | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.RUN_COMPLETED,
+            data={
+                "run_id": run_id,
+                "status": "succeeded",
+                "result": result,
+                "budget_counters": budget_counters or {},
+            },
+        )
+
+    @classmethod
+    def run_cancelled(
+        cls,
+        run_id: str,
+        message: str = "Run was cancelled",
+        budget_counters: dict[str, Any] | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.RUN_CANCELLED,
+            data={
+                "run_id": run_id,
+                "status": "cancelled",
+                "message": message,
+                "budget_counters": budget_counters or {},
+            },
+        )
+
+    @classmethod
+    def run_failed(
+        cls,
+        run_id: str,
+        error: str,
+        error_category: str | None = None,
+    ) -> "SSEEventPayload":
+        return cls(
+            event=SSEEventType.RUN_FAILED,
+            data={
+                "run_id": run_id,
+                "status": "failed",
+                "error": error,
+                "error_category": error_category,
+            },
+        )
+
+
+class RunCreateRequest(BaseModel):
+    """Payload to initiate an execution run on a session."""
+
+    prompt: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    temperature: float | None = None
+    max_turns: int | None = None
+    max_total_tokens: int | None = None
+    auto_compact: bool = True
+    auto_approve: bool = True
+
+
+class RunResponse(BaseModel):
+    """API response model for detailed agent run state and metrics."""
+
+    id: str
+    owner_id: str = "default"
+    session_id: str | None = None
+    status: RunStatus | str = RunStatus.QUEUED
+    provider: str | None = None
+    model: str | None = None
+    budget_counters: dict[str, Any] | None = None
+    error_category: str | None = None
+    idempotency_key: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class RunCancelResponse(BaseModel):
+    """API response model when cancelling an active or queued run."""
+
+    run_id: str
+    status: RunStatus | str
+    cancelled: bool
+    message: str | None = None

@@ -65,7 +65,10 @@ def test_sessions_command_lists_sessions_with_telemetry_and_limit(tmp_path: Path
         )
     )
 
-    # Session 2: run mode with 1 message and 1 run
+    # Session 2: run mode with 1 message and 1 run (small sleep ensures s2 has distinct updated_at)
+    import time
+
+    time.sleep(0.02)
     s2 = session_repo.create_session(SessionCreate(title="Automated Task Run", mode="run"))
     message_repo.create_message(
         MessageCreate(

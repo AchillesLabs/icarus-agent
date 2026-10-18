@@ -15,9 +15,11 @@ from icarus_core.persistence import (
     TenantRunRepository,
     TenantSessionRepository,
 )
+from icarus_core.providers import ProviderRegistry
 from sqlalchemy.orm import Session
 
 from icarus_api.auth import get_current_tenant, get_settings
+from icarus_api.run_registry import ActiveRunRegistry
 
 
 def get_db_manager(request: Request) -> DatabaseManager:
@@ -106,3 +108,21 @@ def get_tenant_session(
             detail=f"Session '{session_id}' not found",
         )
     return session
+
+
+def get_active_run_registry(request: Request) -> ActiveRunRegistry:
+    """Resolve or initialize the in-memory active run registry."""
+    registry = getattr(request.app.state, "run_registry", None)
+    if registry is None:
+        registry = ActiveRunRegistry()
+        request.app.state.run_registry = registry
+    return registry
+
+
+def get_provider_registry(request: Request) -> ProviderRegistry:
+    """Resolve or initialize the model provider registry."""
+    registry = getattr(request.app.state, "provider_registry", None)
+    if registry is None:
+        registry = ProviderRegistry()
+        request.app.state.provider_registry = registry
+    return registry

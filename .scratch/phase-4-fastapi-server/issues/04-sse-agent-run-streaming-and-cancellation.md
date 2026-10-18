@@ -7,10 +7,10 @@
 
 **Blocked by:** [#28](https://github.com/AchillesLabs/icarus-agent/issues/28) (03: RESTful Session and Message Management Endpoints)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Implement `SSEEventPayload` contract with event types (`turn_start`, `token`, `tool_start`, `tool_end`, `compaction`, `run_completed`, `run_cancelled`, `run_failed`).
-- [ ] Implement `POST /v1/sessions/{id}/runs/stream` streaming execution events via `EventSourceResponse` (or Starlette `StreamingResponse`).
-- [ ] Connect remote SSE streaming with `AgentLoopObserver` to push token deltas and tool events live as they occur.
-- [ ] Implement `POST /v1/runs/{id}/cancel` to signal cancellation to the running agent loop task without corrupting state.
-- [ ] End-to-end tests verify SSE stream protocol event sequence, token delivery, and cancellation termination.
+- [x] Implement `SSEEventPayload` contract with event types (`turn_start`, `token`, `tool_start`, `tool_end`, `compaction`, `run_completed`, `run_cancelled`, `run_failed`).
+- [x] Implement `POST /v1/sessions/{id}/runs/stream` streaming execution events via `EventSourceResponse` (or Starlette `StreamingResponse`).
+- [x] Connect remote SSE streaming with `AgentLoopObserver` to push token deltas and tool events live as they occur.
+- [x] Implement `POST /v1/runs/{id}/cancel` to signal cancellation to the running agent loop task without corrupting state.
+- [x] End-to-end tests verify SSE stream protocol event sequence, token delivery, and cancellation termination.
