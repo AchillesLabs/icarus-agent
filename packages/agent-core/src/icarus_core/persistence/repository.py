@@ -85,6 +85,12 @@ class SessionRepository:
             results = session.execute(stmt).scalars().all()
             return [model.to_dto() for model in results]
 
+    def count_sessions(self, owner_id: str = "default") -> int:
+        """Count total sessions belonging to an owner."""
+        with self._session_scope() as session:
+            stmt = select(func.count(SessionModel.id)).where(SessionModel.owner_id == owner_id)
+            return int(session.execute(stmt).scalar() or 0)
+
     def get_latest_session(self, owner_id: str = "default") -> SessionDTO | None:
         """Return the most recently updated or created session for an owner."""
         sessions = self.list_sessions(owner_id=owner_id, limit=1)
@@ -574,7 +580,11 @@ class TenantSessionRepository(SessionRepository):
     ) -> list[SessionDTO]:
         return super().list_sessions(owner_id=self.owner_id, limit=limit, offset=offset)
 
+    def count_sessions(self, owner_id: str | None = None) -> int:
+        return super().count_sessions(owner_id=self.owner_id)
+
     def get_latest_session(self, owner_id: str | None = None) -> SessionDTO | None:
+
         return super().get_latest_session(owner_id=self.owner_id)
 
     def update_session(

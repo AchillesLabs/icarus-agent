@@ -144,3 +144,59 @@ class SessionSummaryDTO(BaseModel):
     message_count: int = 0
     run_count: int = 0
     total_estimated_tokens: int = 0
+
+
+class SessionResponse(BaseModel):
+    """API response model for detailed session information and metrics."""
+
+    id: str
+    owner_id: str = "default"
+    mode: str = "chat"
+    title: str = "New Session"
+    created_at: datetime
+    updated_at: datetime
+    metadata_version: int = 1
+    message_count: int = 0
+    run_count: int = 0
+    total_estimated_tokens: int = 0
+
+
+class SessionListResponse(BaseModel):
+    """API response model for paginated session summaries."""
+
+    items: list[SessionSummaryDTO]
+    total: int
+    limit: int
+    offset: int
+
+
+class MessageResponse(BaseModel):
+    """API response model for an individual transcript message."""
+
+    id: str
+    session_id: str
+    owner_id: str = "default"
+    role: MessageRole | str
+    content: str | None = ""
+    token_estimate: int | None = None
+    created_at: datetime
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+
+
+class SessionCreateRequest(BaseModel):
+    """API request payload to initiate a new session."""
+
+    title: str = "New Session"
+    mode: str = "chat"
+
+
+class MessageCreateRequest(BaseModel):
+    """API request payload to append a message to a session."""
+
+    content: str
+    role: MessageRole | str = MessageRole.USER
+    tool_calls: list[Any] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None

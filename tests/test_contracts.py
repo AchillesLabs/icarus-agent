@@ -144,3 +144,65 @@ def test_tenant_access_denied_error_contract():
     err = TenantAccessDeniedError("Cross-tenant access forbidden")
     assert isinstance(err, PermissionError)
     assert str(err) == "Cross-tenant access forbidden"
+
+
+def test_session_and_message_api_response_contracts():
+    from datetime import UTC, datetime
+
+    from icarus_contracts import (
+        MessageResponse,
+        SessionListResponse,
+        SessionResponse,
+        SessionSummaryDTO,
+    )
+
+    now = datetime.now(UTC)
+    sess_resp = SessionResponse(
+        id="sess-1",
+        owner_id="tenant-1",
+        mode="chat",
+        title="Session Title",
+        created_at=now,
+        updated_at=now,
+        message_count=2,
+        run_count=1,
+        total_estimated_tokens=50,
+    )
+    assert sess_resp.id == "sess-1"
+    assert sess_resp.message_count == 2
+    assert sess_resp.total_estimated_tokens == 50
+
+    list_resp = SessionListResponse(
+        items=[
+            SessionSummaryDTO(
+                id="sess-1",
+                owner_id="tenant-1",
+                mode="chat",
+                title="Session Title",
+                created_at=now,
+                updated_at=now,
+                message_count=2,
+                run_count=1,
+                total_estimated_tokens=50,
+            )
+        ],
+        total=1,
+        limit=50,
+        offset=0,
+    )
+    assert list_resp.total == 1
+    assert len(list_resp.items) == 1
+    assert list_resp.limit == 50
+
+    msg_resp = MessageResponse(
+        id="msg-1",
+        session_id="sess-1",
+        owner_id="tenant-1",
+        role="user",
+        content="Hello!",
+        token_estimate=5,
+        created_at=now,
+    )
+    assert msg_resp.id == "msg-1"
+    assert msg_resp.role == "user"
+    assert msg_resp.content == "Hello!"

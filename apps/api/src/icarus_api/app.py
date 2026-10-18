@@ -9,6 +9,7 @@ from icarus_api.config import ApiSettings
 from icarus_api.errors import register_error_handlers
 from icarus_api.lifespan import lifespan
 from icarus_api.routes.health import router as health_router
+from icarus_api.routes.sessions import router as sessions_router
 
 
 def create_app(
@@ -43,5 +44,6 @@ def create_app(
 
     # Include routes
     app.include_router(health_router)
+    app.include_router(sessions_router)
 
     return app
