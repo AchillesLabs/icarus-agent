@@ -7,14 +7,15 @@
 
 **Blocked by:** #51 (03: Model Context Protocol (MCP) Client Subsystem)
 
-**Status:** ready-for-agent
+**Status:** closed
 
 ## Acceptance criteria
 
-- [ ] Implement McpConfigManager managing persistent server definitions in ~/.icarus/mcp.json.
-- [ ] Implement icarus mcp add <name> <command> [args...] with optional environment variables and transport flags (--sse/--stdio).
-- [ ] Implement icarus mcp list displaying configured servers, transport types, and tool counts in a formatted Rich table.
-- [ ] Implement icarus mcp test <name> performing live handshake and printing discovered tools and schemas.
-- [ ] Implement icarus mcp remove <name> unregistering configured servers.
-- [ ] Auto-load configured MCP servers into agent runtime during CLI startup.
-- [ ] Automated integration tests verify config storage, CLI commands, and runtime discovery.
+- [x] Implement McpConfigManager managing persistent server definitions in ~/.icarus/mcp.json.
+- [x] Implement icarus mcp add <name> <command> [args...] with optional environment variables and transport flags (--sse/--stdio).
+- [x] Implement icarus mcp list displaying configured servers, transport types, and tool counts in a formatted Rich table.
+- [x] Implement icarus mcp test <name> performing live handshake and printing discovered tools and schemas.
+- [x] Implement icarus mcp remove <name> unregistering configured servers.
+- [x] Auto-load configured MCP servers into agent runtime during CLI startup.
+- [x] Automated integration tests verify config storage, CLI commands, and runtime discovery.
+

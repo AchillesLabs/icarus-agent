@@ -60,8 +60,8 @@ class ToolRegistry:
         return tool.execute(arguments=args, workspace_root=workspace_root, call_id=tool_call.id)
 
 
-def create_default_registry() -> ToolRegistry:
-    """Instantiate and configure the default ToolRegistry with built-in core tools."""
+def create_default_registry(load_mcp: bool = True) -> ToolRegistry:
+    """Instantiate and configure the default ToolRegistry with built-in core tools and MCP servers."""
     registry = ToolRegistry()
     registry.register(ReadFileTool())
     registry.register(ListDirTool())
@@ -70,4 +70,14 @@ def create_default_registry() -> ToolRegistry:
     registry.register(RunCommandTool())
     registry.register(WebSearchTool())
     registry.register(FetchWebpageTool())
+
+    if load_mcp:
+        try:
+            from icarus_core.mcp.config import load_configured_mcp_servers_sync
+
+            load_configured_mcp_servers_sync(registry, timeout=5.0)
+        except Exception:
+            pass
+
     return registry
+

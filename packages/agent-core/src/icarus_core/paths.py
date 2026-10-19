@@ -19,6 +19,14 @@ def get_icarus_config_path() -> Path:
     return get_icarus_home() / "config.toml"
 
 
+def get_icarus_mcp_config_path() -> Path:
+    """Return path to mcp.json (~/.icarus/mcp.json or ICARUS_MCP_CONFIG)."""
+    env_mcp = os.environ.get("ICARUS_MCP_CONFIG")
+    if env_mcp:
+        return Path(env_mcp).expanduser().resolve()
+    return get_icarus_home() / "mcp.json"
+
+
 def get_icarus_db_path() -> Path:
     """Return path to SQLite database."""
     return get_icarus_home() / "icarus.db"

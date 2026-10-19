@@ -23,6 +23,7 @@ from icarus_cli.models_view import (
     resolve_model_by_input,
     select_model_interactive,
 )
+from icarus_cli.mcp_cmd import mcp_app
 from icarus_cli.remote import RemoteAgentClient
 from icarus_cli.run import execute_run
 from icarus_cli.server_cmd import server_app
@@ -45,6 +46,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(server_app, name="server")
 app.add_typer(vault_app, name="vault")
 app.add_typer(token_app, name="token")
+app.add_typer(mcp_app, name="mcp")
 
 console = Console()
 
