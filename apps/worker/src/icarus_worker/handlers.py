@@ -219,7 +219,17 @@ class NotificationJobHandler:
         payload = job.payload or {}
         message = payload.get("message") or payload.get("text") or f"Reminder: {job.job_type}"
         recipient = payload.get("recipient")
-        channel = payload.get("channel", "console")
+        channel = payload.get("channel", "desktop")
+
+        desktop_notified = False
+        if channel in ("desktop", "all") or job.job_type in ("reminder", "alert", "notification"):
+            try:
+                from icarus_core.notifications import send_desktop_notification
+
+                title = f"Icarus {job.job_type.title()}"
+                desktop_notified = send_desktop_notification(title=title, message=message)
+            except Exception:
+                desktop_notified = False
 
         result = {
             "job_id": job.id,
@@ -227,6 +237,7 @@ class NotificationJobHandler:
             "message": message,
             "recipient": recipient,
             "channel": channel,
+            "desktop_notified": desktop_notified,
             "dispatched_at": datetime.now(UTC).isoformat(),
             "status": "delivered",
         }

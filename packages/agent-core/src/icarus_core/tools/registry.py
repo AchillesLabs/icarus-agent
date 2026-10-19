@@ -71,6 +71,14 @@ def create_default_registry(load_mcp: bool = True) -> ToolRegistry:
     registry.register(WebSearchTool())
     registry.register(FetchWebpageTool())
 
+    try:
+        from icarus_core.tools.reminders import ListRemindersTool, ScheduleReminderTool
+
+        registry.register(ScheduleReminderTool())
+        registry.register(ListRemindersTool())
+    except Exception:
+        pass
+
     if load_mcp:
         try:
             from icarus_core.mcp.config import load_configured_mcp_servers_sync

@@ -7,12 +7,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
 ## Acceptance criteria
 
-- [ ] Implement ScheduleReminderTool and ListRemindersTool in ToolRegistry for conversational scheduling (e.g. 'remind me in 2 hours to check flight prices').
-- [ ] Parse natural language relative and absolute datetime expressions into UTC timestamps.
-- [ ] Persist scheduled reminder tasks into Phase 4 jobs database table with payload and target execution time.
-- [ ] Integrate cross-platform desktop notification emitter in background worker daemon alerting users upon reminder trigger.
-- [ ] Automated unit and integration tests verify datetime parsing, job row persistence, worker claiming, and notification dispatch.
+- [x] Implement ScheduleReminderTool and ListRemindersTool in ToolRegistry for conversational scheduling (e.g. 'remind me in 2 hours to check flight prices').
+- [x] Parse natural language relative and absolute datetime expressions into UTC timestamps.
+- [x] Persist scheduled reminder tasks into Phase 4 jobs database table with payload and target execution time.
+- [x] Integrate cross-platform desktop notification emitter in background worker daemon alerting users upon reminder trigger.
+- [x] Automated unit and integration tests verify datetime parsing, job row persistence, worker claiming, and notification dispatch.
+
