@@ -19,6 +19,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, Any]:
         db_url = getattr(app.state.settings, "database_url", None)
         app.state.db_manager = DatabaseManager(db_url=db_url)
 
+    if not hasattr(app.state, "token_cache") or app.state.token_cache is None:
+        from icarus_api.auth import TokenValidationCache
+
+        app.state.token_cache = TokenValidationCache()
+
     yield
 
     # Shutdown: clean up database connections

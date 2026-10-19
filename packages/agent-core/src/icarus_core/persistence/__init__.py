@@ -8,12 +8,15 @@ from icarus_core.persistence.models import (
     MessageModel,
     ScheduledJobModel,
     SessionModel,
+    TenantApiTokenModel,
 )
 from icarus_core.persistence.repository import (
     AgentRunRepository,
+    ApiTokenRepository,
     MessageRepository,
     ScheduledJobRepository,
     SessionRepository,
+    TenantApiTokenRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantScheduledJobRepository,
@@ -23,6 +26,7 @@ from icarus_core.persistence.repository import (
 __all__ = [
     "AgentRunModel",
     "AgentRunRepository",
+    "ApiTokenRepository",
     "Base",
     "DatabaseManager",
     "MessageModel",
@@ -32,6 +36,8 @@ __all__ = [
     "ScheduledJobRepository",
     "SessionModel",
     "SessionRepository",
+    "TenantApiTokenModel",
+    "TenantApiTokenRepository",
     "TenantMessageRepository",
     "TenantRunRepository",
     "TenantScheduledJobRepository",

@@ -56,6 +56,7 @@ def test_migration_runner_on_file_db(tmp_path: Path):
         "messages",
         "agent_runs",
         "scheduled_jobs",
+        "tenant_api_tokens",
         "alembic_version",
     }.issubset(table_names)
 
@@ -78,10 +79,28 @@ def test_migration_runner_on_file_db(tmp_path: Path):
     }
     assert expected_columns.issubset(job_columns)
 
+    # Verify tenant_api_tokens columns
+    token_columns = {col["name"] for col in inspector.get_columns("tenant_api_tokens")}
+    expected_token_columns = {
+        "id",
+        "owner_id",
+        "name",
+        "token_hash",
+        "prefix",
+        "created_at",
+        "expires_at",
+        "revoked_at",
+        "last_used_at",
+    }
+    assert expected_token_columns.issubset(token_columns)
+
     # Verify repositories work on migrated schema
     session_repo = SessionRepository(db_manager)
     message_repo = MessageRepository(db_manager)
     job_repo = ScheduledJobRepository(db_manager)
+    from icarus_core.persistence import ApiTokenRepository
+
+    token_repo = ApiTokenRepository(db_manager)
 
     sess = session_repo.create_session(SessionCreate(title="Migrated DB Chat"))
     msg = message_repo.create_message(
@@ -89,6 +108,12 @@ def test_migration_runner_on_file_db(tmp_path: Path):
     )
     job = job_repo.create_job(
         ScheduledJobCreate(job_type="reminder", scheduled_at=datetime.now(UTC))
+    )
+    tkn = token_repo.create_token(
+        owner_id="migrated-tenant",
+        name="CI Token",
+        token_hash="fakehash123",
+        prefix="sk_icarus_...1234",
     )
 
     retrieved = session_repo.get_session(sess.id)
@@ -100,6 +125,10 @@ def test_migration_runner_on_file_db(tmp_path: Path):
     retrieved_job = job_repo.get_job(job.id)
     assert retrieved_job is not None
     assert retrieved_job.status == ScheduledJobStatus.PENDING
+    retrieved_tkn = token_repo.get_token_by_id(tkn.id)
+    assert retrieved_tkn is not None
+    assert retrieved_tkn.name == "CI Token"
+    assert retrieved_tkn.is_active is True
 
 
 def test_migration_runner_on_memory_db():
@@ -116,5 +145,6 @@ def test_migration_runner_on_memory_db():
         "messages",
         "agent_runs",
         "scheduled_jobs",
+        "tenant_api_tokens",
         "alembic_version",
     }.issubset(table_names)

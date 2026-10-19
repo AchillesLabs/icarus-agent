@@ -23,6 +23,7 @@ from icarus_contracts.session import (
     SessionSummaryDTO,
     SessionUpdate,
 )
+from icarus_contracts.tokens import ApiTokenResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,7 @@ from icarus_core.persistence.models import (
     MessageModel,
     ScheduledJobModel,
     SessionModel,
+    TenantApiTokenModel,
 )
 from icarus_core.tokens import TokenCounter, get_token_counter
 
@@ -1114,3 +1116,150 @@ class TenantScheduledJobRepository(ScheduledJobRepository):
 
     def delete_job(self, job_id: str, owner_id: str | None = None) -> bool:
         return super().delete_job(job_id=job_id, owner_id=self.owner_id)
+
+
+class ApiTokenRepository:
+    """Repository handling CRUD operations and queries for dynamic API tokens."""
+
+    def __init__(self, db_manager: DatabaseManager | Session) -> None:
+        self.db = db_manager
+
+    @contextmanager
+    def _session_scope(self) -> Generator[Session, None, None]:
+        if hasattr(self.db, "session_scope"):
+            with self.db.session_scope() as session:
+                yield session
+        else:
+            yield self.db  # type: ignore[misc]
+
+    def create_token(
+        self,
+        owner_id: str,
+        name: str,
+        token_hash: str,
+        prefix: str,
+        expires_at: datetime | None = None,
+    ) -> ApiTokenResponse:
+        """Create and persist a new dynamic API access token."""
+        token_model = TenantApiTokenModel(
+            owner_id=owner_id,
+            name=name,
+            token_hash=token_hash,
+            prefix=prefix,
+            expires_at=expires_at,
+        )
+        with self._session_scope() as session:
+            session.add(token_model)
+            session.flush()
+            session.refresh(token_model)
+            return token_model.to_dto()
+
+    def get_token_by_id(
+        self,
+        token_id: str,
+        owner_id: str | None = None,
+    ) -> ApiTokenResponse | None:
+        """Retrieve an API token by its ID, optionally enforcing owner."""
+        with self._session_scope() as session:
+            stmt = select(TenantApiTokenModel).where(TenantApiTokenModel.id == token_id)
+            if owner_id is not None:
+                stmt = stmt.where(TenantApiTokenModel.owner_id == owner_id)
+            model = session.execute(stmt).scalar_one_or_none()
+            return model.to_dto() if model is not None else None
+
+    def get_token_by_hash(self, token_hash: str) -> ApiTokenResponse | None:
+        """Retrieve an API token by its SHA-256 hash."""
+        with self._session_scope() as session:
+            stmt = select(TenantApiTokenModel).where(TenantApiTokenModel.token_hash == token_hash)
+            model = session.execute(stmt).scalar_one_or_none()
+            return model.to_dto() if model is not None else None
+
+    def list_tokens(
+        self,
+        owner_id: str,
+        include_revoked: bool = True,
+    ) -> list[ApiTokenResponse]:
+        """List tokens belonging to an owner ordered by creation date descending."""
+        with self._session_scope() as session:
+            stmt = select(TenantApiTokenModel).where(TenantApiTokenModel.owner_id == owner_id)
+            if not include_revoked:
+                stmt = stmt.where(TenantApiTokenModel.revoked_at.is_(None))
+            stmt = stmt.order_by(TenantApiTokenModel.created_at.desc())
+            models = session.execute(stmt).scalars().all()
+            return [model.to_dto() for model in models]
+
+    def revoke_token(
+        self,
+        token_id: str,
+        owner_id: str | None = None,
+        revoked_at: datetime | None = None,
+    ) -> ApiTokenResponse | None:
+        """Mark a token as revoked immediately."""
+        with self._session_scope() as session:
+            stmt = select(TenantApiTokenModel).where(TenantApiTokenModel.id == token_id)
+            if owner_id is not None:
+                stmt = stmt.where(TenantApiTokenModel.owner_id == owner_id)
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+            if model.revoked_at is None:
+                model.revoked_at = revoked_at or datetime.now(UTC)
+                session.flush()
+                session.refresh(model)
+            return model.to_dto()
+
+    def touch_last_used(
+        self,
+        token_id: str,
+        now: datetime | None = None,
+    ) -> None:
+        """Update last_used_at timestamp on successful token authentication."""
+        with self._session_scope() as session:
+            stmt = select(TenantApiTokenModel).where(TenantApiTokenModel.id == token_id)
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is not None:
+                model.last_used_at = now or datetime.now(UTC)
+                session.flush()
+
+
+class TenantApiTokenRepository(ApiTokenRepository):
+    """Tenant-scoped repository for API tokens strictly enforcing tenant isolation."""
+
+    def __init__(self, db_manager: DatabaseManager | Session, owner_id: str) -> None:
+        super().__init__(db_manager)
+        if not owner_id or not isinstance(owner_id, str):
+            raise ValueError("owner_id must be a non-empty string")
+        self.owner_id = owner_id
+
+    def create_token(
+        self,
+        name: str,
+        token_hash: str,
+        prefix: str,
+        expires_at: datetime | None = None,
+        owner_id: str | None = None,
+    ) -> ApiTokenResponse:
+        return super().create_token(
+            owner_id=self.owner_id,
+            name=name,
+            token_hash=token_hash,
+            prefix=prefix,
+            expires_at=expires_at,
+        )
+
+    def get_token(self, token_id: str) -> ApiTokenResponse | None:
+        return super().get_token_by_id(token_id=token_id, owner_id=self.owner_id)
+
+    def list_tokens(
+        self,
+        include_revoked: bool = True,
+        owner_id: str | None = None,
+    ) -> list[ApiTokenResponse]:
+        return super().list_tokens(owner_id=self.owner_id, include_revoked=include_revoked)
+
+    def revoke_token(
+        self,
+        token_id: str,
+        owner_id: str | None = None,
+    ) -> ApiTokenResponse | None:
+        return super().revoke_token(token_id=token_id, owner_id=self.owner_id)

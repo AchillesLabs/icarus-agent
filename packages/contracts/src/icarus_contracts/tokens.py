@@ -2,7 +2,65 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
+
+
+class ApiTokenCreateRequest(BaseModel):
+    """Payload to issue a new dynamic API access token."""
+
+    name: str = Field(
+        ..., min_length=1, max_length=128, description="Friendly label for the API token"
+    )
+    expires_at: datetime | None = Field(
+        default=None, description="Optional UTC expiration timestamp"
+    )
+
+
+class ApiTokenResponse(BaseModel):
+    """Public representation of an API token without raw secret."""
+
+    id: str = Field(..., description="Unique UUID identifier for the token")
+    owner_id: str = Field(..., description="Tenant owner ID")
+    name: str = Field(..., description="Friendly token label")
+    prefix: str = Field(..., description="Display prefix, e.g. sk_icarus_...4a2b")
+    created_at: datetime = Field(..., description="UTC creation timestamp")
+    expires_at: datetime | None = Field(
+        default=None, description="Optional UTC expiration timestamp"
+    )
+    revoked_at: datetime | None = Field(
+        default=None, description="UTC revocation timestamp if revoked"
+    )
+    last_used_at: datetime | None = Field(
+        default=None, description="UTC timestamp of last authentication"
+    )
+    is_active: bool = Field(
+        default=True, description="Whether the token is currently active and unexpired"
+    )
+
+
+class ApiTokenCreatedResponse(ApiTokenResponse):
+    """Response returned upon token creation containing the plaintext secret."""
+
+    token: str = Field(
+        ..., description="Raw plaintext API token. Only returned once upon creation!"
+    )
+
+
+class ApiTokenRevokeResponse(BaseModel):
+    """Response returned when revoking a token."""
+
+    id: str = Field(..., description="Token UUID")
+    revoked: bool = Field(default=True, description="Whether token was successfully revoked")
+    revoked_at: datetime = Field(..., description="UTC revocation timestamp")
+
+
+class ApiTokenListResponse(BaseModel):
+    """List of API tokens belonging to the authenticated tenant."""
+
+    tokens: list[ApiTokenResponse] = Field(default_factory=list)
+    total: int = Field(default=0)
 
 
 class TokenUsage(BaseModel):

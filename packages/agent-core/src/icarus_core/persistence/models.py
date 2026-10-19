@@ -6,6 +6,7 @@ from typing import Any
 
 from icarus_contracts.jobs import ScheduledJobDTO, ScheduledJobStatus
 from icarus_contracts.session import MessageDTO, MessageRole, RunDTO, RunStatus, SessionDTO
+from icarus_contracts.tokens import ApiTokenResponse
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -218,4 +219,44 @@ class ScheduledJobModel(Base):
             retry_count=self.retry_count,
             created_at=_ensure_utc(self.created_at),  # type: ignore[arg-type]
             updated_at=_ensure_utc(self.updated_at),  # type: ignore[arg-type]
+        )
+
+
+class TenantApiTokenModel(Base):
+    """Persistent dynamic API access token for a tenant."""
+
+    __tablename__ = "tenant_api_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_generate_uuid)
+    owner_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="default", index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def to_dto(self) -> ApiTokenResponse:
+        """Convert ORM model to immutable Pydantic ApiTokenResponse."""
+        now = datetime.now(UTC)
+        exp = _ensure_utc(self.expires_at)
+        rev = _ensure_utc(self.revoked_at)
+        is_active = (rev is None) and (exp is None or exp > now)
+        return ApiTokenResponse(
+            id=self.id,
+            owner_id=self.owner_id,
+            name=self.name,
+            prefix=self.prefix,
+            created_at=_ensure_utc(self.created_at) or now,
+            expires_at=exp,
+            revoked_at=rev,
+            last_used_at=_ensure_utc(self.last_used_at),
+            is_active=is_active,
         )

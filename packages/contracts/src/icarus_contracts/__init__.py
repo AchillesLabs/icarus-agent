@@ -57,7 +57,15 @@ from icarus_contracts.session import (
     SSEEventPayload,
     SSEEventType,
 )
-from icarus_contracts.tokens import RunBudgetCounters, TokenUsage
+from icarus_contracts.tokens import (
+    ApiTokenCreatedResponse,
+    ApiTokenCreateRequest,
+    ApiTokenListResponse,
+    ApiTokenResponse,
+    ApiTokenRevokeResponse,
+    RunBudgetCounters,
+    TokenUsage,
+)
 from icarus_contracts.tools import (
     ToolCall,
     ToolDefinition,
@@ -69,6 +77,11 @@ __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
+    "ApiTokenCreatedResponse",
+    "ApiTokenCreateRequest",
+    "ApiTokenListResponse",
+    "ApiTokenResponse",
+    "ApiTokenRevokeResponse",
     "AuthenticationError",
     "CompactionResult",
     "CompletionResult",

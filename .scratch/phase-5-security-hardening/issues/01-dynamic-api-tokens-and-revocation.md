@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] New database model and migration for API tokens storing tenant owner, friendly token name, SHA-256 token hash, prefix, creation date, and optional expiration/revocation timestamps.
-- [ ] Endpoint `POST /v1/auth/tokens` issues a new cryptographically random API token, hashes and persists it, and returns the plaintext secret exactly once.
-- [ ] Endpoint `GET /v1/auth/tokens` returns the list of active and revoked tokens for the authenticated tenant with names, prefixes, creation dates, and last used timestamps.
-- [ ] Endpoint `POST /v1/auth/tokens/{id}/revoke` immediately marks a token as revoked and purges it from in-memory validation caches.
-- [ ] FastAPI authentication dependency validates incoming Bearer tokens against the database-backed token store using constant-time verification.
-- [ ] Integration tests verify dynamic token generation, successful authentication, constant-time validation, and immediate rejection of revoked or expired tokens.
+- [x] New database model and migration for API tokens storing tenant owner, friendly token name, SHA-256 token hash, prefix, creation date, and optional expiration/revocation timestamps.
+- [x] Endpoint `POST /v1/auth/tokens` issues a new cryptographically random API token, hashes and persists it, and returns the plaintext secret exactly once.
+- [x] Endpoint `GET /v1/auth/tokens` returns the list of active and revoked tokens for the authenticated tenant with names, prefixes, creation dates, and last used timestamps.
+- [x] Endpoint `POST /v1/auth/tokens/{id}/revoke` immediately marks a token as revoked and purges it from in-memory validation caches.
+- [x] FastAPI authentication dependency validates incoming Bearer tokens against the database-backed token store using constant-time verification.
+- [x] Integration tests verify dynamic token generation, successful authentication, constant-time validation, and immediate rejection of revoked or expired tokens.

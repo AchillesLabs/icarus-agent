@@ -11,6 +11,7 @@ from icarus_core.persistence import (
     DatabaseManager,
     MessageRepository,
     SessionRepository,
+    TenantApiTokenRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantSessionRepository,
@@ -18,7 +19,7 @@ from icarus_core.persistence import (
 from icarus_core.providers import ProviderRegistry
 from sqlalchemy.orm import Session
 
-from icarus_api.auth import get_current_tenant, get_settings
+from icarus_api.auth import TokenValidationCache, get_current_tenant, get_settings
 from icarus_api.run_registry import ActiveRunRegistry
 
 
@@ -126,3 +127,20 @@ def get_provider_registry(request: Request) -> ProviderRegistry:
         registry = ProviderRegistry()
         request.app.state.provider_registry = registry
     return registry
+
+
+def get_token_cache(request: Request) -> TokenValidationCache:
+    """Resolve or initialize the in-memory token validation cache."""
+    cache = getattr(request.app.state, "token_cache", None)
+    if cache is None:
+        cache = TokenValidationCache()
+        request.app.state.token_cache = cache
+    return cache
+
+
+def get_tenant_api_token_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+) -> TenantApiTokenRepository:
+    """Provide a TenantApiTokenRepository scoped to the authenticated tenant."""
+    return TenantApiTokenRepository(db_manager=db_manager, owner_id=identity.owner_id)
