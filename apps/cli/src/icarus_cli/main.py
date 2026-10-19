@@ -396,6 +396,12 @@ def chat_cmd(
     """Launch an interactive streaming chat REPL session."""
     if local or (not remote and not server and ConfigManager().get_active_server() is None):
         ensure_database_migrated()
+
+    from icarus_cli.trust import verify_workspace_trust
+
+    if not verify_workspace_trust(console=console, auto_approve=auto_approve):
+        raise typer.Exit(code=0)
+
     try:
         run_chat(
             provider_name=provider,
@@ -459,6 +465,11 @@ def run_cmd(
     """Execute a non-interactive one-shot query and stream tokens to stdout."""
     if local or (not remote and not server and ConfigManager().get_active_server() is None):
         ensure_database_migrated()
+
+    from icarus_cli.trust import verify_workspace_trust
+
+    if not verify_workspace_trust(console=console, auto_approve=auto_approve):
+        raise typer.Exit(code=0)
 
     full_prompt: str | None = None
     if prompt:

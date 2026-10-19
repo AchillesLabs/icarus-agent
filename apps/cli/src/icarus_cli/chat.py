@@ -254,12 +254,10 @@ def _run_remote_chat(
                                     for tc in msg.tool_calls
                                 ]
                                 console.print(
-                                    f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
+                                    f"[dim]✦ Icarus > [Invoked {', '.join(tc_names)}][/dim]"
                                 )
                             if msg.content:
-                                console.print(
-                                    f"[bold green]{effective_provider} > [/bold green]{msg.content}"
-                                )
+                                console.print(f"[bold gold1]✦ Icarus > [/bold gold1]{msg.content}")
                         elif msg_role in (MessageRole.SYSTEM.value, "system") and (
                             "[Previous Conversation Summary]" in (msg.content or "")
                         ):
@@ -332,7 +330,7 @@ def _run_remote_chat(
                     )
                     continue
 
-                console.print(f"[bold green]{effective_provider} > [/bold green]")
+                console.print("[bold gold1]✦ Icarus > [/bold gold1]")
                 observer = RichAgentObserver(console=console, stream_tokens=True)
 
                 try:
@@ -474,13 +472,9 @@ def run_chat(
                             else getattr(tc, "name", "tool")
                             for tc in msg.tool_calls
                         ]
-                        console.print(
-                            f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
-                        )
+                        console.print(f"[dim]✦ Icarus > [Invoked {', '.join(tc_names)}][/dim]")
                     if msg.content:
-                        console.print(
-                            f"[bold green]{effective_provider} > [/bold green]{msg.content}"
-                        )
+                        console.print(f"[bold gold1]✦ Icarus > [/bold gold1]{msg.content}")
                 elif msg_role in (MessageRole.SYSTEM.value, "system") and (
                     "[Previous Conversation Summary]" in (msg.content or "")
                 ):
@@ -575,7 +569,7 @@ def run_chat(
             prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
 
             # Stream assistant response
-            console.print(f"[bold green]{effective_provider} > [/bold green]")
+            console.print("[bold gold1]✦ Icarus > [/bold gold1]")
             observer = RichAgentObserver(console=console, stream_tokens=True)
 
             def on_chat_message(msg: PromptMessage) -> None:

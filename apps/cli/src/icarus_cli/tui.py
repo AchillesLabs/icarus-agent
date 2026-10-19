@@ -7,6 +7,7 @@ persistent history and keybindings.
 
 from __future__ import annotations
 
+import getpass
 import sys
 from pathlib import Path
 from typing import Any, TextIO
@@ -90,6 +91,17 @@ class AlternateScreenBuffer:
         self.exit()
 
 
+ICARUS_SPRITE = """[bold gold1]
+             ▄█▄
+   █▄       █████       ▄█
+   ███▄   ▄██ █ ██▄   ▄███
+   ▀████▄███████████▄████▀
+     ▀██████ ▀█▀ ██████▀
+        ▀█████████▀
+            ▀█▀
+[/bold gold1]"""
+
+
 def render_workspace_header(
     console: Console,
     model: str,
@@ -100,40 +112,67 @@ def render_workspace_header(
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
 ) -> None:
-    """Render the pinned top status header bar of the terminal workspace."""
+    """Render the pinned top status dashboard of the terminal workspace."""
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
 
-    # Build 2-row metric grid table
-    grid = Table.grid(expand=True)
-    grid.add_column(justify="left", ratio=3)
-    grid.add_column(justify="right", ratio=2)
+    try:
+        user = getpass.getuser().capitalize()
+    except Exception:
+        user = "Explorer"
+
+    try:
+        cwd = str(Path.cwd().resolve())
+    except Exception:
+        cwd = "Workspace"
 
     status_badge = (
         f"[bold cyan]REMOTE ({remote_url})[/bold cyan]"
         if remote_url
         else "[bold green]LOCAL RUNTIME[/bold green]"
     )
-
-    grid.add_row(
-        f"[bold white]Model:[/bold white] [bold cyan]{model}[/bold cyan] [dim]({provider})[/dim]",
-        status_badge,
-    )
-    grid.add_row(
-        f"[bold white]Session:[/bold white] [bold yellow]{session_id}[/bold yellow]",
-        f"[bold white]Tokens:[/bold white] [bold yellow]{tokens_used:,}[/bold yellow] / [dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]",
+    tokens_info = (
+        f"[bold white]Tokens:[/bold white] [bold yellow]{tokens_used:,}[/bold yellow] / "
+        f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
-    header_title = f"[bold cyan]* ICARUS AGENT CHAT[/bold cyan] [dim]v{__version__}[/dim] | [bold magenta]{mode}[/bold magenta]"
+    left_content = (
+        f"[bold white]Welcome back, {user}![/bold white]\n"
+        + ICARUS_SPRITE
+        + f"\n[bold cyan]Model:[/bold cyan] [bold yellow]{model}[/bold yellow] [dim]({provider})[/dim]\n"
+        + f"[dim]Session: {session_id}[/dim]\n"
+        + f"[dim]Dir: {cwd}[/dim]"
+    )
+
+    right_content = (
+        f"[bold gold1]Status:[/bold gold1] {status_badge}  •  {tokens_info}\n\n"
+        "[bold gold1]Tips for getting started[/bold gold1]\n"
+        '[dim]•[/dim] [white]Near me:[/white] [italic]"Find affordable hotels near me"[/italic]\n'
+        '[dim]•[/dim] [white]Live web:[/white] [italic]"Search latest news on AI agents"[/italic]\n'
+        '[dim]•[/dim] [white]Reminders:[/white] [italic]"Remind me in 30 mins to take a break"[/italic]\n\n'
+        "[bold gold1]In-Chat Commands[/bold gold1]\n"
+        "[bold cyan]/models[/bold cyan] Switch active model   [bold cyan]/doctor[/bold cyan] Diagnostics\n"
+        "[bold cyan]/clear[/bold cyan]  Clear screen           [bold cyan]/exit[/bold cyan]   Save & quit"
+    )
+
+    table = Table.grid(expand=True, padding=(0, 2))
+    table.add_column(ratio=5)
+    table.add_column(ratio=6)
+    table.add_row(left_content, right_content)
+
+    header_title = (
+        f"[bold gold1]* ICARUS AGENT CHAT[/bold gold1] [dim]v{__version__}[/dim] | "
+        f"[bold magenta]{mode}[/bold magenta]"
+    )
     header_subtitle = (
-        "[dim]Chief of Staff | Live Web Search | MCP Browser & Booking | Background Scheduler[/dim]"
+        "[dim]Chief of Staff • Live Web Intelligence • MCP Protocol • 24/7 Scheduler[/dim]"
     )
 
     panel = Panel(
-        grid,
+        table,
         title=header_title,
         subtitle=header_subtitle,
-        border_style="cyan",
-        padding=(0, 1),
+        border_style="gold1",
+        padding=(1, 2),
     )
     console.print(panel)
 
