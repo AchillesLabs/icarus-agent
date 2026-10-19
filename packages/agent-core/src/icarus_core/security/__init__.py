@@ -6,10 +6,20 @@ from icarus_core.security.tokens import (
     hash_api_token,
     verify_token_hash,
 )
+from icarus_core.security.vault import (
+    DEFAULT_DEV_VAULT_KEY,
+    CredentialVault,
+    VaultDecryptionError,
+    mask_secret,
+)
 
 __all__ = [
+    "CredentialVault",
+    "DEFAULT_DEV_VAULT_KEY",
     "DEFAULT_TOKEN_PREFIX",
+    "VaultDecryptionError",
     "generate_api_token",
     "hash_api_token",
+    "mask_secret",
     "verify_token_hash",
 ]

@@ -72,6 +72,11 @@ from icarus_contracts.tools import (
     ToolResult,
     ToolSafetyCategory,
 )
+from icarus_contracts.vault import (
+    VaultCredentialCreate,
+    VaultCredentialDeleteResponse,
+    VaultCredentialResponse,
+)
 
 __version__ = "0.1.0"
 
@@ -134,5 +139,8 @@ __all__ = [
     "ToolResult",
     "ToolSafetyCategory",
     "TokenUsage",
+    "VaultCredentialCreate",
+    "VaultCredentialDeleteResponse",
+    "VaultCredentialResponse",
     "WorkspaceJailError",
 ]

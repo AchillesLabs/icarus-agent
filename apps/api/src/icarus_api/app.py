@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from icarus_core.persistence import DatabaseManager
 from icarus_core.providers import ProviderRegistry
+from icarus_core.security import CredentialVault
 
 from icarus_api.auth import TenantAuthMiddleware, TokenValidationCache
 from icarus_api.config import ApiSettings
@@ -13,6 +14,7 @@ from icarus_api.routes.health import router as health_router
 from icarus_api.routes.runs import router as runs_router
 from icarus_api.routes.sessions import router as sessions_router
 from icarus_api.routes.tokens import router as tokens_router
+from icarus_api.routes.vault import router as vault_router
 from icarus_api.run_registry import ActiveRunRegistry
 
 
@@ -22,6 +24,7 @@ def create_app(
     provider_registry: ProviderRegistry | None = None,
     run_registry: ActiveRunRegistry | None = None,
     token_cache: TokenValidationCache | None = None,
+    credential_vault: CredentialVault | None = None,
 ) -> FastAPI:
     """Create and configure a new FastAPI application instance."""
     resolved_settings = settings or ApiSettings()
@@ -38,6 +41,7 @@ def create_app(
     app.state.provider_registry = provider_registry
     app.state.run_registry = run_registry
     app.state.token_cache = token_cache or TokenValidationCache()
+    app.state.credential_vault = credential_vault or CredentialVault()
 
     # Configure CORS and authentication middleware
     app.add_middleware(
@@ -57,5 +61,6 @@ def create_app(
     app.include_router(sessions_router)
     app.include_router(runs_router)
     app.include_router(tokens_router)
+    app.include_router(vault_router)
 
     return app

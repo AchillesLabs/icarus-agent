@@ -57,6 +57,7 @@ def test_migration_runner_on_file_db(tmp_path: Path):
         "agent_runs",
         "scheduled_jobs",
         "tenant_api_tokens",
+        "tenant_credentials",
         "alembic_version",
     }.issubset(table_names)
 
@@ -94,13 +95,27 @@ def test_migration_runner_on_file_db(tmp_path: Path):
     }
     assert expected_token_columns.issubset(token_columns)
 
+    # Verify tenant_credentials columns
+    cred_columns = {col["name"] for col in inspector.get_columns("tenant_credentials")}
+    expected_cred_columns = {
+        "id",
+        "owner_id",
+        "provider",
+        "encrypted_secret",
+        "key_hint",
+        "created_at",
+        "updated_at",
+    }
+    assert expected_cred_columns.issubset(cred_columns)
+
     # Verify repositories work on migrated schema
     session_repo = SessionRepository(db_manager)
     message_repo = MessageRepository(db_manager)
     job_repo = ScheduledJobRepository(db_manager)
-    from icarus_core.persistence import ApiTokenRepository
+    from icarus_core.persistence import ApiTokenRepository, CredentialRepository
 
     token_repo = ApiTokenRepository(db_manager)
+    cred_repo = CredentialRepository(db_manager)
 
     sess = session_repo.create_session(SessionCreate(title="Migrated DB Chat"))
     msg = message_repo.create_message(
@@ -114,6 +129,11 @@ def test_migration_runner_on_file_db(tmp_path: Path):
         name="CI Token",
         token_hash="fakehash123",
         prefix="sk_icarus_...1234",
+    )
+    cred_repo.set_credential(
+        owner_id="migrated-tenant",
+        provider="openrouter",
+        secret="sk-or-v1-secret1234567890abc",
     )
 
     retrieved = session_repo.get_session(sess.id)
@@ -129,6 +149,13 @@ def test_migration_runner_on_file_db(tmp_path: Path):
     assert retrieved_tkn is not None
     assert retrieved_tkn.name == "CI Token"
     assert retrieved_tkn.is_active is True
+    retrieved_crd = cred_repo.get_credential("migrated-tenant", "openrouter")
+    assert retrieved_crd is not None
+    assert retrieved_crd.provider == "openrouter"
+    assert (
+        cred_repo.get_decrypted_secret("migrated-tenant", "openrouter")
+        == "sk-or-v1-secret1234567890abc"
+    )
 
 
 def test_migration_runner_on_memory_db():
@@ -146,5 +173,6 @@ def test_migration_runner_on_memory_db():
         "agent_runs",
         "scheduled_jobs",
         "tenant_api_tokens",
+        "tenant_credentials",
         "alembic_version",
     }.issubset(table_names)

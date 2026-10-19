@@ -7,7 +7,8 @@ from typing import Any
 from icarus_contracts.jobs import ScheduledJobDTO, ScheduledJobStatus
 from icarus_contracts.session import MessageDTO, MessageRole, RunDTO, RunStatus, SessionDTO
 from icarus_contracts.tokens import ApiTokenResponse
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from icarus_contracts.vault import VaultCredentialResponse
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -259,4 +260,40 @@ class TenantApiTokenModel(Base):
             revoked_at=rev,
             last_used_at=_ensure_utc(self.last_used_at),
             is_active=is_active,
+        )
+
+
+class TenantCredentialModel(Base):
+    """Persistent encrypted model provider credential for a tenant."""
+
+    __tablename__ = "tenant_credentials"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "provider", name="uq_tenant_credentials_owner_provider"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_generate_uuid)
+    owner_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="default", index=True
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    encrypted_secret: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hint: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        onupdate=_utcnow,
+    )
+
+    def to_dto(self) -> VaultCredentialResponse:
+        """Convert ORM model to immutable Pydantic VaultCredentialResponse."""
+        now = datetime.now(UTC)
+        return VaultCredentialResponse(
+            provider=self.provider,
+            key_hint=self.key_hint,
+            created_at=_ensure_utc(self.created_at) or now,
+            updated_at=_ensure_utc(self.updated_at) or now,
         )

@@ -24,6 +24,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, Any]:
 
         app.state.token_cache = TokenValidationCache()
 
+    if not hasattr(app.state, "credential_vault") or app.state.credential_vault is None:
+        from icarus_core.security import CredentialVault
+
+        app.state.credential_vault = CredentialVault()
+
     yield
 
     # Shutdown: clean up database connections

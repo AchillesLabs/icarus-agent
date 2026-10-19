@@ -24,6 +24,7 @@ from icarus_contracts.session import (
     SessionUpdate,
 )
 from icarus_contracts.tokens import ApiTokenResponse
+from icarus_contracts.vault import VaultCredentialResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -34,7 +35,9 @@ from icarus_core.persistence.models import (
     ScheduledJobModel,
     SessionModel,
     TenantApiTokenModel,
+    TenantCredentialModel,
 )
+from icarus_core.security import CredentialVault, mask_secret
 from icarus_core.tokens import TokenCounter, get_token_counter
 
 
@@ -1263,3 +1266,188 @@ class TenantApiTokenRepository(ApiTokenRepository):
         owner_id: str | None = None,
     ) -> ApiTokenResponse | None:
         return super().revoke_token(token_id=token_id, owner_id=self.owner_id)
+
+
+class CredentialRepository:
+    """Repository handling persistence and encryption for tenant model provider credentials."""
+
+    def __init__(
+        self,
+        db_manager: DatabaseManager | Session,
+        vault: CredentialVault | None = None,
+    ) -> None:
+        self.db = db_manager
+        self.vault = vault or CredentialVault()
+
+    @contextmanager
+    def _session_scope(self) -> Generator[Session, None, None]:
+        if hasattr(self.db, "session_scope"):
+            with self.db.session_scope() as session:
+                yield session
+        else:
+            yield self.db  # type: ignore[misc]
+
+    def set_credential(
+        self,
+        owner_id: str,
+        provider: str,
+        secret: str,
+    ) -> VaultCredentialResponse:
+        """Encrypt and persist or update a model provider API credential."""
+        norm_provider = provider.strip().lower()
+        key_hint = mask_secret(secret)
+        encrypted_secret = self.vault.encrypt(secret)
+        now = datetime.now(UTC)
+
+        with self._session_scope() as session:
+            stmt = select(TenantCredentialModel).where(
+                TenantCredentialModel.owner_id == owner_id,
+                TenantCredentialModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is not None:
+                model.encrypted_secret = encrypted_secret
+                model.key_hint = key_hint
+                model.updated_at = now
+            else:
+                model = TenantCredentialModel(
+                    owner_id=owner_id,
+                    provider=norm_provider,
+                    encrypted_secret=encrypted_secret,
+                    key_hint=key_hint,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(model)
+            session.flush()
+            session.refresh(model)
+            return model.to_dto()
+
+    def get_credential(
+        self,
+        owner_id: str,
+        provider: str,
+    ) -> VaultCredentialResponse | None:
+        """Retrieve masked credential metadata for an owner and provider."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope() as session:
+            stmt = select(TenantCredentialModel).where(
+                TenantCredentialModel.owner_id == owner_id,
+                TenantCredentialModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            return model.to_dto() if model is not None else None
+
+    def get_decrypted_secret(
+        self,
+        owner_id: str,
+        provider: str,
+    ) -> str | None:
+        """Retrieve and decrypt the plaintext secret for an owner and provider."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope() as session:
+            stmt = select(TenantCredentialModel).where(
+                TenantCredentialModel.owner_id == owner_id,
+                TenantCredentialModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+            return self.vault.decrypt(model.encrypted_secret)
+
+    def list_credentials(
+        self,
+        owner_id: str,
+    ) -> list[VaultCredentialResponse]:
+        """List all masked credentials stored by a tenant owner."""
+        with self._session_scope() as session:
+            stmt = (
+                select(TenantCredentialModel)
+                .where(TenantCredentialModel.owner_id == owner_id)
+                .order_by(TenantCredentialModel.provider.asc())
+            )
+            models = session.execute(stmt).scalars().all()
+            return [model.to_dto() for model in models]
+
+    def delete_credential(
+        self,
+        owner_id: str,
+        provider: str,
+    ) -> bool:
+        """Delete a stored provider credential for a tenant."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope() as session:
+            stmt = select(TenantCredentialModel).where(
+                TenantCredentialModel.owner_id == owner_id,
+                TenantCredentialModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return False
+            session.delete(model)
+            return True
+
+
+class TenantCredentialRepository(CredentialRepository):
+    """Tenant-scoped repository for provider vault credentials strictly enforcing
+    owner isolation.
+    """
+
+    def __init__(
+        self,
+        db_manager: DatabaseManager | Session,
+        owner_id: str,
+        vault: CredentialVault | None = None,
+    ) -> None:
+        super().__init__(db_manager=db_manager, vault=vault)
+        if not owner_id or not isinstance(owner_id, str):
+            raise ValueError("owner_id must be a non-empty string")
+        self.owner_id = owner_id
+
+    def set_credential(
+        self,
+        provider: str,
+        secret: str,
+        owner_id: str | None = None,
+    ) -> VaultCredentialResponse:
+        return super().set_credential(
+            owner_id=self.owner_id,
+            provider=provider,
+            secret=secret,
+        )
+
+    def get_credential(
+        self,
+        provider: str,
+        owner_id: str | None = None,
+    ) -> VaultCredentialResponse | None:
+        return super().get_credential(
+            owner_id=self.owner_id,
+            provider=provider,
+        )
+
+    def get_decrypted_secret(
+        self,
+        provider: str,
+        owner_id: str | None = None,
+    ) -> str | None:
+        return super().get_decrypted_secret(
+            owner_id=self.owner_id,
+            provider=provider,
+        )
+
+    def list_credentials(
+        self,
+        owner_id: str | None = None,
+    ) -> list[VaultCredentialResponse]:
+        return super().list_credentials(owner_id=self.owner_id)
+
+    def delete_credential(
+        self,
+        provider: str,
+        owner_id: str | None = None,
+    ) -> bool:
+        return super().delete_credential(
+            owner_id=self.owner_id,
+            provider=provider,
+        )

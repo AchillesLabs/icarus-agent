@@ -7,11 +7,11 @@
 
 **Blocked by:** [#34](https://github.com/AchillesLabs/icarus-agent/issues/34) (01: Dynamic API Token Issuance, Constant-Time Verification, and Instant Revocation)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Implement cryptographic credential vault with authenticated encryption and decryption backed by a vault master key.
-- [ ] Database model and migration for tenant credentials storing tenant owner, provider identifier, encrypted secret ciphertext, and masked key preview hint.
-- [ ] Implement `POST /v1/vault/credentials` encrypting provider keys before persistence and returning masked confirmation.
-- [ ] Implement `GET /v1/vault/credentials` listing all configured provider credentials for the authenticated tenant with masked previews.
-- [ ] Implement `DELETE /v1/vault/credentials/{provider}` removing a stored provider credential.
-- [ ] Integration tests verify encryption at rest, key masking in responses, tampering detection, and complete tenant isolation.
+- [x] Implement cryptographic credential vault with authenticated encryption and decryption backed by a vault master key.
+- [x] Database model and migration for tenant credentials storing tenant owner, provider identifier, encrypted secret ciphertext, and masked key preview hint.
+- [x] Implement `POST /v1/vault/credentials` encrypting provider keys before persistence and returning masked confirmation.
+- [x] Implement `GET /v1/vault/credentials` listing all configured provider credentials for the authenticated tenant with masked previews.
+- [x] Implement `DELETE /v1/vault/credentials/{provider}` removing a stored provider credential.
+- [x] Integration tests verify encryption at rest, key masking in responses, tampering detection, and complete tenant isolation.

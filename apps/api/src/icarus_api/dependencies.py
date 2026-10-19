@@ -12,11 +12,13 @@ from icarus_core.persistence import (
     MessageRepository,
     SessionRepository,
     TenantApiTokenRepository,
+    TenantCredentialRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantSessionRepository,
 )
 from icarus_core.providers import ProviderRegistry
+from icarus_core.security import CredentialVault
 from sqlalchemy.orm import Session
 
 from icarus_api.auth import TokenValidationCache, get_current_tenant, get_settings
@@ -144,3 +146,25 @@ def get_tenant_api_token_repository(
 ) -> TenantApiTokenRepository:
     """Provide a TenantApiTokenRepository scoped to the authenticated tenant."""
     return TenantApiTokenRepository(db_manager=db_manager, owner_id=identity.owner_id)
+
+
+def get_credential_vault(request: Request) -> CredentialVault:
+    """Resolve active CredentialVault from application state."""
+    vault = getattr(request.app.state, "credential_vault", None)
+    if vault is None:
+        vault = CredentialVault()
+        request.app.state.credential_vault = vault
+    return vault
+
+
+def get_tenant_credential_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+    vault: Annotated[CredentialVault, Depends(get_credential_vault)],
+) -> TenantCredentialRepository:
+    """Provide a TenantCredentialRepository scoped to the authenticated tenant."""
+    return TenantCredentialRepository(
+        db_manager=db_manager,
+        owner_id=identity.owner_id,
+        vault=vault,
+    )
