@@ -56,6 +56,7 @@ class ProviderRegistry:
         self,
         name: str,
         api_key: str | None = None,
+        allow_fallback: bool = True,
         **kwargs: Any,
     ) -> ModelProvider:
         """Instantiate a ModelProvider by name, resolving credentials when required."""
@@ -68,11 +69,18 @@ class ProviderRegistry:
         needs_credentials = self._requires_credentials.get(normalized, True)
 
         if not needs_credentials:
+            if api_key is not None:
+                kwargs["api_key"] = api_key
             return factory(**kwargs)
 
         # Real provider resolution
         effective_key = api_key
         if not effective_key:
+            if not allow_fallback:
+                raise ValueError(
+                    f"No tenant BYOK credential configured for provider '{name}' "
+                    "and fallback to system credentials is disabled."
+                )
             cred = self.resolver.resolve_or_raise(normalized)
             effective_key = cred.secret
 

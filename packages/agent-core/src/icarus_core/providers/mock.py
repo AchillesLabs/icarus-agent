@@ -26,6 +26,8 @@ class MockProvider:
         should_fail: Exception | None = None,
         latency: float = 0.0,
         tool_calls_sequence: list[list[ToolCall] | None] | None = None,
+        api_key: str | None = None,
+        **kwargs: Any,
     ) -> None:
         self.responses = (
             list(responses) if responses is not None else ["Mock response from Icarus agent."]
@@ -36,6 +38,7 @@ class MockProvider:
         self.tool_calls_sequence = (
             list(tool_calls_sequence) if tool_calls_sequence is not None else None
         )
+        self.api_key = api_key
 
         self.call_count: int = 0
         self.recorded_prompts: list[list[PromptMessage]] = []

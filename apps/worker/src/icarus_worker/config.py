@@ -23,6 +23,7 @@ class WorkerSettings(BaseSettings):
     retry_backoff_base_seconds: int = 60
     default_provider: str = "mock"
     default_model: str = "mock-model"
+    allow_fallback_to_system_credentials: bool = True
 
 
 WorkerConfig = WorkerSettings

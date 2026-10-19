@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
+from collections.abc import Sequence
+from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -25,6 +27,38 @@ def mask_secret(secret: str) -> str:
     if len(secret) <= 8:
         return "***"
     return f"{secret[:3]}...{secret[-4:]}"
+
+
+def redact_secret(
+    text_or_obj: Any,
+    secret: str | Sequence[str] | None,
+    replacement: str = "[REDACTED]",
+) -> Any:
+    """Recursively redact instances of secret(s) from strings, dicts, lists, or tuples."""
+    if not secret:
+        return text_or_obj
+    secrets: list[str] = [secret] if isinstance(secret, str) else [s for s in secret if s]
+    active_secrets = [s for s in secrets if len(s) >= 4]
+    if not active_secrets:
+        return text_or_obj
+
+    if isinstance(text_or_obj, str):
+        result = text_or_obj
+        for s in active_secrets:
+            result = result.replace(s, replacement)
+        return result
+    if isinstance(text_or_obj, dict):
+        return {
+            redact_secret(k, active_secrets, replacement): redact_secret(
+                v, active_secrets, replacement
+            )
+            for k, v in text_or_obj.items()
+        }
+    if isinstance(text_or_obj, list):
+        return [redact_secret(v, active_secrets, replacement) for v in text_or_obj]
+    if isinstance(text_or_obj, tuple):
+        return tuple(redact_secret(v, active_secrets, replacement) for v in text_or_obj)
+    return text_or_obj
 
 
 class CredentialVault:

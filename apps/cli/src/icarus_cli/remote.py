@@ -14,6 +14,7 @@ from icarus_contracts.session import (
     MessageRole,
     RunCancelResponse,
     RunCreateRequest,
+    RunResponse,
     SessionCreateRequest,
     SessionListResponse,
     SessionResponse,
@@ -142,6 +143,35 @@ class RemoteAgentClient:
         resp = await client.post(f"/v1/runs/{run_id}/cancel")
         resp.raise_for_status()
         return RunCancelResponse.model_validate(resp.json())
+
+    async def execute_run(
+        self,
+        session_id: str,
+        prompt: str,
+        model: str | None = None,
+        provider: str | None = None,
+        temperature: float | None = None,
+        max_turns: int | None = None,
+        max_total_tokens: int | None = None,
+        auto_compact: bool = True,
+        auto_approve: bool = True,
+    ) -> RunResponse:
+        """Execute a synchronous one-shot run via POST /v1/sessions/{id}/runs."""
+        client = await self.get_client()
+        url = f"/v1/sessions/{session_id}/runs"
+        payload = RunCreateRequest(
+            prompt=prompt,
+            model=model,
+            provider=provider,
+            temperature=temperature,
+            max_turns=max_turns,
+            max_total_tokens=max_total_tokens,
+            auto_compact=auto_compact,
+            auto_approve=auto_approve,
+        ).model_dump(exclude_none=True)
+        resp = await client.post(url, json=payload, headers=self._get_headers())
+        resp.raise_for_status()
+        return RunResponse.model_validate(resp.json())
 
     async def stream_run(
         self,

@@ -9,6 +9,8 @@ from typing import Any
 from icarus_contracts import ScheduledJobDTO
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.repository import ScheduledJobRepository
+from icarus_core.providers import ProviderRegistry
+from icarus_core.security import CredentialVault
 
 from icarus_worker.config import WorkerSettings
 from icarus_worker.handlers import HandlerRegistry, JobContext
@@ -24,11 +26,15 @@ class WorkerDaemon:
         settings: WorkerSettings | None = None,
         db_manager: DatabaseManager | None = None,
         handler_registry: HandlerRegistry | None = None,
+        vault: CredentialVault | None = None,
+        provider_registry: ProviderRegistry | None = None,
     ) -> None:
         self.settings = settings or WorkerSettings()
         self.db_manager = db_manager or DatabaseManager(db_url=self.settings.database_url)
         self.handler_registry = handler_registry or HandlerRegistry.default_registry()
         self.job_repo = ScheduledJobRepository(self.db_manager)
+        self.vault = vault or CredentialVault()
+        self.provider_registry = provider_registry
 
         self._stop_event = asyncio.Event()
         self._is_running = False
@@ -50,6 +56,8 @@ class WorkerDaemon:
             worker_id=self.settings.worker_id,
             db_manager=self.db_manager,
             settings=self.settings,
+            vault=self.vault,
+            provider_registry=self.provider_registry,
         )
 
     async def run_once(self) -> ScheduledJobDTO | None:

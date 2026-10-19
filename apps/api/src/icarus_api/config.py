@@ -23,6 +23,9 @@ class ApiSettings(BaseSettings):
     auth_token: str | None = None
     auth_tokens: dict[str, str] = Field(default_factory=dict)
     default_owner_id: str = "default"
+    default_provider: str = "mock"
+    default_model: str = "mock-model"
+    allow_fallback_to_system_credentials: bool = True
 
     @field_validator("auth_tokens", mode="before")
     @classmethod

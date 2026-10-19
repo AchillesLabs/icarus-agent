@@ -18,12 +18,14 @@ from icarus_core.agent.approvals import ApprovalEngine, ApprovalPolicy
 from icarus_core.agent.loop import AgentLoop
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.repository import (
+    TenantCredentialRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantSessionRepository,
 )
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.registry import ProviderRegistry
+from icarus_core.security import CredentialVault, redact_secret
 from icarus_core.tools.registry import ToolRegistry, create_default_registry
 
 from icarus_worker.config import WorkerSettings
@@ -39,6 +41,7 @@ class JobContext:
     provider_registry: ProviderRegistry | None = None
     tool_registry: ToolRegistry | None = None
     approval_engine: ApprovalEngine | None = None
+    vault: CredentialVault | None = None
 
 
 class JobHandler(Protocol):
@@ -102,9 +105,22 @@ class AgentRunJobHandler:
             )
         )
 
-        # Resolve provider
+        # Resolve provider with BYOK credentials if vault is available
         provider_registry = context.provider_registry or ProviderRegistry()
-        provider: ModelProvider = provider_registry.get_provider(provider_name)
+        byok_key: str | None = None
+        if context.vault is not None:
+            cred_repo = TenantCredentialRepository(
+                db_manager=context.db_manager,
+                owner_id=job.owner_id,
+                vault=context.vault,
+            )
+            byok_key = cred_repo.get_decrypted_secret(provider_name)
+        allow_fallback = getattr(context.settings, "allow_fallback_to_system_credentials", True)
+        provider: ModelProvider = provider_registry.get_provider(
+            provider_name,
+            api_key=byok_key,
+            allow_fallback=allow_fallback,
+        )
 
         # Setup headless approvals (all automated/approved for background runs)
         approval_engine = context.approval_engine or ApprovalEngine(
@@ -119,12 +135,14 @@ class AgentRunJobHandler:
                     if msg.role in MessageRole._value2member_map_
                     else MessageRole.ASSISTANT
                 )
+                safe_content = redact_secret(msg.content or "", byok_key)
+                safe_tools = redact_secret(msg.tool_calls, byok_key)
                 message_repo.create_message(
                     MessageCreate(
                         session_id=session_id,
                         role=role_val,
-                        content=msg.content or "",
-                        tool_calls=msg.tool_calls,
+                        content=safe_content,
+                        tool_calls=safe_tools,
                         tool_call_id=msg.tool_call_id,
                         name=msg.name,
                     )
@@ -173,12 +191,13 @@ class AgentRunJobHandler:
                     budget_counters=loop_result.budget_counters,
                 )
 
+            safe_resp = redact_secret(loop_result.content or "", byok_key)
             return {
                 "run_id": run.id,
                 "session_id": session_id,
                 "finish_reason": loop_result.finish_reason,
                 "budget_counters": loop_result.budget_counters,
-                "response": loop_result.content,
+                "response": safe_resp,
             }
         except Exception as exc:
             run_repo.update_run(

@@ -11,6 +11,7 @@ from icarus_core.security.vault import (
     CredentialVault,
     VaultDecryptionError,
     mask_secret,
+    redact_secret,
 )
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "generate_api_token",
     "hash_api_token",
     "mask_secret",
+    "redact_secret",
     "verify_token_hash",
 ]

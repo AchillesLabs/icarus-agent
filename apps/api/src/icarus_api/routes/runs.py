@@ -20,17 +20,20 @@ from icarus_contracts import (
 from icarus_core.agent.approvals import ApprovalEngine, ApprovalPolicy
 from icarus_core.agent.loop import AgentLoop
 from icarus_core.persistence import (
+    TenantCredentialRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantSessionRepository,
 )
 from icarus_core.providers import ProviderRegistry
+from icarus_core.security import redact_secret
 
 from icarus_api.auth import get_current_tenant, get_settings
 from icarus_api.config import ApiSettings
 from icarus_api.dependencies import (
     get_active_run_registry,
     get_provider_registry,
+    get_tenant_credential_repository,
     get_tenant_message_repository,
     get_tenant_run_repository,
     get_tenant_session_repository,
@@ -48,6 +51,9 @@ async def stream_session_run(
     session_repo: Annotated[TenantSessionRepository, Depends(get_tenant_session_repository)],
     msg_repo: Annotated[TenantMessageRepository, Depends(get_tenant_message_repository)],
     run_repo: Annotated[TenantRunRepository, Depends(get_tenant_run_repository)],
+    credential_repo: Annotated[
+        TenantCredentialRepository, Depends(get_tenant_credential_repository)
+    ],
     run_registry: Annotated[ActiveRunRegistry, Depends(get_active_run_registry)],
     provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     settings: Annotated[ApiSettings, Depends(get_settings)],
@@ -93,10 +99,17 @@ async def stream_session_run(
     db_messages = msg_repo.list_messages(session_id)
     prompt_messages = [m.to_prompt_message() for m in db_messages]
 
-    # 5. Initialize provider adapter
+    # 5. Resolve provider adapter with ephemerally decrypted tenant BYOK credentials
+    byok_key: str | None = credential_repo.get_decrypted_secret(effective_provider)
+    allow_fallback: bool = getattr(settings, "allow_fallback_to_system_credentials", True)
     try:
-        provider = provider_registry.get_provider(effective_provider)
+        provider = provider_registry.get_provider(
+            effective_provider,
+            api_key=byok_key,
+            allow_fallback=allow_fallback,
+        )
     except Exception as exc:
+        err_msg = redact_secret(str(exc), byok_key)
         run_repo.update_run(
             run_id,
             status=RunStatus.FAILED,
@@ -105,7 +118,7 @@ async def stream_session_run(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to initialize provider '{effective_provider}': {exc}",
+            detail=f"Failed to initialize provider '{effective_provider}': {err_msg}",
         ) from exc
 
     # 6. Configure approval engine
@@ -115,15 +128,17 @@ async def stream_session_run(
         else ApprovalEngine(policy=ApprovalPolicy.DENY)
     )
 
-    # 7. Callback for recording intermediate agent messages to persistent transcript
+    # 7. Callback for recording intermediate agent messages with zero-leak secret redaction
     def on_run_message(msg: PromptMessage) -> None:
+        content = redact_secret(msg.content or "", byok_key)
+        tool_calls = redact_secret(msg.tool_calls, byok_key)
         msg_repo.create_message(
             MessageCreate(
                 session_id=session_id,
                 owner_id=identity.owner_id,
                 role=msg.role,
-                content=msg.content or "",
-                tool_calls=msg.tool_calls,
+                content=content,
+                tool_calls=tool_calls,
                 tool_call_id=msg.tool_call_id,
                 name=msg.name,
             )
@@ -143,7 +158,7 @@ async def stream_session_run(
     )
 
     queue: asyncio.Queue[SSEEventPayload | None] = asyncio.Queue()
-    observer = SSEAgentObserver(queue, run_id=run_id)
+    observer = SSEAgentObserver(queue, run_id=run_id, secret_to_redact=byok_key)
     # Immediately emit initial turn_start so client connects and learns
     # run_id without provider latency
     queue.put_nowait(SSEEventPayload.turn_start(turn=1, run_id=run_id))
@@ -176,10 +191,11 @@ async def stream_session_run(
                     completed=True,
                     budget_counters=loop_result.budget_counters,
                 )
+                safe_result = redact_secret(loop_result.content or "", byok_key)
                 await queue.put(
                     SSEEventPayload.run_completed(
                         run_id=run_id,
-                        result=loop_result.content,
+                        result=safe_result,
                         budget_counters=loop_result.budget_counters,
                     )
                 )
@@ -196,6 +212,7 @@ async def stream_session_run(
                 )
             )
         except Exception as exc:
+            err_msg = redact_secret(str(exc), byok_key)
             run_repo.update_run(
                 run_id,
                 status=RunStatus.FAILED,
@@ -205,7 +222,7 @@ async def stream_session_run(
             await queue.put(
                 SSEEventPayload.run_failed(
                     run_id=run_id,
-                    error=str(exc),
+                    error=err_msg,
                     error_category=exc.__class__.__name__,
                 )
             )
@@ -315,3 +332,147 @@ async def list_session_runs(
         )
     runs = run_repo.list_runs_for_session(session_id)
     return [RunResponse(**r.model_dump()) for r in runs]
+
+
+@router.post(
+    "/v1/sessions/{session_id}/runs",
+    response_model=RunResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_session_run(
+    session_id: str,
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    session_repo: Annotated[TenantSessionRepository, Depends(get_tenant_session_repository)],
+    msg_repo: Annotated[TenantMessageRepository, Depends(get_tenant_message_repository)],
+    run_repo: Annotated[TenantRunRepository, Depends(get_tenant_run_repository)],
+    credential_repo: Annotated[
+        TenantCredentialRepository, Depends(get_tenant_credential_repository)
+    ],
+    provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
+    settings: Annotated[ApiSettings, Depends(get_settings)],
+    body: RunCreateRequest | None = None,
+) -> RunResponse:
+    """Execute a one-shot agent loop run synchronously and return the completed run state."""
+    req = body or RunCreateRequest()
+
+    # 1. Enforce session exists and belongs to authenticated tenant
+    session = session_repo.get_session(session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found",
+        )
+
+    # 2. Append incoming user prompt if provided
+    if req.prompt:
+        msg_repo.create_message(
+            MessageCreate(
+                session_id=session_id,
+                owner_id=identity.owner_id,
+                role=MessageRole.USER,
+                content=req.prompt,
+            )
+        )
+
+    # 3. Create persistent run entry in running status
+    effective_provider = req.provider or getattr(settings, "default_provider", "mock")
+    effective_model = req.model or getattr(settings, "default_model", None)
+    run_dto = run_repo.create_run(
+        RunCreate(
+            session_id=session_id,
+            owner_id=identity.owner_id,
+            provider=effective_provider,
+            model=effective_model,
+            status=RunStatus.RUNNING,
+        )
+    )
+    run_id = run_dto.id
+
+    # 4. Gather existing conversation messages
+    db_messages = msg_repo.list_messages(session_id)
+    prompt_messages = [m.to_prompt_message() for m in db_messages]
+
+    # 5. Resolve provider adapter with ephemerally decrypted tenant BYOK credentials
+    byok_key: str | None = credential_repo.get_decrypted_secret(effective_provider)
+    allow_fallback: bool = getattr(settings, "allow_fallback_to_system_credentials", True)
+    try:
+        provider = provider_registry.get_provider(
+            effective_provider,
+            api_key=byok_key,
+            allow_fallback=allow_fallback,
+        )
+    except Exception as exc:
+        err_msg = redact_secret(str(exc), byok_key)
+        run_repo.update_run(
+            run_id,
+            status=RunStatus.FAILED,
+            error_category=exc.__class__.__name__,
+            completed=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to initialize provider '{effective_provider}': {err_msg}",
+        ) from exc
+
+    # 6. Configure approval engine
+    approval_engine = (
+        ApprovalEngine(policy=ApprovalPolicy.AUTO_APPROVE)
+        if req.auto_approve
+        else ApprovalEngine(policy=ApprovalPolicy.DENY)
+    )
+
+    # 7. Callback for recording intermediate agent messages with zero-leak secret redaction
+    def on_run_message(msg: PromptMessage) -> None:
+        content = redact_secret(msg.content or "", byok_key)
+        tool_calls = redact_secret(msg.tool_calls, byok_key)
+        msg_repo.create_message(
+            MessageCreate(
+                session_id=session_id,
+                owner_id=identity.owner_id,
+                role=msg.role,
+                content=content,
+                tool_calls=tool_calls,
+                tool_call_id=msg.tool_call_id,
+                name=msg.name,
+            )
+        )
+
+    # 8. Setup agent loop and execute run
+    agent_loop = AgentLoop(
+        provider=provider,
+        approval_engine=approval_engine,
+        model=effective_model,
+        temperature=req.temperature if req.temperature is not None else 0.7,
+        max_turns=req.max_turns if req.max_turns is not None else 25,
+        max_total_tokens=req.max_total_tokens,
+        auto_compact=req.auto_compact,
+        inject_system=True,
+        message_callback=on_run_message,
+    )
+
+    try:
+        loop_result = await agent_loop.run(messages=prompt_messages)
+        if loop_result.finish_reason == "cancelled":
+            updated_run = run_repo.update_run(
+                run_id,
+                status=RunStatus.CANCELLED,
+                completed=True,
+                budget_counters=loop_result.budget_counters,
+            )
+        else:
+            updated_run = run_repo.update_run(
+                run_id,
+                status=RunStatus.SUCCEEDED,
+                completed=True,
+                budget_counters=loop_result.budget_counters,
+            )
+    except Exception as exc:
+        updated_run = run_repo.update_run(
+            run_id,
+            status=RunStatus.FAILED,
+            error_category=exc.__class__.__name__,
+            completed=True,
+        )
+
+    final_run = updated_run or run_repo.get_run(run_id)
+    return RunResponse(**final_run.model_dump())

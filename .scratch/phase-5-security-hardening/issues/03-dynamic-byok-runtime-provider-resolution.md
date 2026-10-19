@@ -7,10 +7,10 @@
 
 **Blocked by:** [#35](https://github.com/AchillesLabs/icarus-agent/issues/35) (02: Encrypted Credential Vault and Server-Side BYOK Management)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Connect tenant vault repository to the agent execution pipeline in the streaming and one-shot run endpoints.
-- [ ] Dynamically resolve tenant-specific provider credentials during run creation, falling back to system defaults only when permitted.
-- [ ] Instantiate isolated model provider instances configured with the tenant's decrypted API key.
-- [ ] Enforce zero-leak invariant: ensure provider credentials are never written to session messages, context summaries, or error messages.
-- [ ] Integration tests verify streaming runs and one-shot queries execute successfully using the tenant's vault-stored BYOK credentials.
+- [x] Connect tenant vault repository to the agent execution pipeline in the streaming and one-shot run endpoints.
+- [x] Dynamically resolve tenant-specific provider credentials during run creation, falling back to system defaults only when permitted.
+- [x] Instantiate isolated model provider instances configured with the tenant's decrypted API key.
+- [x] Enforce zero-leak invariant: ensure provider credentials are never written to session messages, context summaries, or error messages.
+- [x] Integration tests verify streaming runs and one-shot queries execute successfully using the tenant's vault-stored BYOK credentials.
