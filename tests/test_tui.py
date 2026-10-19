@@ -202,9 +202,12 @@ def test_interactive_prompt_fallback_and_history(tmp_path: Path):
 def test_default_icarus_launches_chat(tmp_path: Path):
     """Running `icarus` with no arguments launches into interactive chat workspace."""
     db_file = tmp_path / "icarus.db"
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('default_provider = "mock"\nmodel = "mock-model"\n', encoding="utf-8")
     with (
         patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
         patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_config_path", return_value=config_file),
     ):
         result = runner.invoke(app, [], input="/exit\n")
         assert result.exit_code == 0
