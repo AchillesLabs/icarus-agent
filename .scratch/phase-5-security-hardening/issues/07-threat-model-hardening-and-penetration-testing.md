@@ -1,11 +1,14 @@
 # 07: Threat-Model Security Hardening and Penetration Test Matrix
 
+**GitHub Issue:** [#40](https://github.com/AchillesLabs/icarus-agent/issues/40)
+**Parent Spec:** [#33](https://github.com/AchillesLabs/icarus-agent/issues/33)
+
 **What to build:** Enforce and validate all Phase 5 security release gates through an automated penetration and threat-model test suite. Verifies that the agent loop refuses prompt-injection attempts attempting to extract vault keys or internal configs via canary tests, that token verification resists timing attacks, that cross-tenant resource tampering and ID enumeration are rejected with 404/403, and that automated scanners detect zero plaintext secrets across database tables, application logs, and HTTP payloads.
 
 **Blocked by:**
-- 03: Dynamic BYOK Model Provider Resolution in Remote Agent Runs
-- 05: Structured Security Audit Logging (audit.jsonl) with Secret Redaction
-- 06: Remote CLI Security Management (icarus vault and icarus token)
+- [#36](https://github.com/AchillesLabs/icarus-agent/issues/36) (03: Dynamic BYOK Model Provider Resolution in Remote Agent Runs)
+- [#38](https://github.com/AchillesLabs/icarus-agent/issues/38) (05: Structured Security Audit Logging (audit.jsonl) with Secret Redaction)
+- [#39](https://github.com/AchillesLabs/icarus-agent/issues/39) (06: Remote CLI Security Management (icarus vault and icarus token))
 
 **Status:** ready-for-agent
 

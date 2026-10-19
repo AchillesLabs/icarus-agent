@@ -1,5 +1,8 @@
 # 01: Dynamic API Token Issuance, Constant-Time Verification, and Instant Revocation
 
+**GitHub Issue:** [#34](https://github.com/AchillesLabs/icarus-agent/issues/34)
+**Parent Spec:** [#33](https://github.com/AchillesLabs/icarus-agent/issues/33)
+
 **What to build:** Enable tenants to dynamically generate, name, inspect, and immediately revoke API access tokens instead of relying on static environment configuration. Tokens are hashed with SHA-256 before database persistence and verified using constant-time comparison to prevent timing attacks. An in-memory cache accelerates active token lookups, while revocation immediately invalidates cached tokens so compromised credentials are synchronously rejected with HTTP 401.
 
 **Blocked by:** None (can start immediately)

@@ -1,8 +1,11 @@
 # 04: Per-Tenant Sliding-Window Rate Limiting and Concurrency Throttling
 
+**GitHub Issue:** [#37](https://github.com/AchillesLabs/icarus-agent/issues/37)
+**Parent Spec:** [#33](https://github.com/AchillesLabs/icarus-agent/issues/33)
+
 **What to build:** Safeguard the API and background worker against denial-of-service, request flooding, and runaway agent loops by enforcing per-tenant rate limits and concurrency ceilings. Requests are throttled using an in-memory sliding window algorithm, and concurrent active runs are bounded. When thresholds are exceeded, the server returns an RFC 6585 compliant HTTP 429 response with a Retry-After header and standard rate limiting status headers.
 
-**Blocked by:** 01: Dynamic API Token Issuance, Constant-Time Verification, and Instant Revocation
+**Blocked by:** [#34](https://github.com/AchillesLabs/icarus-agent/issues/34) (01: Dynamic API Token Issuance, Constant-Time Verification, and Instant Revocation)
 
 **Status:** ready-for-agent
 
