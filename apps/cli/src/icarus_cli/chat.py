@@ -26,6 +26,7 @@ from icarus_core.persistence.repository import MessageRepository, SessionReposit
 from icarus_core.providers import fetch_provider_models
 from icarus_core.providers.base import ModelProvider
 from icarus_core.providers.registry import ProviderRegistry
+from icarus_core.theme import UITheme, get_theme, list_themes, set_theme
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
@@ -77,8 +78,10 @@ def render_shutdown_summary(
     session_id: str,
     duration_seconds: float,
     messages: list[Any],
+    theme: UITheme | None = None,
 ) -> None:
     """Render Hermes-style session finalization and shutdown summary."""
+    th = theme or get_theme()
     user_count = 0
     tool_count = 0
     for m in messages:
@@ -100,7 +103,7 @@ def render_shutdown_summary(
     console.rule(style="dim")
     console.print("[dim]Shutting down… (finalizing session)[/dim]\n")
     console.print("Resume this session with:")
-    console.print(f"  [bold #C084FC]icarus chat --resume {session_id}[/bold #C084FC]\n")
+    console.print(f"  [bold {th.primary}]icarus chat --resume {session_id}[/bold {th.primary}]\n")
     console.print(f"{'Session:':<16}{session_id}")
     console.print(f"{'Duration:':<16}{duration_str}")
     console.print(f"{'Messages:':<16}{total_msgs} ({user_count} user, {tool_count} {tool_label})\n")
@@ -219,6 +222,7 @@ def _run_remote_chat(
     client: RemoteAgentClient | None,
     cfg: Any,
     cfg_manager: ConfigManager,
+    theme_name: str | None = None,
 ) -> None:
     """Execute the interactive chat REPL loop against a remote Icarus API server."""
     should_close = False
@@ -288,6 +292,7 @@ def _run_remote_chat(
         raise ValueError(str(exc)) from exc
 
     session_start_time = time.monotonic()
+    active_theme = get_theme(theme_name)
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
         render_workspace_header(
@@ -299,6 +304,7 @@ def _run_remote_chat(
             token_budget=128000,
             mode=f"Icarus Interactive Chat (Remote: {server_label} - {server_url})",
             remote_url=server_url,
+            theme=active_theme,
         )
 
         if was_resumed:
@@ -338,11 +344,11 @@ def _run_remote_chat(
                     f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]"
                 )
 
-        prompt_session = InteractivePrompt(console=console, stdin=stdin)
+        prompt_session = InteractivePrompt(console=console, stdin=stdin, theme=active_theme)
         try:
             while True:
                 status_bar = (
-                    f"[bold #C084FC]⚡ {effective_model}[/bold #C084FC] [dim]│[/dim] "
+                    f"[bold {active_theme.primary}]⚡ {effective_model}[/bold {active_theme.primary}] [dim]│[/dim] "
                     f"[dim]REMOTE ({server_label})[/dim] [dim]│[/dim] "
                     f"[dim]/help for commands[/dim]"
                 )
@@ -365,16 +371,62 @@ def _run_remote_chat(
 
                 if cleaned == "/help":
                     table = Table(
-                        title="Available Slash Commands", show_header=True, header_style="bold #C084FC"
+                        title="Available Slash Commands",
+                        show_header=True,
+                        header_style=f"bold {active_theme.primary}",
                     )
-                    table.add_column("Command", style="bold #E9D5FF", width=18)
+                    table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                     table.add_column("Description")
                     table.add_row("/help", "Display available in-chat slash commands")
                     table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
+                    table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
                     table.add_row("/clear", "Clear the terminal screen")
                     table.add_row("/session", "Show active session details and message count")
                     table.add_row("/exit", "Exit the chat REPL")
                     console.print(table)
+                    continue
+
+                if cleaned == "/theme" or cleaned.startswith("/theme "):
+                    parts = cleaned.split(maxsplit=1)
+                    if len(parts) > 1 and parts[1].strip():
+                        new_theme_name = parts[1].strip()
+                        try:
+                            active_theme = set_theme(new_theme_name)
+                            prompt_session.theme = active_theme
+                            console.print(
+                                f"\n[bold green]✔ UI theme changed to[/bold green] [bold {active_theme.primary}]'{active_theme.name}'[/bold {active_theme.primary}]!\n"
+                            )
+                        except Exception as exc:
+                            console.print(f"[bold red]Theme error:[/bold red] {exc}")
+                    else:
+                        table = Table(
+                            title="Available UI Color Themes",
+                            show_header=True,
+                            header_style=f"bold {active_theme.primary}",
+                        )
+                        table.add_column("Theme", style="bold", width=14)
+                        table.add_column("Swatch", width=14)
+                        table.add_column("Hex", width=12)
+                        table.add_column("Description")
+                        table.add_column("Status", width=12)
+                        for th_name, th in list_themes().items():
+                            is_active = th_name == active_theme.name
+                            status = (
+                                "[bold green]✔ active[/bold green]"
+                                if is_active
+                                else "[dim]available[/dim]"
+                            )
+                            table.add_row(
+                                f"[{th.primary}]{th.name}[/{th.primary}]",
+                                f"[{th.primary}]████████[/{th.primary}]",
+                                th.primary,
+                                th.description,
+                                status,
+                            )
+                        console.print(table)
+                        console.print(
+                            f"[dim]* Type [bold {active_theme.primary}]/theme <name_or_hex>[/bold {active_theme.primary}] to switch theme (e.g. /theme cyan or /theme #FF007F).[/dim]\n"
+                        )
                     continue
 
                 if cleaned == "/skills" or cleaned.startswith("/skills "):
@@ -459,10 +511,13 @@ def _run_remote_chat(
                         tokens_used=0,
                         token_budget=128000,
                         remote_url=server_url,
+                        theme=active_theme,
                     )
                     continue
 
-                observer = RichAgentObserver(console=console, stream_tokens=True)
+                observer = RichAgentObserver(
+                    console=console, stream_tokens=True, theme=active_theme
+                )
                 turn_start = time.monotonic()
 
                 try:
@@ -505,6 +560,7 @@ def _run_remote_chat(
                 session_id=remote_session_id,
                 duration_seconds=max(0.0, time.monotonic() - session_start_time),
                 messages=remote_messages,
+                theme=active_theme,
             )
         finally:
             if should_close:
@@ -524,6 +580,7 @@ def run_chat(
     server_name: str | None = None,
     local: bool = False,
     client: RemoteAgentClient | None = None,
+    theme_name: str | None = None,
 ) -> None:
     """Execute the interactive chat REPL loop."""
     console = console or Console()
@@ -549,6 +606,7 @@ def run_chat(
             client=client,
             cfg=cfg,
             cfg_manager=cfg_manager,
+            theme_name=theme_name,
         )
         return
 
@@ -585,6 +643,7 @@ def run_chat(
         raise
 
     session_start_time = time.monotonic()
+    active_theme = get_theme(theme_name)
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
         total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
@@ -595,6 +654,7 @@ def run_chat(
             session_id=session.id,
             tokens_used=total_tokens,
             token_budget=getattr(cfg, "max_tokens_budget", 128000),
+            theme=active_theme,
         )
 
         # Load existing messages for context and replay if resumed
@@ -630,15 +690,15 @@ def run_chat(
             console.print()
 
         prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
-        prompt_session = InteractivePrompt(console=console, stdin=stdin)
+        prompt_session = InteractivePrompt(console=console, stdin=stdin, theme=active_theme)
 
         while True:
             total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
             token_budget = getattr(cfg, "max_tokens_budget", 128000)
             pct = (total_tokens / token_budget * 100) if token_budget > 0 else 0.0
             status_bar = (
-                f"[bold #C084FC]⚡ {effective_model}[/bold #C084FC] [dim]│[/dim] "
-                f"[bold #E9D5FF]{total_tokens:,}[/bold #E9D5FF][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
+                f"[bold {active_theme.primary}]⚡ {effective_model}[/bold {active_theme.primary}] [dim]│[/dim] "
+                f"[bold {active_theme.secondary}]{total_tokens:,}[/bold {active_theme.secondary}][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
                 f"[dim]LOCAL RUNTIME[/dim] [dim]│[/dim] "
                 f"[dim]/help for commands[/dim]"
             )
@@ -661,17 +721,63 @@ def run_chat(
 
             if cleaned == "/help":
                 table = Table(
-                    title="Available Slash Commands", show_header=True, header_style="bold #C084FC"
+                    title="Available Slash Commands",
+                    show_header=True,
+                    header_style=f"bold {active_theme.primary}",
                 )
-                table.add_column("Command", style="bold #E9D5FF", width=15)
+                table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
                 table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
+                table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
                 table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
                 table.add_row("/clear", "Clear the terminal screen")
                 table.add_row("/session", "Show active session details and message count")
                 table.add_row("/exit", "Exit the chat REPL")
                 console.print(table)
+                continue
+
+            if cleaned == "/theme" or cleaned.startswith("/theme "):
+                parts = cleaned.split(maxsplit=1)
+                if len(parts) > 1 and parts[1].strip():
+                    new_theme_name = parts[1].strip()
+                    try:
+                        active_theme = set_theme(new_theme_name)
+                        prompt_session.theme = active_theme
+                        console.print(
+                            f"\n[bold green]✔ UI theme changed to[/bold green] [bold {active_theme.primary}]'{active_theme.name}'[/bold {active_theme.primary}]!\n"
+                        )
+                    except Exception as exc:
+                        console.print(f"[bold red]Theme error:[/bold red] {exc}")
+                else:
+                    table = Table(
+                        title="Available UI Color Themes",
+                        show_header=True,
+                        header_style=f"bold {active_theme.primary}",
+                    )
+                    table.add_column("Theme", style="bold", width=14)
+                    table.add_column("Swatch", width=14)
+                    table.add_column("Hex", width=12)
+                    table.add_column("Description")
+                    table.add_column("Status", width=12)
+                    for th_name, th in list_themes().items():
+                        is_active = th_name == active_theme.name
+                        status = (
+                            "[bold green]✔ active[/bold green]"
+                            if is_active
+                            else "[dim]available[/dim]"
+                        )
+                        table.add_row(
+                            f"[{th.primary}]{th.name}[/{th.primary}]",
+                            f"[{th.primary}]████████[/{th.primary}]",
+                            th.primary,
+                            th.description,
+                            status,
+                        )
+                    console.print(table)
+                    console.print(
+                        f"[dim]* Type [bold {active_theme.primary}]/theme <name_or_hex>[/bold {active_theme.primary}] to switch theme (e.g. /theme cyan or /theme #FF007F).[/dim]\n"
+                    )
                 continue
 
             if cleaned == "/skills" or cleaned.startswith("/skills "):
@@ -783,6 +889,7 @@ def run_chat(
                     session_id=session.id,
                     tokens_used=total_tokens,
                     token_budget=getattr(cfg, "max_tokens_budget", 128000),
+                    theme=active_theme,
                 )
                 continue
 
@@ -791,7 +898,9 @@ def run_chat(
             prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
 
             # Stream assistant response
-            observer = RichAgentObserver(console=console, stream_tokens=True)
+            observer = RichAgentObserver(
+                console=console, stream_tokens=True, theme=active_theme
+            )
 
             def on_chat_message(msg: PromptMessage) -> None:
                 session_mgr.append_message(
@@ -865,4 +974,5 @@ def run_chat(
             session_id=session.id,
             duration_seconds=max(0.0, time.monotonic() - session_start_time),
             messages=session_messages,
+            theme=active_theme,
         )

@@ -217,3 +217,25 @@ def test_pull_skill_from_git_repo(tmp_path: Path):
     assert dest_file.is_file()
 
 
+def test_pull_skill_pasted_command_wrapper(tmp_path: Path):
+    """pull_skill handles pasted strings like 'npx skills@latest add owner/repo --skill=foo'."""
+    from unittest.mock import patch
+    from icarus_core.skills import pull_skill
+
+    ws = tmp_path / "my-workspace"
+    ws.mkdir()
+
+    # Mock _pull_from_git_repo to verify clean_source and skill_name passed
+    with patch("icarus_core.skills._pull_from_git_repo") as mock_git:
+        mock_git.return_value = []
+        pull_skill(
+            source="npx skills@latest add mattpocock/skills --skill=grill-with-docs",
+            workspace_dir=ws,
+        )
+        mock_git.assert_called_once()
+        args, kwargs = mock_git.call_args
+        assert args[0] == "https://github.com/mattpocock/skills.git"
+        assert kwargs["skill_name"] == "grill-with-docs"
+
+
+

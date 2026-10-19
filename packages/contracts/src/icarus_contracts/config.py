@@ -75,3 +75,8 @@ class IcarusConfig(BaseModel):
         default=None,
         description="Name of the currently active remote server profile",
     )
+    theme: str = Field(
+        default="purple",
+        description="UI accent color theme (purple, cyan, green, amber, red, blue, pink, or custom hex)",
+    )
+

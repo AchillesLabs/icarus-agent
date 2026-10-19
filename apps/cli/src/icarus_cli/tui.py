@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from icarus_core.paths import get_icarus_home
+from icarus_core.theme import UITheme, get_theme
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
@@ -89,10 +90,10 @@ class AlternateScreenBuffer:
         self.exit()
 
 
-ICARUS_BANNER = """[bold #C084FC]█ █▀▀ ▄▀█ █▀█ █░█ █▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄░█ ▀█▀
-█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█ ░░ █▀█ █▄█ ██▄ █░▀█ ░█░[/bold #C084FC]"""
+BANNER_ART = """█ █▀▀ ▄▀█ █▀█ █░█ █▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄░█ ▀█▀
+█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█ ░░ █▀█ █▄█ ██▄ █░▀█ ░█░"""
 
-ICARUS_SPRITE = """[bold #C084FC]
+SPRITE_ART = """
   ▄▄                     ▄▄
  █▀██▄   ▄▄       ▄▄   ▄██▀█
  ██ ███▄  ▀█▄   ▄█▀  ▄███ ██
@@ -101,7 +102,21 @@ ICARUS_SPRITE = """[bold #C084FC]
     ▀███████████████████▀
        ▀█████████████▀
           ▀███████▀
-             ▀█▀[/bold #C084FC]"""
+             ▀█▀"""
+
+
+def get_banner(theme: UITheme | None = None) -> str:
+    th = theme or get_theme()
+    return f"[bold {th.primary}]{BANNER_ART}[/bold {th.primary}]"
+
+
+def get_sprite(theme: UITheme | None = None) -> str:
+    th = theme or get_theme()
+    return f"[bold {th.primary}]{SPRITE_ART}[/bold {th.primary}]"
+
+
+ICARUS_BANNER = get_banner()
+ICARUS_SPRITE = get_sprite()
 
 
 def render_workspace_header(
@@ -113,8 +128,10 @@ def render_workspace_header(
     token_budget: int = 128000,
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
+    theme: UITheme | None = None,
 ) -> None:
-    """Render the Hermes-style top status dashboard with purple accent and dynamic skills."""
+    """Render the top status dashboard with customizable theme accent and dynamic skills."""
+    th = theme or get_theme()
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
 
     try:
@@ -125,15 +142,15 @@ def render_workspace_header(
     status_badge = (
         f"[bold cyan]REMOTE ({remote_url})[/bold cyan]"
         if remote_url
-        else "[bold #C084FC]LOCAL RUNTIME[/bold #C084FC]"
+        else f"[bold {th.primary}]LOCAL RUNTIME[/bold {th.primary}]"
     )
     tokens_info = (
-        f"[bold #E9D5FF]{tokens_used:,}[/bold #E9D5FF] / "
+        f"[bold {th.secondary}]{tokens_used:,}[/bold {th.secondary}] / "
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
     meta_text = (
-        f"[bold #E9D5FF]{model}[/bold #E9D5FF] [dim]· {provider}[/dim]\n"
+        f"[bold {th.secondary}]{model}[/bold {th.secondary}] [dim]· {provider}[/dim]\n"
         f"[dim]{cwd}[/dim]\n"
         f"[dim]Session: {session_id}[/dim]"
     )
@@ -156,21 +173,22 @@ def render_workspace_header(
         skills_line = "None loaded (.agents/skills/)"
 
     right_text = (
-        "[bold #C084FC]Available Tools[/bold #C084FC]\n"
+        f"[bold {th.primary}]Available Tools[/bold {th.primary}]\n"
         "[dim]file: read, write, search\n"
         "shell: run_command\n"
         "web: web_search, fetch_webpage\n"
         "system: location, reminders (8 tools)[/dim]\n\n"
-        "[bold #C084FC]Available Skills[/bold #C084FC]\n"
+        f"[bold {th.primary}]Available Skills[/bold {th.primary}]\n"
         f"[dim]{skills_line}[/dim]\n\n"
-        "[bold #C084FC]Shortcuts[/bold #C084FC]\n"
-        "[bold #C084FC]/help[/bold #C084FC] [dim]Commands[/dim] · "
-        "[bold #C084FC]/skills[/bold #C084FC] [dim]Skills[/dim] · "
-        "[bold #C084FC]/models[/bold #C084FC] [dim]Switch[/dim]"
+        f"[bold {th.primary}]Shortcuts[/bold {th.primary}]\n"
+        f"[bold {th.primary}]/help[/bold {th.primary}] [dim]Commands[/dim] · "
+        f"[bold {th.primary}]/skills[/bold {th.primary}] [dim]Skills[/dim] · "
+        f"[bold {th.primary}]/theme[/bold {th.primary}] [dim]Colors[/dim] · "
+        f"[bold {th.primary}]/models[/bold {th.primary}] [dim]Switch[/dim]"
     )
 
     left_table = Table.grid(padding=(0, 0))
-    left_table.add_row(ICARUS_SPRITE)
+    left_table.add_row(get_sprite(th))
     left_table.add_row(meta_text)
 
     main_grid = Table.grid(padding=(0, 3))
@@ -180,18 +198,18 @@ def render_workspace_header(
 
     panel = Panel(
         main_grid,
-        border_style="#A855F7",
-        title=f"[bold #E9D5FF]─── ICARUS AGENT CHAT v{__version__} ───[/bold #E9D5FF]",
+        border_style=th.border,
+        title=f"[bold {th.secondary}]─── ICARUS AGENT CHAT v{__version__} ───[/bold {th.secondary}]",
         subtitle=f"[dim]{mode}  •  {status_badge}  •  {tokens_info}[/dim]",
         padding=(0, 1),
     )
 
     console.print()
-    console.print(ICARUS_BANNER)
+    console.print(get_banner(th))
     console.print()
     console.print(panel)
     console.print(
-        "[dim]Welcome to Icarus Agent! Type your message or [bold #C084FC]/help[/bold #C084FC] for commands.[/dim]"
+        f"[dim]Welcome to Icarus Agent! Type your message or [bold {th.primary}]/help[/bold {th.primary}] for commands.[/dim]"
     )
     console.print(
         "[dim]* Tip: Icarus can search live flights, weather, compare prices, edit code, and manage tasks.[/dim]"
@@ -217,10 +235,12 @@ class InteractivePrompt:
         console: Console | None = None,
         stdin: TextIO | None = None,
         history_file: Path | None = None,
+        theme: UITheme | None = None,
     ) -> None:
         self.console = console or Console()
         self.stdin = stdin or sys.stdin
         self.history_path = history_file or get_history_file()
+        self.theme = theme or get_theme()
         self._session: PromptSession[str] | None = None
 
         if self.is_interactive:
@@ -259,17 +279,26 @@ class InteractivePrompt:
     def read_input(self, prompt_text: str = "> ", rprompt_text: str | None = None) -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
-            formatted_prompt = HTML(f"<b><ansimagenta>{prompt_text}</ansimagenta></b>")
+            formatted_prompt = HTML(
+                f"<b><{self.theme.prompt_ansi}>{prompt_text}</{self.theme.prompt_ansi}></b>"
+            )
             rprompt = HTML(f"<ansigray>{rprompt_text}</ansigray>") if rprompt_text else None
             return self._session.prompt(formatted_prompt, rprompt=rprompt)
 
         # Fallback for non-interactive runners or redirected stdin
         if hasattr(self.console, "input") and self.stdin is sys.stdin:
             try:
-                return self.console.input(f"[bold #C084FC]{prompt_text}[/bold #C084FC]")
+                return self.console.input(
+                    f"[bold {self.theme.primary}]{prompt_text}[/bold {self.theme.primary}]"
+                )
             except EOFError:
                 raise
         line = self.stdin.readline()
         if not line:
             raise EOFError
         return line.rstrip("\r\n")
+
+
+# Alias for backwards compatibility
+IcarusInputPrompt = InteractivePrompt
+

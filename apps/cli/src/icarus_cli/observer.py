@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TextIO
 
 from icarus_contracts.tools import ToolCall, ToolResult
+from icarus_core.theme import UITheme, get_theme
 from rich.console import Console
 from rich.panel import Panel
 
@@ -20,10 +21,12 @@ class RichAgentObserver:
         console: Console | None = None,
         stdout: TextIO | None = None,
         stream_tokens: bool = True,
+        theme: UITheme | None = None,
     ) -> None:
         self.console = console or Console()
         self.stdout = stdout
         self.stream_tokens = stream_tokens
+        self.theme = theme or get_theme()
         self._current_status = None
         self._active_step_lines = 0
         self._assistant_header_printed = False
@@ -37,7 +40,7 @@ class RichAgentObserver:
                 self.stdout.write("\n● Icarus\n")
                 self.stdout.flush()
             else:
-                self.console.print("\n[bold #C084FC]● Icarus[/bold #C084FC]")
+                self.console.print(f"\n[bold {self.theme.primary}]● Icarus[/bold {self.theme.primary}]")
             self._assistant_header_printed = True
 
         cleaned_delta = delta.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")

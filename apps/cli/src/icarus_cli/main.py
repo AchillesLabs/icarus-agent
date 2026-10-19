@@ -39,6 +39,7 @@ from icarus_cli.run import execute_run
 from icarus_cli.server_cmd import server_app
 from icarus_cli.sessions_view import render_session_history, render_sessions_table
 from icarus_cli.skills_cmd import skills_app
+from icarus_cli.theme_cmd import theme_app
 from icarus_cli.token_cmd import token_app
 from icarus_cli.vault_cmd import vault_app
 
@@ -80,6 +81,7 @@ app.add_typer(vault_app, name="vault")
 app.add_typer(token_app, name="token")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(skills_app, name="skills")
+app.add_typer(theme_app, name="theme")
 
 console = Console()
 
@@ -408,6 +410,13 @@ def chat_cmd(
             "--local", help="Force local agent execution even if a remote server is active."
         ),
     ] = False,
+    theme: Annotated[
+        str | None,
+        typer.Option(
+            "--theme",
+            help="Override UI color theme (purple, cyan, green, amber, red, blue, pink, or custom hex).",
+        ),
+    ] = None,
 ) -> None:
     """Launch an interactive streaming chat REPL session."""
     target_session = session or session_arg
@@ -433,6 +442,7 @@ def chat_cmd(
             remote=remote,
             server_name=server,
             local=local,
+            theme_name=theme,
         )
     except ValueError as exc:
         raise typer.Exit(code=1) from exc

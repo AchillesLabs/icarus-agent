@@ -328,6 +328,31 @@ def pull_skill(
     if not clean_source:
         raise ValueError("Source cannot be empty.")
 
+    # Strip pasted command wrappers like `npx skills@latest add` or `icarus skills add`
+    clean_source = re.sub(
+        r"^(?:npx\s+)?skills(?:@\S+)?\s+add\s+", "", clean_source, flags=re.IGNORECASE
+    ).strip()
+    clean_source = re.sub(
+        r"^(?:icarus\s+)?skills\s+(?:pull|install|add)\s+", "", clean_source, flags=re.IGNORECASE
+    ).strip()
+
+    # Extract embedded --skill=... or --skill ...
+    skill_arg_match = re.search(r"--skill[=\s]+([^\s]+)", clean_source)
+    if skill_arg_match:
+        if not skill_name:
+            skill_name = skill_arg_match.group(1).strip("\"'")
+        clean_source = re.sub(r"--skill[=\s]+[^\s]+", "", clean_source).strip()
+
+    # Extract embedded -f or --overwrite
+    if re.search(r"(?:^|\s)(-f|--overwrite)(?:\s|$)", clean_source):
+        overwrite = True
+        clean_source = re.sub(r"(?:^|\s)(-f|--overwrite)(?:\s|$)", " ", clean_source).strip()
+
+    # Extract embedded -g or --global
+    if re.search(r"(?:^|\s)(-g|--global)(?:\s|$)", clean_source):
+        global_scope = True
+        clean_source = re.sub(r"(?:^|\s)(-g|--global)(?:\s|$)", " ", clean_source).strip()
+
     if global_scope:
         target_base_dir = get_icarus_skills_dir()
         target_scope = "global"

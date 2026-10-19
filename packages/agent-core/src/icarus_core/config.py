@@ -54,6 +54,7 @@ class ConfigManager:
             f"safety_margin_tokens = {config.safety_margin_tokens}",
             f"output_reserve_tokens = {config.output_reserve_tokens}",
             f"compaction_threshold = {config.compaction_threshold}",
+            f'theme = "{config.theme}"',
         ]
         if config.active_server:
             lines.append(f'active_server = "{config.active_server}"')
