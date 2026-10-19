@@ -51,7 +51,7 @@ class RichAgentObserver:
         if "location" in lower:
             return (
                 "Resolving location",
-                "Querying high-precision OS WiFi/GPS telemetry...",
+                f"Querying high-precision OS WiFi/GPS telemetry ({name})...",
                 "Resolved location",
             )
         if "command" in lower or lower in ("bash", "sh", "terminal", "exec"):
@@ -61,23 +61,30 @@ class RichAgentObserver:
                 short_cmd = short_cmd[:47] + "..."
             return (
                 "Running command",
-                f"$ {short_cmd}" if short_cmd else "Executing shell command...",
-                f"Ran {short_cmd}" if short_cmd else "Ran command",
+                f"$ {short_cmd} ({name})"
+                if short_cmd
+                else f"Executing shell command via {name}...",
+                f"Ran {short_cmd}" if short_cmd else f"Ran {name}",
             )
         if "view_file" in lower or "read_file" in lower or "read_url_content" in lower:
             target = str(args.get("path") or args.get("AbsolutePath") or args.get("Url") or "")
             short_target = target.replace("\\", "/").split("/")[-1] if target else "file"
             return (
                 f"Reading {short_target}",
-                f"{target}" if target else "Reading file contents...",
+                f"{name}: {target}" if target else f"Reading file contents via {name}...",
                 f"Read {short_target}",
             )
-        if "edit" in lower or "write_to_file" in lower or "replace_file" in lower:
+        if (
+            "edit" in lower
+            or "write_to_file" in lower
+            or "replace_file" in lower
+            or "write_file" in lower
+        ):
             target = str(args.get("path") or args.get("TargetFile") or "")
             short_target = target.replace("\\", "/").split("/")[-1] if target else "file"
             return (
                 f"Editing {short_target}",
-                f"{target}" if target else "Applying modifications...",
+                f"{name}: {target}" if target else f"Applying modifications via {name}...",
                 f"Edited {short_target}",
             )
         if "search" in lower:
@@ -85,14 +92,14 @@ class RichAgentObserver:
             short_q = f'"{q}"' if q else "web"
             return (
                 f"Searching web for {short_q}",
-                "Querying web intelligence...",
+                f"Querying web intelligence ({name})...",
                 f"Searched {short_q}",
             )
         if "fetch" in lower or "browser" in lower:
             url = str(args.get("url") or args.get("Url") or "")
             return (
                 "Fetching webpage",
-                f"{url}" if url else "Navigating...",
+                f"{name}: {url}" if url else f"Navigating via {name}...",
                 "Fetched webpage",
             )
 

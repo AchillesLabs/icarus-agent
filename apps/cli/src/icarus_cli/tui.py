@@ -18,6 +18,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from icarus_cli import __version__
@@ -135,7 +136,10 @@ def render_workspace_header(
         f"[dim]{cwd}[/dim]\n\n"
         f"[dim]Runtime:[/dim] {status_badge}   {tokens_info}\n"
         f"[dim]{mode}[/dim]\n"
-        "[dim]Commands:[/dim] [bold cyan]/help[/bold cyan] [dim]manual[/dim]  [dim]·[/dim]  [bold cyan]/models[/bold cyan] [dim]switch[/dim]  [dim]·[/dim]  [bold cyan]/clear[/bold cyan]  [dim]·[/dim]  [bold cyan]/exit[/bold cyan]"
+        "[dim]Shortcuts:[/dim] [bold cyan]Ctrl+C[/bold cyan] Cancel  [dim]·[/dim]  "
+        "[bold cyan]Ctrl+D /exit[/bold cyan] Quit  [dim]·[/dim]  "
+        "[bold cyan]/help[/bold cyan] Commands  [dim]·[/dim]  "
+        "[bold cyan]/models[/bold cyan] Switch Model"
     )
 
     table = Table.grid(padding=(0, 2))
@@ -143,18 +147,17 @@ def render_workspace_header(
     table.add_column()
     table.add_row(ICARUS_SPRITE.strip("\n"), right_content)
 
-    console.print()
-    console.print(table)
-    console.print()
+    boxed_header = Panel(
+        table,
+        border_style="cyan",
+        title="[bold gold1]⚔ Achilles Vanguard[/bold gold1]",
+        subtitle="[dim]CLI Autonomous Personal Agent[/dim]",
+        padding=(1, 2),
+    )
 
-    # Fill vertical space so input area sits pinned at bottom like Claude Code
-    try:
-        rows = shutil.get_terminal_size().lines
-        padding = max(0, rows - 13)
-        if padding > 0:
-            console.print("\n" * (padding - 1))
-    except Exception:
-        pass
+    console.print()
+    console.print(boxed_header)
+    console.print()
 
 
 def get_history_file() -> Path:
@@ -193,7 +196,7 @@ class InteractivePrompt:
             return False
 
     def _init_prompt_toolkit(self) -> None:
-        """Initialize prompt_toolkit PromptSession with custom keybindings and toolbar."""
+        """Initialize prompt_toolkit PromptSession with custom keybindings."""
         kb = KeyBindings()
 
         @kb.add("c-c")
@@ -206,23 +209,10 @@ class InteractivePrompt:
                 event.cli.output.write("\n")
                 raise KeyboardInterrupt
 
-        def _bottom_toolbar() -> HTML:
-            cols = shutil.get_terminal_size().columns
-            divider = "─" * max(10, cols - 1)
-            return HTML(
-                f"<ansigray>{divider}</ansigray>\n"
-                " <b><ansiyellow>⚔ Achilles Vanguard</ansiyellow></b>  │  "
-                "<b>[Ctrl+C]</b> Cancel  │  "
-                "<b>[Ctrl+D /exit]</b> Quit  │  "
-                "<b>[/help]</b> Commands  │  "
-                "<b>[/models]</b> Switch Model "
-            )
-
         try:
             self._session = PromptSession(
                 history=FileHistory(str(self.history_path)),
                 key_bindings=kb,
-                bottom_toolbar=_bottom_toolbar,
             )
         except Exception:
             self._session = None
