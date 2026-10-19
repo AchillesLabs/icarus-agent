@@ -139,21 +139,18 @@ def render_workspace_header(
 
     right_text = (
         "[bold gold1]Available Tools[/bold gold1]\n"
-        "[dim]  file: read_file, write_file, search\n"
-        "  shell: run_command\n"
-        "  web: web_search, fetch_webpage\n"
-        "  system: get_current_location, reminders\n"
-        "  (8 tools)[/dim]\n\n"
+        "[dim]file: read, write, search\n"
+        "shell: run_command\n"
+        "web: web_search, fetch_webpage\n"
+        "system: location, reminders (8 tools)[/dim]\n\n"
         "[bold gold1]Available Skills[/bold gold1]\n"
-        "[dim]  architecture: codebase-design, code-review\n"
-        "  diagnostics: diagnosing-bugs\n"
-        "  research: research\n"
-        "  development: tdd, writing-for-agents\n"
-        "  (6 skills)[/dim]\n\n"
+        "[dim]architecture: codebase-design, review\n"
+        "diagnostics: diagnosing-bugs\n"
+        "dev: tdd, writing-for-agents (6 skills)[/dim]\n\n"
         "[bold gold1]Shortcuts[/bold gold1]\n"
-        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim]  ·  "
-        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim]  ·  "
-        "[bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim]  ·  "
+        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim] · "
+        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim] · "
+        "[bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim] · "
         "[bold cyan]/exit[/bold cyan] [dim]Quit[/dim]"
     )
 
@@ -161,7 +158,7 @@ def render_workspace_header(
     left_table.add_row(ICARUS_SPRITE)
     left_table.add_row(meta_text)
 
-    main_grid = Table.grid(padding=(0, 4))
+    main_grid = Table.grid(padding=(0, 3))
     main_grid.add_column()
     main_grid.add_column()
     main_grid.add_row(left_table, right_text)
@@ -171,7 +168,7 @@ def render_workspace_header(
         border_style="gold1",
         title=f"[bold gold1]─── ICARUS AGENT CHAT v{__version__} ───[/bold gold1]",
         subtitle=f"[dim]{mode}  •  {status_badge}  •  {tokens_info}[/dim]",
-        padding=(1, 2),
+        padding=(0, 1),
     )
 
     console.print()
