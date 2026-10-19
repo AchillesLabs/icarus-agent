@@ -57,6 +57,55 @@ def _render_timing_banner(elapsed: float) -> str:
     return f"[dim]⚔ {verb} {elapsed_str} · done {time_str}[/dim]\n"
 
 
+def format_duration(seconds: float) -> str:
+    """Format duration in seconds into human-readable string (e.g. 42m 16s, 12s)."""
+    total_sec = max(0, int(seconds))
+    if total_sec >= 3600:
+        h = total_sec // 3600
+        m = (total_sec % 3600) // 60
+        s = total_sec % 60
+        return f"{h}h {m}m {s}s"
+    if total_sec >= 60:
+        m = total_sec // 60
+        s = total_sec % 60
+        return f"{m}m {s}s"
+    return f"{total_sec}s"
+
+
+def render_shutdown_summary(
+    console: Console,
+    session_id: str,
+    duration_seconds: float,
+    messages: list[Any],
+) -> None:
+    """Render Hermes-style session finalization and shutdown summary."""
+    user_count = 0
+    tool_count = 0
+    for m in messages:
+        role = getattr(m, "role", "")
+        role_val = role.value if hasattr(role, "value") else str(role)
+        if role_val in (MessageRole.USER.value, "user"):
+            user_count += 1
+        elif role_val in (MessageRole.TOOL.value, "tool"):
+            tool_count += 1
+        elif getattr(m, "tool_calls", None):
+            tool_count += len(m.tool_calls)
+
+    total_msgs = len(messages)
+    tool_label = "tool call" if tool_count == 1 else "tool calls"
+    duration_str = format_duration(duration_seconds)
+
+    console.print()
+    console.print("[dim]Exiting chat session. Goodbye![/dim]")
+    console.rule(style="dim")
+    console.print("[dim]Shutting down… (finalizing session)[/dim]\n")
+    console.print("Resume this session with:")
+    console.print(f"  [bold cyan]icarus chat --resume {session_id}[/bold cyan]\n")
+    console.print(f"{'Session:':<16}{session_id}")
+    console.print(f"{'Duration:':<16}{duration_str}")
+    console.print(f"{'Messages:':<16}{total_msgs} ({user_count} user, {tool_count} {tool_label})\n")
+
+
 class ChatSessionManager:
     """Manages session resolution, loading, and persistence for chat REPL."""
 
@@ -238,6 +287,7 @@ def _run_remote_chat(
             asyncio.run(remote_client.close())
         raise ValueError(str(exc)) from exc
 
+    session_start_time = time.monotonic()
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
         render_workspace_header(
@@ -302,7 +352,6 @@ def _run_remote_chat(
                         "> ", rprompt_text=f"{effective_model} · {effective_provider}"
                     )
                 except (KeyboardInterrupt, EOFError):
-                    console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                     break
 
                 cleaned = user_input.strip()
@@ -312,7 +361,6 @@ def _run_remote_chat(
                     continue
 
                 if cleaned in ("/exit", "/quit"):
-                    console.print("[dim]Exiting chat session. Goodbye![/dim]")
                     break
 
                 if cleaned == "/help":
@@ -389,6 +437,17 @@ def _run_remote_chat(
                         )
                     )
                     continue
+
+            try:
+                remote_messages = asyncio.run(remote_client.list_messages(remote_session_id))
+            except Exception:
+                remote_messages = []
+            render_shutdown_summary(
+                console=console,
+                session_id=remote_session_id,
+                duration_seconds=max(0.0, time.monotonic() - session_start_time),
+                messages=remote_messages,
+            )
         finally:
             if should_close:
                 asyncio.run(remote_client.close())
@@ -467,6 +526,7 @@ def run_chat(
         )
         raise
 
+    session_start_time = time.monotonic()
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
         total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
@@ -530,7 +590,6 @@ def run_chat(
                     "> ", rprompt_text=f"{effective_model} · {effective_provider}"
                 )
             except (KeyboardInterrupt, EOFError):
-                console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                 break
 
             cleaned = user_input.strip()
@@ -540,7 +599,6 @@ def run_chat(
                 continue
 
             if cleaned in ("/exit", "/quit"):
-                console.print("[dim]Exiting chat session. Goodbye![/dim]")
                 break
 
             if cleaned == "/help":
@@ -678,3 +736,11 @@ def run_chat(
                     )
                 )
                 continue
+
+        session_messages = session_mgr.get_messages(session.id)
+        render_shutdown_summary(
+            console=console,
+            session_id=session.id,
+            duration_seconds=max(0.0, time.monotonic() - session_start_time),
+            messages=session_messages,
+        )

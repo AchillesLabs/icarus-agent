@@ -358,6 +358,10 @@ def models_cmd(
 
 @app.command(name="chat")
 def chat_cmd(
+    session_arg: Annotated[
+        str | None,
+        typer.Argument(help="Optional session ID to resume or load."),
+    ] = None,
     resume: Annotated[
         bool,
         typer.Option("--resume", "-r", help="Resume the most recent conversation session."),
@@ -404,6 +408,9 @@ def chat_cmd(
     ] = False,
 ) -> None:
     """Launch an interactive streaming chat REPL session."""
+    target_session = session or session_arg
+    should_resume = resume or bool(target_session)
+
     if local or (not remote and not server and ConfigManager().get_active_server() is None):
         ensure_database_migrated()
 
@@ -416,8 +423,8 @@ def chat_cmd(
         run_chat(
             provider_name=provider,
             model_name=model,
-            session_id=session,
-            resume=resume,
+            session_id=target_session,
+            resume=should_resume,
             temperature=temperature,
             auto_approve=auto_approve,
             console=console,
