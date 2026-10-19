@@ -100,7 +100,7 @@ def render_shutdown_summary(
     console.rule(style="dim")
     console.print("[dim]Shutting down… (finalizing session)[/dim]\n")
     console.print("Resume this session with:")
-    console.print(f"  [bold cyan]icarus chat --resume {session_id}[/bold cyan]\n")
+    console.print(f"  [bold #C084FC]icarus chat --resume {session_id}[/bold #C084FC]\n")
     console.print(f"{'Session:':<16}{session_id}")
     console.print(f"{'Duration:':<16}{duration_str}")
     console.print(f"{'Messages:':<16}{total_msgs} ({user_count} user, {tool_count} {tool_label})\n")
@@ -342,7 +342,7 @@ def _run_remote_chat(
         try:
             while True:
                 status_bar = (
-                    f"[bold gold1]⚡ {effective_model}[/bold gold1] [dim]│[/dim] "
+                    f"[bold #C084FC]⚡ {effective_model}[/bold #C084FC] [dim]│[/dim] "
                     f"[dim]REMOTE ({server_label})[/dim] [dim]│[/dim] "
                     f"[dim]/help for commands[/dim]"
                 )
@@ -579,8 +579,8 @@ def run_chat(
             token_budget = getattr(cfg, "max_tokens_budget", 128000)
             pct = (total_tokens / token_budget * 100) if token_budget > 0 else 0.0
             status_bar = (
-                f"[bold gold1]⚡ {effective_model}[/bold gold1] [dim]│[/dim] "
-                f"[yellow]{total_tokens:,}[/yellow][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
+                f"[bold #C084FC]⚡ {effective_model}[/bold #C084FC] [dim]│[/dim] "
+                f"[bold #E9D5FF]{total_tokens:,}[/bold #E9D5FF][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
                 f"[dim]LOCAL RUNTIME[/dim] [dim]│[/dim] "
                 f"[dim]/help for commands[/dim]"
             )
@@ -603,16 +603,46 @@ def run_chat(
 
             if cleaned == "/help":
                 table = Table(
-                    title="Available Slash Commands", show_header=True, header_style="bold cyan"
+                    title="Available Slash Commands", show_header=True, header_style="bold #C084FC"
                 )
-                table.add_column("Command", style="bold yellow", width=15)
+                table.add_column("Command", style="bold #E9D5FF", width=15)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
+                table.add_row("/skills", "List and inspect available local and global skills")
                 table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
                 table.add_row("/clear", "Clear the terminal screen")
                 table.add_row("/session", "Show active session details and message count")
                 table.add_row("/exit", "Exit the chat REPL")
                 console.print(table)
+                continue
+
+            if cleaned == "/skills":
+                from icarus_core.skills import discover_skills
+
+                skills_list = discover_skills(Path.cwd())
+                table = Table(
+                    title="Available Skills", show_header=True, header_style="bold #C084FC"
+                )
+                table.add_column("Skill Name", style="bold #E9D5FF", width=22)
+                table.add_column("Scope", style="dim", width=12)
+                table.add_column("Description")
+                if not skills_list:
+                    table.add_row(
+                        "No skills loaded",
+                        "-",
+                        "Add a folder with SKILL.md to .agents/skills/ or ~/.icarus/skills/",
+                    )
+                else:
+                    for sk in skills_list:
+                        desc_snip = sk.description[:80] + (
+                            "..." if len(sk.description) > 80 else ""
+                        )
+                        table.add_row(sk.name, sk.scope, desc_snip)
+                console.print(table)
+                console.print(
+                    "[dim]* To create a skill, add a folder with a [bold #C084FC]SKILL.md[/bold #C084FC] to "
+                    "[bold #E9D5FF].agents/skills/<name>/[/bold #E9D5FF] or run [bold #C084FC]icarus skills new <name>[/bold #C084FC].[/dim]\n"
+                )
                 continue
 
             if cleaned == "/models":

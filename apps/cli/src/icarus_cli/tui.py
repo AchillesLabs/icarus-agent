@@ -89,18 +89,19 @@ class AlternateScreenBuffer:
         self.exit()
 
 
-ICARUS_BANNER = """[bold gold1]█ █▀▀ ▄▀█ █▀█ █░█ █▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄░█ ▀█▀
-█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█ ░░ █▀█ █▄█ ██▄ █░▀█ ░█░[/bold gold1]"""
+ICARUS_BANNER = """[bold #C084FC]█ █▀▀ ▄▀█ █▀█ █░█ █▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄░█ ▀█▀
+█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█ ░░ █▀█ █▄█ ██▄ █░▀█ ░█░[/bold #C084FC]"""
 
-ICARUS_SPRITE = """[bold gold1]
-       ,▄▄████▄▄,
-   ▄▄██████████████▄▄
-  ▀▀▀████▀▀██▀▀████▀▀▀
-    ▄██▀   ██   ▀██▄
-   ▀▀      ██      ▀▀
-           ██
-           ██
-          ▄██▄[/bold gold1]"""
+ICARUS_SPRITE = """[bold #C084FC]
+  ▄▄                     ▄▄
+ █▀██▄   ▄▄       ▄▄   ▄██▀█
+ ██ ███▄  ▀█▄   ▄█▀  ▄███ ██
+ ▀██ ▀███▄ ▀█▄ ▄█▀ ▄███▀ ██▀
+  ▀███▄███████████████▄███▀
+    ▀███████████████████▀
+       ▀█████████████▀
+          ▀███████▀
+             ▀█▀[/bold #C084FC]"""
 
 
 def render_workspace_header(
@@ -113,7 +114,7 @@ def render_workspace_header(
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
 ) -> None:
-    """Render the Hermes-style top status dashboard of the terminal workspace."""
+    """Render the Hermes-style top status dashboard with purple accent and dynamic skills."""
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
 
     try:
@@ -124,34 +125,48 @@ def render_workspace_header(
     status_badge = (
         f"[bold cyan]REMOTE ({remote_url})[/bold cyan]"
         if remote_url
-        else "[bold green]LOCAL RUNTIME[/bold green]"
+        else "[bold #C084FC]LOCAL RUNTIME[/bold #C084FC]"
     )
     tokens_info = (
-        f"[bold yellow]{tokens_used:,}[/bold yellow] / "
+        f"[bold #E9D5FF]{tokens_used:,}[/bold #E9D5FF] / "
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
     meta_text = (
-        f"[bold cyan]{model}[/bold cyan] [dim]· {provider}[/dim]\n"
+        f"[bold #E9D5FF]{model}[/bold #E9D5FF] [dim]· {provider}[/dim]\n"
         f"[dim]{cwd}[/dim]\n"
         f"[dim]Session: {session_id}[/dim]"
     )
 
+    from icarus_core.skills import discover_skills
+
+    try:
+        discovered_skills = discover_skills(Path(cwd))
+    except Exception:
+        discovered_skills = []
+
+    if discovered_skills:
+        skill_names = [s.name for s in discovered_skills]
+        if len(skill_names) <= 3:
+            skills_preview = ", ".join(skill_names)
+        else:
+            skills_preview = f"{', '.join(skill_names[:3])}, +{len(skill_names) - 3} more"
+        skills_line = f"{skills_preview} ({len(discovered_skills)} skills)"
+    else:
+        skills_line = "None loaded (.agents/skills/)"
+
     right_text = (
-        "[bold gold1]Available Tools[/bold gold1]\n"
+        "[bold #C084FC]Available Tools[/bold #C084FC]\n"
         "[dim]file: read, write, search\n"
         "shell: run_command\n"
         "web: web_search, fetch_webpage\n"
         "system: location, reminders (8 tools)[/dim]\n\n"
-        "[bold gold1]Available Skills[/bold gold1]\n"
-        "[dim]architecture: codebase-design, review\n"
-        "diagnostics: diagnosing-bugs\n"
-        "dev: tdd, writing-for-agents (6 skills)[/dim]\n\n"
-        "[bold gold1]Shortcuts[/bold gold1]\n"
-        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim] · "
-        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim] · "
-        "[bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim] · "
-        "[bold cyan]/exit[/bold cyan] [dim]Quit[/dim]"
+        "[bold #C084FC]Available Skills[/bold #C084FC]\n"
+        f"[dim]{skills_line}[/dim]\n\n"
+        "[bold #C084FC]Shortcuts[/bold #C084FC]\n"
+        "[bold #C084FC]/help[/bold #C084FC] [dim]Commands[/dim] · "
+        "[bold #C084FC]/skills[/bold #C084FC] [dim]Skills[/dim] · "
+        "[bold #C084FC]/models[/bold #C084FC] [dim]Switch[/dim]"
     )
 
     left_table = Table.grid(padding=(0, 0))
@@ -165,8 +180,8 @@ def render_workspace_header(
 
     panel = Panel(
         main_grid,
-        border_style="gold1",
-        title=f"[bold gold1]─── ICARUS AGENT CHAT v{__version__} ───[/bold gold1]",
+        border_style="#A855F7",
+        title=f"[bold #E9D5FF]─── ICARUS AGENT CHAT v{__version__} ───[/bold #E9D5FF]",
         subtitle=f"[dim]{mode}  •  {status_badge}  •  {tokens_info}[/dim]",
         padding=(0, 1),
     )
@@ -176,7 +191,7 @@ def render_workspace_header(
     console.print()
     console.print(panel)
     console.print(
-        "[dim]Welcome to Icarus Agent! Type your message or [bold cyan]/help[/bold cyan] for commands.[/dim]"
+        "[dim]Welcome to Icarus Agent! Type your message or [bold #C084FC]/help[/bold #C084FC] for commands.[/dim]"
     )
     console.print(
         "[dim]* Tip: Icarus can search live flights, weather, compare prices, edit code, and manage tasks.[/dim]"
@@ -244,14 +259,14 @@ class InteractivePrompt:
     def read_input(self, prompt_text: str = "> ", rprompt_text: str | None = None) -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
-            formatted_prompt = HTML(f"<b><ansiyellow>{prompt_text}</ansiyellow></b>")
+            formatted_prompt = HTML(f"<b><ansimagenta>{prompt_text}</ansimagenta></b>")
             rprompt = HTML(f"<ansigray>{rprompt_text}</ansigray>") if rprompt_text else None
             return self._session.prompt(formatted_prompt, rprompt=rprompt)
 
         # Fallback for non-interactive runners or redirected stdin
         if hasattr(self.console, "input") and self.stdin is sys.stdin:
             try:
-                return self.console.input(f"[bold gold1]{prompt_text}[/bold gold1]")
+                return self.console.input(f"[bold #C084FC]{prompt_text}[/bold #C084FC]")
             except EOFError:
                 raise
         line = self.stdin.readline()

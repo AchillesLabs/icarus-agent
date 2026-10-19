@@ -43,3 +43,8 @@ def get_icarus_logs_dir() -> Path:
 def get_icarus_log_file() -> Path:
     """Return path to default cli.log file."""
     return get_icarus_logs_dir() / "cli.log"
+
+
+def get_icarus_skills_dir() -> Path:
+    """Return path to global skills directory (~/.icarus/skills)."""
+    return get_icarus_home() / "skills"
