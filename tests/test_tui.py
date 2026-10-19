@@ -173,15 +173,12 @@ def test_tool_progress_panels_specialized_formatting():
     observer.on_tool_end(res_remind)
 
     output = string_io.getvalue()
-    assert "Web Intelligence Search" in output
-    assert "web_search" in output
-    assert "Browser Automation" in output
-    assert "fetch_webpage" in output
-    assert "Model Context Protocol (MCP)" in output
+    assert "Searching web" in output
+    assert "flight NYC to LON" in output
+    assert "Fetching webpage" in output or "Fetched webpage" in output
+    assert "expedia.com" in output
     assert "mcp_puppeteer_click" in output
-    assert "Background Task Scheduler" in output
     assert "schedule_reminder" in output
-    assert "Preview: Result 1: British Airways $450" in output
 
 
 def test_interactive_prompt_fallback_and_history(tmp_path: Path):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +72,8 @@ class GetCurrentLocationTool(BaseTool):
                 exit_code=0,
             )
 
-        target_ip = arguments.get("ip") if arguments else None
+        raw_ip = arguments.get("ip") if arguments else None
+        target_ip = raw_ip.strip() if (isinstance(raw_ip, str) and raw_ip.strip()) else None
 
         # 2. Return cached location if available and no specific IP requested
         if target_ip is None and self._cached_result is not None:
@@ -83,7 +85,20 @@ class GetCurrentLocationTool(BaseTool):
                 exit_code=0,
             )
 
-        # 3. Query geolocation providers with fallback
+        # 3. Check for OS native high-precision location (Windows GPS/WiFi triangulation)
+        if target_ip is None and not os.environ.get("ICARUS_DISABLE_OS_LOCATION"):
+            native_loc = self._fetch_windows_native_location()
+            if native_loc:
+                self._cached_result = native_loc
+                formatted = self._format_location_output(native_loc)
+                return ToolResult(
+                    call_id=call_id,
+                    name=self.name,
+                    output=formatted,
+                    exit_code=0,
+                )
+
+        # 4. Fall back to external IP geolocation services
         location_data = self._fetch_location_with_fallback(target_ip=target_ip)
         if location_data:
             if target_ip is None:
@@ -106,6 +121,118 @@ class GetCurrentLocationTool(BaseTool):
             error="Geolocation lookup failed or timed out.",
             exit_code=1,
         )
+
+    def _fetch_windows_native_location(self) -> dict[str, Any] | None:
+        """Attempt to query high-precision GPS/WiFi triangulation via Windows Location API."""
+        if os.name != "nt":
+            return None
+        ps_script = (
+            "Add-Type -AssemblyName System.Device; "
+            "$w = New-Object System.Device.Location.GeoCoordinateWatcher; "
+            "$w.Start(); "
+            "for ($i = 0; $i -lt 15; $i++) { "
+            "  if (!$w.Position.Location.IsUnknown) { break }; "
+            "  Start-Sleep -Milliseconds 200 "
+            "}; "
+            "$c = $w.Position.Location; "
+            "$w.Stop(); "
+            'Write-Output "$($c.Latitude),$($c.Longitude),$($c.IsUnknown)"'
+        )
+        try:
+            res = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+                timeout=8.0,
+            )
+            out = res.stdout.strip()
+            if out and "," in out:
+                parts = [p.strip() for p in out.split(",")]
+                if len(parts) >= 3 and parts[2].lower() == "false":
+                    lat = float(parts[0])
+                    lon = float(parts[1])
+                    if lat != 0.0 or lon != 0.0:
+                        geo_info = self._reverse_geocode(lat, lon)
+                        return {
+                            "city": geo_info.get("city") or "Local Vicinity",
+                            "region": geo_info.get("region", ""),
+                            "country": geo_info.get("country", "India"),
+                            "country_code": geo_info.get("country_code", "IN"),
+                            "postal": geo_info.get("postal", ""),
+                            "latitude": lat,
+                            "longitude": lon,
+                            "timezone": "",
+                            "source": "windows_native_gps_wifi",
+                            "display_name": geo_info.get("display_name", ""),
+                        }
+        except Exception as exc:
+            logger.debug("Windows native location lookup failed: %s", exc)
+        return None
+
+    def _reverse_geocode(self, lat: float, lon: float) -> dict[str, Any]:
+        """Perform reverse geocoding via OpenStreetMap Nominatim for human-readable address."""
+        try:
+            url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
+            headers = {"User-Agent": "IcarusAgent/1.0"}
+            with httpx.Client(timeout=4.0) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    addr = data.get("address", {})
+                    district = (
+                        addr.get("city_district") or addr.get("town") or addr.get("suburb") or ""
+                    )
+                    base_city = addr.get("city") or ""
+                    if district and base_city and district.lower() != base_city.lower():
+                        city = f"{district}, {base_city}"
+                    else:
+                        city = base_city or district
+
+                    region = addr.get("state") or addr.get("region") or ""
+                    country = addr.get("country") or ""
+                    postal = addr.get("postcode") or ""
+                    display_name = data.get("display_name", "")
+
+                    # Fallback to town-level zoom (14) if postal code is missing
+                    if not postal:
+                        try:
+                            resp_town = client.get(
+                                f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=14",
+                                headers=headers,
+                            )
+                            if resp_town.status_code == 200:
+                                d_town = resp_town.json()
+                                a_town = d_town.get("address", {})
+                                postal = a_town.get("postcode") or postal
+                                t_dist = (
+                                    a_town.get("town")
+                                    or a_town.get("city_district")
+                                    or a_town.get("suburb")
+                                    or ""
+                                )
+                                t_city = a_town.get("city") or ""
+                                if t_dist and t_city and t_dist.lower() != t_city.lower():
+                                    city = f"{t_dist}, {t_city}"
+                                elif t_city or t_dist:
+                                    city = t_city or t_dist
+                                if not region:
+                                    region = a_town.get("state") or region
+                                if not display_name or display_name.count(",") < 3:
+                                    display_name = d_town.get("display_name", display_name)
+                        except Exception:
+                            pass
+
+                    return {
+                        "city": city,
+                        "region": region,
+                        "country": country,
+                        "country_code": addr.get("country_code", "").upper(),
+                        "postal": postal,
+                        "display_name": display_name,
+                    }
+        except Exception as exc:
+            logger.debug("Reverse geocoding failed: %s", exc)
+        return {}
 
     def _fetch_location_with_fallback(self, target_ip: str | None = None) -> dict[str, Any] | None:
         """Query primary and secondary IP geolocation APIs."""
@@ -180,6 +307,12 @@ class GetCurrentLocationTool(BaseTool):
             parts.append(f"• Coordinates: {lat}, {lon}")
         if tz:
             parts.append(f"• Timezone: {tz}")
+        if data.get("display_name"):
+            parts.append(f"• Exact Vicinity / Area: {data['display_name']}")
+        if data.get("source") == "windows_native_gps_wifi":
+            parts.append("• Precision: High-Precision OS WiFi/GPS Triangulation")
+        elif data.get("source") != "environment_override":
+            parts.append("• Precision: Regional ISP Routing Gateway (IP Geolocation)")
 
         summary = "\n".join(parts)
         json_block = json.dumps(data, indent=2)

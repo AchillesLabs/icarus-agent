@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 from icarus_contracts.tools import ToolCall, ToolResult
 from rich.console import Console
@@ -26,6 +25,7 @@ class RichAgentObserver:
         self.stdout = stdout
         self.stream_tokens = stream_tokens
         self._current_status = None
+        self._active_step_lines = 0
 
     def on_token(self, delta: str) -> None:
         """Stream token deltas directly to configured output stream."""
@@ -38,74 +38,139 @@ class RichAgentObserver:
             self.console.print(delta, end="")
 
     def on_turn_start(self, turn: int) -> None:
-        """Render turn transition banner for multi-turn reasoning cycles."""
-        if turn > 1:
-            self.console.print(f"\n[dim]─── Reasoning (Turn {turn}) ───[/dim]\n")
+        """Invoked when turn reasoning begins. Multi-turn reasoning flows seamlessly without disruptive divider lines."""
+        pass
 
     def on_turn_end(self, turn: int) -> None:
         """Invoked when turn reasoning concludes."""
         pass
 
-    def _classify_tool(self, name: str) -> tuple[str, str, str, str]:
-        """Classify tool name into (icon, category, border_style, subtitle)."""
+    def _format_action_labels(self, name: str, args: dict[str, Any]) -> tuple[str, str, str]:
+        """Return (active_action, active_detail, completed_verb) for tool call."""
         lower = name.lower()
-        if "mcp" in lower or lower.startswith("mcp_"):
-            return "🔌", "Model Context Protocol (MCP)", "blue", "Official MCP Server Dispatch"
-        if "web_search" in lower or "search" in lower:
-            return "🌐", "Web Intelligence Search", "cyan", "Live Web Intelligence"
-        if (
-            "fetch_webpage" in lower
-            or "browser" in lower
-            or "puppeteer" in lower
-            or "playwright" in lower
-        ):
-            return "🖥", "Browser Automation", "magenta", "Autonomous Web Navigation & Extraction"
-        if "reminder" in lower or "schedule" in lower or "job" in lower:
-            return "⏰", "Background Task Scheduler", "yellow", "Autonomous Executive Reminders"
-        return "⚙", "Tool Execution", "cyan", "Autonomous ReAct Dispatch"
+        if "location" in lower:
+            return (
+                "Resolving location",
+                "Querying high-precision OS WiFi/GPS telemetry...",
+                "Resolved location",
+            )
+        if "command" in lower or lower in ("bash", "sh", "terminal", "exec"):
+            cmd = str(args.get("command") or args.get("CommandLine") or args.get("cmd") or "")
+            short_cmd = cmd.strip()
+            if len(short_cmd) > 50:
+                short_cmd = short_cmd[:47] + "..."
+            return (
+                "Running command",
+                f"$ {short_cmd}" if short_cmd else "Executing shell command...",
+                f"Ran {short_cmd}" if short_cmd else "Ran command",
+            )
+        if "view_file" in lower or "read_file" in lower or "read_url_content" in lower:
+            target = str(args.get("path") or args.get("AbsolutePath") or args.get("Url") or "")
+            short_target = target.replace("\\", "/").split("/")[-1] if target else "file"
+            return (
+                f"Reading {short_target}",
+                f"{target}" if target else "Reading file contents...",
+                f"Read {short_target}",
+            )
+        if "edit" in lower or "write_to_file" in lower or "replace_file" in lower:
+            target = str(args.get("path") or args.get("TargetFile") or "")
+            short_target = target.replace("\\", "/").split("/")[-1] if target else "file"
+            return (
+                f"Editing {short_target}",
+                f"{target}" if target else "Applying modifications...",
+                f"Edited {short_target}",
+            )
+        if "search" in lower:
+            q = str(args.get("query") or args.get("q") or "")
+            short_q = f'"{q}"' if q else "web"
+            return (
+                f"Searching web for {short_q}",
+                "Querying web intelligence...",
+                f"Searched {short_q}",
+            )
+        if "fetch" in lower or "browser" in lower:
+            url = str(args.get("url") or args.get("Url") or "")
+            return (
+                "Fetching webpage",
+                f"{url}" if url else "Navigating...",
+                "Fetched webpage",
+            )
+
+        readable = name.replace("_", " ").title()
+        arg_snippets = []
+        for k, v in list(args.items())[:2]:
+            v_str = str(v)
+            if len(v_str) > 30:
+                v_str = v_str[:27] + "..."
+            arg_snippets.append(f"{k}={v_str!r}")
+        args_display = f"({', '.join(arg_snippets)})" if arg_snippets else "()"
+        return (
+            f"Executing {name}",
+            f"Dispatching with {args_display}",
+            f"{readable} completed",
+        )
 
     def on_tool_start(self, tool_call: ToolCall) -> None:
-        """Display styled execution panel when a tool begins execution."""
-        icon, category, border_style, subtitle = self._classify_tool(tool_call.name)
+        """Display step banner when a tool begins execution."""
         args = tool_call.get_arguments_dict()
-        formatted_args = json.dumps(args, indent=2)
+        action, detail, _ = self._format_action_labels(tool_call.name, args)
 
-        preview = f"[bold white]Tool:[/bold white] [bold {border_style}]{tool_call.name}[/bold {border_style}]\n"
-        preview += f"[bold white]Arguments:[/bold white] {formatted_args}"
-
-        panel = Panel(
-            preview,
-            title=f"[bold {border_style}]{icon} {category}: {tool_call.name}[/bold {border_style}]",
-            border_style=border_style,
-            subtitle=f"[dim]{subtitle}[/dim]",
+        self.console.print(
+            f"  [bold cyan]●[/bold cyan] [bold white]{action}[/bold white] [dim]v[/dim]\n"
+            f"    [dim]{detail}[/dim]",
+            highlight=False,
         )
-        self.console.print(panel)
+        self._active_step_lines = 2
 
     def on_tool_end(self, tool_result: ToolResult) -> None:
-        """Display outcome summary banner with exit status and byte/char metrics."""
-        icon, category, border_style, _ = self._classify_tool(tool_result.name)
-        if tool_result.error:
-            summary = (
-                f"[bold red]✖ Tool '{tool_result.name}' failed:[/bold red] {tool_result.error}"
-            )
-            self.console.print(Panel(summary, border_style="red"))
-        else:
-            output_chars = len(tool_result.output)
-            output_lines = [
-                line.strip() for line in tool_result.output.splitlines() if line.strip()
-            ]
-            preview_snippet = ""
-            if output_lines:
-                first_line = output_lines[0]
-                if len(first_line) > 120:
-                    first_line = first_line[:117] + "..."
-                preview_snippet = f"\n[dim]Preview: {first_line}[/dim]"
+        """Collapse active step and display completed summary."""
+        import sys
 
-            summary = (
-                f"[bold green]✔ {icon} {tool_result.name} completed[/bold green] "
-                f"[dim]({output_chars:,} characters captured)[/dim]{preview_snippet}"
+        if self._active_step_lines > 0:
+            try:
+                if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+                    clear_seq = ("\033[A\033[2K" * self._active_step_lines) + "\r"
+                    sys.stdout.write(clear_seq)
+                    sys.stdout.flush()
+            except Exception:
+                pass
+            self._active_step_lines = 0
+
+        _, _, completed_verb = self._format_action_labels(tool_result.name, {})
+
+        if tool_result.error:
+            err_snip = tool_result.error.strip()
+            if len(err_snip) > 60:
+                err_snip = err_snip[:57] + "..."
+            self.console.print(
+                f"  [bold red]✖[/bold red] [bold red]{tool_result.name} failed[/bold red] [dim]›[/dim] [red]{err_snip}[/red]",
+                highlight=False,
             )
-            self.console.print(Panel(summary, border_style="green"))
+            return
+
+        if "location" in tool_result.name.lower():
+            out = tool_result.output
+            summary_parts = []
+            for line in out.splitlines():
+                line_str = line.strip()
+                if "City:" in line_str:
+                    city_val = line_str.split("City:", 1)[1].strip()
+                    summary_parts.append(city_val)
+                elif "Postal Code:" in line_str:
+                    pin_val = line_str.split("Postal Code:", 1)[1].strip()
+                    summary_parts.append(f"({pin_val})")
+            if summary_parts:
+                loc_summary = " ".join(summary_parts)
+                self.console.print(
+                    f"  [bold green]✔[/bold green] [bold white]Resolved location[/bold white] [dim]›[/dim] [cyan]{loc_summary}[/cyan]",
+                    highlight=False,
+                )
+                return
+
+        self.console.print(
+            f"  [bold green]✔[/bold green] [bold white]{completed_verb}[/bold white]",
+            highlight=False,
+        )
 
     def on_max_turns(self, max_turns: int) -> None:
         """Display clear notice panel when maximum turn budget is reached."""

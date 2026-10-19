@@ -1,6 +1,7 @@
 """Interactive Chat REPL implementation with streaming markdown and session persistence."""
 
 import asyncio
+import random
 import sys
 import time
 from datetime import datetime
@@ -36,6 +37,24 @@ from icarus_cli.models_view import render_models_table, select_model_interactive
 from icarus_cli.observer import RichAgentObserver
 from icarus_cli.remote import RemoteAgentClient
 from icarus_cli.tui import AlternateScreenBuffer, InteractivePrompt, render_workspace_header
+
+ACHILLES_WAR_VERBS = (
+    "Strategos deliberated for",
+    "Phalanx marshalled for",
+    "Myrmidons deployed in",
+    "War Council resolved in",
+    "Achilles' vanguard struck in",
+    "Tactical maneuver waged for",
+    "Forged in the Aegis for",
+)
+
+
+def _render_timing_banner(elapsed: float) -> str:
+    """Format post-turn Greek war thinking/execution duration with Achilles imagery."""
+    elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
+    time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
+    verb = random.choice(ACHILLES_WAR_VERBS)
+    return f"[dim]⚔ {verb} {elapsed_str} · done {time_str}[/dim]\n"
 
 
 class ChatSessionManager:
@@ -275,7 +294,9 @@ def _run_remote_chat(
         try:
             while True:
                 try:
-                    user_input = prompt_session.read_input("> ")
+                    user_input = prompt_session.read_input(
+                        "> ", rprompt_text=f"{effective_model} · {effective_provider}"
+                    )
                 except (KeyboardInterrupt, EOFError):
                     console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                     break
@@ -347,9 +368,7 @@ def _run_remote_chat(
                     )
                     console.print()
                     elapsed = max(0.0, time.monotonic() - turn_start)
-                    elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
-                    time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
-                    console.print(f"[dim]✻ Cogitated for {elapsed_str} · done {time_str}[/dim]\n")
+                    console.print(_render_timing_banner(elapsed))
                     if result.finish_reason == "cancelled":
                         console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
                 except (KeyboardInterrupt, asyncio.CancelledError):
@@ -491,7 +510,9 @@ def run_chat(
 
         while True:
             try:
-                user_input = prompt_session.read_input("> ")
+                user_input = prompt_session.read_input(
+                    "> ", rprompt_text=f"{effective_model} · {effective_provider}"
+                )
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                 break
@@ -604,9 +625,7 @@ def run_chat(
                 )
                 console.print()
                 elapsed = max(0.0, time.monotonic() - turn_start)
-                elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
-                time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
-                console.print(f"[dim]✻ Cogitated for {elapsed_str} · done {time_str}[/dim]\n")
+                console.print(_render_timing_banner(elapsed))
                 if loop_result.finish_reason == "cancelled":
                     console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
                 prompt_history = [m for m in loop_result.messages if _is_chat_prompt_message(m)]

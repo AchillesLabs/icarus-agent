@@ -7,6 +7,7 @@ persistent history and keybindings.
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, TextIO
@@ -129,12 +130,12 @@ def render_workspace_header(
     )
 
     right_content = (
-        f"[bold gold1]* ICARUS AGENT CHAT[/bold gold1] [dim]v{__version__}[/dim]\n"
-        f"[bold cyan]{model}[/bold cyan] [dim]·[/dim] [yellow]{provider}[/yellow] [dim]· Session: {session_id}[/dim]\n"
+        f"[bold white]ICARUS AGENT CHAT[/bold white] [bold gold1]v{__version__}[/bold gold1]\n"
+        f"[bold cyan]{model}[/bold cyan] [dim]·[/dim] [yellow]{provider}[/yellow]  [dim]•  Session: {session_id}[/dim]\n"
         f"[dim]{cwd}[/dim]\n\n"
-        f"[dim]Status:[/dim] {status_badge}  [dim]·[/dim]  {tokens_info}\n"
+        f"[dim]Runtime:[/dim] {status_badge}   {tokens_info}\n"
         f"[dim]{mode}[/dim]\n"
-        "[dim]Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/models[/bold cyan] to switch models, [bold cyan]/exit[/bold cyan] to quit[/dim]"
+        "[dim]Commands:[/dim] [bold cyan]/help[/bold cyan] [dim]manual[/dim]  [dim]·[/dim]  [bold cyan]/models[/bold cyan] [dim]switch[/dim]  [dim]·[/dim]  [bold cyan]/clear[/bold cyan]  [dim]·[/dim]  [bold cyan]/exit[/bold cyan]"
     )
 
     table = Table.grid(padding=(0, 2))
@@ -145,6 +146,15 @@ def render_workspace_header(
     console.print()
     console.print(table)
     console.print()
+
+    # Fill vertical space so input area sits pinned at bottom like Claude Code
+    try:
+        rows = shutil.get_terminal_size().lines
+        padding = max(0, rows - 13)
+        if padding > 0:
+            console.print("\n" * (padding - 1))
+    except Exception:
+        pass
 
 
 def get_history_file() -> Path:
@@ -197,8 +207,12 @@ class InteractivePrompt:
                 raise KeyboardInterrupt
 
         def _bottom_toolbar() -> HTML:
+            cols = shutil.get_terminal_size().columns
+            divider = "─" * max(10, cols - 1)
             return HTML(
-                " <b>[Ctrl+C]</b> Cancel Turn  │  "
+                f"<ansigray>{divider}</ansigray>\n"
+                " <b><ansiyellow>⚔ Achilles Vanguard</ansiyellow></b>  │  "
+                "<b>[Ctrl+C]</b> Cancel  │  "
                 "<b>[Ctrl+D /exit]</b> Quit  │  "
                 "<b>[/help]</b> Commands  │  "
                 "<b>[/models]</b> Switch Model "
@@ -213,10 +227,16 @@ class InteractivePrompt:
         except Exception:
             self._session = None
 
-    def read_input(self, prompt_text: str = "> ") -> str:
+    def read_input(self, prompt_text: str = "> ", rprompt_text: str | None = None) -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
-            return self._session.prompt(HTML(f"<b><ansicyan>{prompt_text}</ansicyan></b>"))
+            cols = shutil.get_terminal_size().columns
+            divider = "─" * max(10, cols - 1)
+            formatted_prompt = HTML(
+                f"<ansigray>{divider}</ansigray>\n<b><ansicyan>{prompt_text}</ansicyan></b>"
+            )
+            rprompt = HTML(f"<ansigray>{rprompt_text}</ansigray>") if rprompt_text else None
+            return self._session.prompt(formatted_prompt, rprompt=rprompt)
 
         # Fallback for non-interactive runners or redirected stdin
         if hasattr(self.console, "input") and self.stdin is sys.stdin:

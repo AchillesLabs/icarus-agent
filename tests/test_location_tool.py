@@ -30,8 +30,9 @@ def test_location_tool_environment_override(monkeypatch, tmp_path: Path):
     assert "environment_override" in result.output
 
 
-def test_location_tool_primary_success(tmp_path: Path):
+def test_location_tool_primary_success(monkeypatch, tmp_path: Path):
     """Primary provider ipapi.co returns valid city and region."""
+    monkeypatch.setenv("ICARUS_DISABLE_OS_LOCATION", "1")
     tool = GetCurrentLocationTool()
     mock_payload = {
         "city": "Seattle",
@@ -88,8 +89,9 @@ def test_location_tool_fallback_success(tmp_path: Path):
         assert "United Kingdom (GB)" in result.output
 
 
-def test_location_tool_caching(tmp_path: Path):
+def test_location_tool_caching(monkeypatch, tmp_path: Path):
     """Repeated calls with no IP return cached result without hitting network again."""
+    monkeypatch.setenv("ICARUS_DISABLE_OS_LOCATION", "1")
     tool = GetCurrentLocationTool()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -113,14 +115,38 @@ def test_location_tool_caching(tmp_path: Path):
         assert mock_get.call_count == 1
 
 
-def test_location_tool_failure(tmp_path: Path):
+def test_location_tool_failure(monkeypatch, tmp_path: Path):
     """Total failure produces graceful error message."""
+    monkeypatch.setenv("ICARUS_DISABLE_OS_LOCATION", "1")
     tool = GetCurrentLocationTool()
 
     with patch("httpx.Client.get", side_effect=Exception("Network unreachable")):
         result = tool.execute(arguments={}, workspace_root=tmp_path)
         assert result.exit_code == 1
         assert "Unable to determine current geographic location" in result.output
+
+
+def test_location_tool_windows_native_success(tmp_path: Path):
+    """Native Windows GPS/WiFi triangulation returns exact coordinates and area."""
+    tool = GetCurrentLocationTool()
+    mock_native = {
+        "city": "Gurugram",
+        "region": "Haryana",
+        "country": "India",
+        "country_code": "IN",
+        "postal": "122103",
+        "latitude": 28.2768,
+        "longitude": 77.0561,
+        "source": "windows_native_gps_wifi",
+        "display_name": "Sohna, Gurugram, Haryana, India",
+    }
+    with patch.object(tool, "_fetch_windows_native_location", return_value=mock_native):
+        result = tool.execute(arguments={}, workspace_root=tmp_path)
+        assert result.exit_code == 0
+        assert "Gurugram" in result.output
+        assert "28.2768, 77.0561" in result.output
+        assert "Sohna, Gurugram, Haryana, India" in result.output
+        assert "High-Precision OS WiFi/GPS Triangulation" in result.output
 
 
 def test_registry_includes_location_tool():
