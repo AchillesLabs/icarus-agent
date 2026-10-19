@@ -7,13 +7,14 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
 ## Acceptance criteria
 
-- [ ] Implement McpClient handling MCP JSON-RPC 2.0 lifecycle: initialize, ping, tools/list, and tools/call.
-- [ ] Implement StdioTransport spawning child process commands (e.g. npx -y @modelcontextprotocol/server-puppeteer) and communicating over stdin/stdout pipes.
-- [ ] Implement SseTransport connecting to remote HTTP/SSE MCP endpoints.
-- [ ] Dynamically map discovered MCP tool schemas into Icarus BaseTool instances with typed arguments and validation.
-- [ ] Handle MCP server crashes, execution timeouts, and protocol errors gracefully without crashing agent runtime.
-- [ ] Automated unit and mock integration tests verify handshake protocol, schema translation, tool execution round-trip, and error recovery.
+- [x] Implement McpClient handling MCP JSON-RPC 2.0 lifecycle: initialize, ping, tools/list, and tools/call.
+- [x] Implement StdioTransport spawning child process commands (e.g. npx -y @modelcontextprotocol/server-puppeteer) and communicating over stdin/stdout pipes.
+- [x] Implement SseTransport connecting to remote HTTP/SSE MCP endpoints.
+- [x] Dynamically map discovered MCP tool schemas into Icarus BaseTool instances with typed arguments and validation.
+- [x] Handle MCP server crashes, execution timeouts, and protocol errors gracefully without crashing agent runtime.
+- [x] Automated unit and mock integration tests verify handshake protocol, schema translation, tool execution round-trip, and error recovery.
+
