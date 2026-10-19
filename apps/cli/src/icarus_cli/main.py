@@ -34,7 +34,7 @@ app = typer.Typer(
     name="icarus",
     help="[bold cyan]Icarus[/bold cyan] - Modular, open-source, CLI-first AI agent platform.",
     rich_markup_mode="rich",
-    no_args_is_help=True,
+    no_args_is_help=False,
 )
 config_app = typer.Typer(
     name="config",
@@ -69,8 +69,9 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: Annotated[
         bool | None,
         typer.Option(
@@ -84,6 +85,8 @@ def main(
 ) -> None:
     """Icarus root CLI command callback."""
     ensure_database_migrated()
+    if ctx.invoked_subcommand is None:
+        chat_cmd()
 
 
 @app.command(name="doctor")

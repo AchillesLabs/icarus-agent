@@ -7,13 +7,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
 ## Acceptance criteria
 
-- [ ] Launch icarus chat (or default icarus) into an alternate screen buffer taking over the full terminal window.
-- [ ] Render pinned top header status bar displaying application name, active LLM model, provider, session ID, and token usage budget.
-- [ ] Render collapsible or bordered tool execution panels in the message stream showing live progress for web search, browser automation, and MCP operations.
-- [ ] Implement interactive prompt at the bottom of the screen with multiline input support, command history, and keybindings (Ctrl+C cancel turn, Ctrl+D / exit clean exit).
-- [ ] Restore standard terminal screen buffer and original scrollback cleanly upon session exit without corrupting terminal state.
-- [ ] Automated unit and integration tests verify screen buffer transition commands, header rendering, and graceful exit handling.
+- [x] Launch icarus chat (or default icarus) into an alternate screen buffer taking over the full terminal window.
+- [x] Render pinned top header status bar displaying application name, active LLM model, provider, session ID, and token usage budget.
+- [x] Render collapsible or bordered tool execution panels in the message stream showing live progress for web search, browser automation, and MCP operations.
+- [x] Implement interactive prompt at the bottom of the screen with multiline input support, command history, and keybindings (Ctrl+C cancel turn, Ctrl+D / exit clean exit).
+- [x] Restore standard terminal screen buffer and original scrollback cleanly upon session exit without corrupting terminal state.
+- [x] Automated unit and integration tests verify screen buffer transition commands, header rendering, and graceful exit handling.

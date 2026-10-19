@@ -34,6 +34,7 @@ from icarus_cli.approvals import create_cli_approval_engine
 from icarus_cli.models_view import render_models_table, select_model_interactive
 from icarus_cli.observer import RichAgentObserver
 from icarus_cli.remote import RemoteAgentClient
+from icarus_cli.tui import AlternateScreenBuffer, InteractivePrompt, render_workspace_header
 
 
 class ChatSessionManager:
@@ -217,135 +218,148 @@ def _run_remote_chat(
             asyncio.run(remote_client.close())
         raise ValueError(str(exc)) from exc
 
-    banner_text = (
-        f"[bold cyan]Icarus Interactive Chat (Remote: {server_label} - {server_url})[/bold cyan]\n"
-        f"Session: [yellow]{remote_session_id}[/yellow] | "
-        f"Provider: [green]{effective_provider}[/green] | "
-        f"Model: [green]{effective_model}[/green]\n"
-        f"[dim]Type your message or use /help, /clear, /session, /exit[/dim]"
-    )
-    console.print(Panel(banner_text, border_style="cyan"))
+    alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
+    with alt_buffer:
+        render_workspace_header(
+            console=console,
+            model=effective_model,
+            provider=effective_provider,
+            session_id=remote_session_id,
+            tokens_used=0,
+            token_budget=128000,
+            mode=f"Icarus Interactive Chat (Remote: {server_label} - {server_url})",
+            remote_url=server_url,
+        )
 
-    if was_resumed:
+        if was_resumed:
+            try:
+                messages = asyncio.run(remote_client.list_messages(remote_session_id))
+                if messages:
+                    console.print(f"[dim]─── Restoring {len(messages)} previous message(s) ───[/dim]")
+                    for msg in messages:
+                        msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                        if msg_role in (MessageRole.USER.value, "user"):
+                            console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
+                        elif msg_role in (MessageRole.TOOL.value, "tool"):
+                            tool_label = msg.name or "Tool"
+                            console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
+                        elif msg_role in (MessageRole.ASSISTANT.value, "assistant"):
+                            if msg.tool_calls:
+                                tc_names = [
+                                    tc.get("function", {}).get("name", "tool")
+                                    if isinstance(tc, dict)
+                                    else getattr(tc, "name", "tool")
+                                    for tc in msg.tool_calls
+                                ]
+                                console.print(
+                                    f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
+                                )
+                            if msg.content:
+                                console.print(
+                                    f"[bold green]{effective_provider} > [/bold green]{msg.content}"
+                                )
+                        elif msg_role in (MessageRole.SYSTEM.value, "system") and (
+                            "[Previous Conversation Summary]" in (msg.content or "")
+                        ):
+                            console.print(
+                                "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
+                            )
+                    console.print("[dim]───────────────────────────────────────────────────────[/dim]")
+            except Exception as exc:
+                console.print(f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]")
+
+        prompt_session = InteractivePrompt(console=console, stdin=stdin)
         try:
-            messages = asyncio.run(remote_client.list_messages(remote_session_id))
-            if messages:
-                console.print(f"[dim]─── Restoring {len(messages)} previous message(s) ───[/dim]")
-                for msg in messages:
-                    msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
-                    if msg_role in (MessageRole.USER.value, "user"):
-                        console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
-                    elif msg_role in (MessageRole.TOOL.value, "tool"):
-                        tool_label = msg.name or "Tool"
-                        console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
-                    elif msg_role in (MessageRole.ASSISTANT.value, "assistant"):
-                        if msg.tool_calls:
-                            tc_names = [
-                                tc.get("function", {}).get("name", "tool")
-                                if isinstance(tc, dict)
-                                else getattr(tc, "name", "tool")
-                                for tc in msg.tool_calls
-                            ]
-                            console.print(
-                                f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
-                            )
-                        if msg.content:
-                            console.print(
-                                f"[bold green]{effective_provider} > [/bold green]{msg.content}"
-                            )
-                    elif msg_role in (MessageRole.SYSTEM.value, "system") and (
-                        "[Previous Conversation Summary]" in (msg.content or "")
-                    ):
-                        console.print(
-                            "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
-                        )
-                console.print("[dim]───────────────────────────────────────────────────────[/dim]")
-        except Exception as exc:
-            console.print(f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]")
-
-    try:
-        while True:
-            try:
-                user_input = console.input("[bold cyan]You > [/bold cyan]")
-            except (KeyboardInterrupt, EOFError):
-                console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
-                break
-
-            cleaned = user_input.strip()
-            if not cleaned:
-                continue
-
-            if cleaned in ("/exit", "/quit"):
-                console.print("[dim]Exiting chat session. Goodbye![/dim]")
-                break
-
-            if cleaned == "/help":
-                table = Table(
-                    title="Available Slash Commands", show_header=True, header_style="bold cyan"
-                )
-                table.add_column("Command", style="bold yellow", width=15)
-                table.add_column("Description")
-                table.add_row("/help", "Display available in-chat slash commands")
-                table.add_row("/clear", "Clear the terminal screen")
-                table.add_row("/session", "Show active session details and message count")
-                table.add_row("/exit", "Exit the chat REPL")
-                console.print(table)
-                continue
-
-            if cleaned == "/session":
+            while True:
                 try:
-                    msgs = asyncio.run(remote_client.list_messages(remote_session_id))
-                    details = (
-                        f"[bold cyan]Active Remote Session Details[/bold cyan]\n"
-                        f"Server: [green]{server_label}[/green] ({server_url})\n"
-                        f"ID: [yellow]{remote_session_id}[/yellow]\n"
-                        f"Title: {session_title}\n"
-                        f"Messages: {len(msgs)}"
+                    user_input = prompt_session.read_input("You > ")
+                except (KeyboardInterrupt, EOFError):
+                    console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
+                    break
+
+                cleaned = user_input.strip()
+                if not cleaned:
+                    continue
+
+                if cleaned in ("/exit", "/quit"):
+                    console.print("[dim]Exiting chat session. Goodbye![/dim]")
+                    break
+
+                if cleaned == "/help":
+                    table = Table(
+                        title="Available Slash Commands", show_header=True, header_style="bold cyan"
                     )
-                    console.print(Panel(details, border_style="cyan"))
-                except Exception as exc:
-                    console.print(f"[bold red]Error fetching session info:[/bold red] {exc}")
-                continue
+                    table.add_column("Command", style="bold yellow", width=15)
+                    table.add_column("Description")
+                    table.add_row("/help", "Display available in-chat slash commands")
+                    table.add_row("/clear", "Clear the terminal screen")
+                    table.add_row("/session", "Show active session details and message count")
+                    table.add_row("/exit", "Exit the chat REPL")
+                    console.print(table)
+                    continue
 
-            if cleaned == "/clear":
-                console.clear()
-                console.print(Panel(banner_text, border_style="cyan"))
-                continue
+                if cleaned == "/session":
+                    try:
+                        msgs = asyncio.run(remote_client.list_messages(remote_session_id))
+                        details = (
+                            f"[bold cyan]Active Remote Session Details[/bold cyan]\n"
+                            f"Server: [green]{server_label}[/green] ({server_url})\n"
+                            f"ID: [yellow]{remote_session_id}[/yellow]\n"
+                            f"Title: {session_title}\n"
+                            f"Messages: {len(msgs)}"
+                        )
+                        console.print(Panel(details, border_style="cyan"))
+                    except Exception as exc:
+                        console.print(f"[bold red]Error fetching session info:[/bold red] {exc}")
+                    continue
 
-            console.print(f"[bold green]{effective_provider} > [/bold green]")
-            observer = RichAgentObserver(console=console, stream_tokens=True)
-
-            try:
-                result = asyncio.run(
-                    remote_client.execute_remote_run(
-                        prompt=cleaned,
-                        session_id=remote_session_id,
+                if cleaned == "/clear":
+                    console.clear()
+                    render_workspace_header(
+                        console=console,
                         model=effective_model,
                         provider=effective_provider,
-                        temperature=effective_temp,
-                        max_turns=cfg.max_turns,
-                        auto_approve=auto_approve,
-                        observer=observer,
+                        session_id=remote_session_id,
+                        tokens_used=0,
+                        token_budget=128000,
+                        remote_url=server_url,
                     )
-                )
-                console.print()
-                if result.finish_reason == "cancelled":
-                    console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
-                continue
-            except Exception as exc:
-                console.print(
-                    Panel(
-                        f"[bold red]Remote Error:[/bold red] {exc}",
-                        title="Error",
-                        border_style="red",
+                    continue
+
+                console.print(f"[bold green]{effective_provider} > [/bold green]")
+                observer = RichAgentObserver(console=console, stream_tokens=True)
+
+                try:
+                    result = asyncio.run(
+                        remote_client.execute_remote_run(
+                            prompt=cleaned,
+                            session_id=remote_session_id,
+                            model=effective_model,
+                            provider=effective_provider,
+                            temperature=effective_temp,
+                            max_turns=cfg.max_turns,
+                            auto_approve=auto_approve,
+                            observer=observer,
+                        )
                     )
-                )
-                continue
-    finally:
-        if should_close:
-            asyncio.run(remote_client.close())
+                    console.print()
+                    if result.finish_reason == "cancelled":
+                        console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
+                except (KeyboardInterrupt, asyncio.CancelledError):
+                    console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
+                    continue
+                except Exception as exc:
+                    console.print(
+                        Panel(
+                            f"[bold red]Remote Error:[/bold red] {exc}",
+                            title="Error",
+                            border_style="red",
+                        )
+                    )
+                    continue
+        finally:
+            if should_close:
+                asyncio.run(remote_client.close())
 
 
 def run_chat(
@@ -421,182 +435,194 @@ def run_chat(
         )
         raise
 
-    banner_text = (
-        f"[bold cyan]Icarus Interactive Chat[/bold cyan]\n"
-        f"Session: [yellow]{session.id}[/yellow] | "
-        f"Provider: [green]{effective_provider}[/green] | "
-        f"Model: [green]{effective_model}[/green]\n"
-        f"[dim]Type your message or use /help, /clear, /session, /exit[/dim]"
-    )
-    console.print(Panel(banner_text, border_style="cyan"))
-
-    # Load existing messages for context and replay if resumed
-    session_messages = session_mgr.get_messages(session.id)
-    if session_messages:
-        console.print(f"[dim]─── Restoring {len(session_messages)} previous message(s) ───[/dim]")
-        for msg in session_messages:
-            msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
-            if msg_role == MessageRole.USER.value:
-                console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
-            elif msg_role == MessageRole.TOOL.value:
-                tool_label = msg.name or "Tool"
-                console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
-            elif msg_role == MessageRole.ASSISTANT.value:
-                if msg.tool_calls:
-                    tc_names = [
-                        tc.get("function", {}).get("name", "tool")
-                        if isinstance(tc, dict)
-                        else getattr(tc, "name", "tool")
-                        for tc in msg.tool_calls
-                    ]
-                    console.print(
-                        f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
-                    )
-                if msg.content:
-                    console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
-            elif msg_role in (MessageRole.SYSTEM.value, "system") and (
-                "[Previous Conversation Summary]" in (msg.content or "")
-            ):
-                console.print("[dim italic]📝 [Compacted Context Summary Restored][/dim italic]")
-        console.print("[dim]───────────────────────────────────────────────────────[/dim]")
-
-    prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
-
-    while True:
-        try:
-            user_input = console.input("[bold cyan]You > [/bold cyan]")
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
-            break
-
-        cleaned = user_input.strip()
-        if not cleaned:
-            continue
-
-        if cleaned in ("/exit", "/quit"):
-            console.print("[dim]Exiting chat session. Goodbye![/dim]")
-            break
-
-        if cleaned == "/help":
-            table = Table(
-                title="Available Slash Commands", show_header=True, header_style="bold cyan"
-            )
-            table.add_column("Command", style="bold yellow", width=15)
-            table.add_column("Description")
-            table.add_row("/help", "Display available in-chat slash commands")
-            table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
-            table.add_row("/clear", "Clear the terminal screen")
-            table.add_row("/session", "Show active session details and message count")
-            table.add_row("/exit", "Exit the chat REPL")
-            console.print(table)
-            continue
-
-        if cleaned == "/models":
-            cred = CredentialResolver().resolve(effective_provider)
-            with console.status(f"[cyan]Fetching models for '{effective_provider}'...[/cyan]"):
-                models_list = fetch_provider_models(effective_provider, api_key=cred.secret)
-            if not models_list:
-                console.print(
-                    f"[yellow]No models found for provider '{effective_provider}'.[/yellow]"
-                )
-            else:
-                render_models_table(
-                    models_list, current_model=effective_model, provider=effective_provider
-                )
-                chosen = select_model_interactive(models_list, current_model=effective_model)
-                if chosen and chosen != effective_model:
-                    effective_model = chosen
-                    cfg = cfg_manager.load_config()
-                    cfg.model = chosen
-                    cfg_manager.save_config(cfg)
-                    console.print(f"[bold green]Switched active model to '{chosen}'![/bold green]")
-            continue
-
-        if cleaned == "/session":
-            active_msgs = session_mgr.get_messages(session.id)
-            details = (
-                f"[bold cyan]Active Session Details[/bold cyan]\n"
-                f"ID: [yellow]{session.id}[/yellow]\n"
-                f"Title: {session.title}\n"
-                f"Mode: {session.mode}\n"
-                f"Created At: {session.created_at.isoformat()}\n"
-                f"Messages: {len(active_msgs)}"
-            )
-            console.print(Panel(details, border_style="cyan"))
-            continue
-
-        if cleaned == "/clear":
-            console.clear()
-            console.print(Panel(banner_text, border_style="cyan"))
-            continue
-
-        # Persist user message
-        session_mgr.append_message(session.id, MessageRole.USER, cleaned)
-        prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
-
-        # Stream assistant response
-        console.print(f"[bold green]{effective_provider} > [/bold green]")
-        observer = RichAgentObserver(console=console, stream_tokens=True)
-
-        def on_chat_message(msg: PromptMessage) -> None:
-            session_mgr.append_message(
-                session_id=session.id,
-                role=msg.role,
-                content=msg.content or "",
-                tool_calls=msg.tool_calls,
-                tool_call_id=msg.tool_call_id,
-                name=msg.name,
-            )
-
-        agent_loop = AgentLoop(
-            provider=provider,
-            approval_engine=approval_engine,
+    alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
+    with alt_buffer:
+        total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
+        render_workspace_header(
+            console=console,
             model=effective_model,
-            temperature=effective_temp,
-            max_turns=cfg.max_turns,
-            workspace_root=Path.cwd(),
-            inject_system=True,
-            message_callback=on_chat_message,
+            provider=effective_provider,
+            session_id=session.id,
+            tokens_used=total_tokens,
+            token_budget=getattr(cfg, "max_tokens_budget", 128000),
         )
-        try:
-            loop_result = asyncio.run(
-                agent_loop.run(
-                    messages=prompt_history,
-                    observer=observer,
+
+        # Load existing messages for context and replay if resumed
+        session_messages = session_mgr.get_messages(session.id)
+        if session_messages:
+            console.print(f"[dim]─── Restoring {len(session_messages)} previous message(s) ───[/dim]")
+            for msg in session_messages:
+                msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                if msg_role == MessageRole.USER.value:
+                    console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
+                elif msg_role == MessageRole.TOOL.value:
+                    tool_label = msg.name or "Tool"
+                    console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
+                elif msg_role == MessageRole.ASSISTANT.value:
+                    if msg.tool_calls:
+                        tc_names = [
+                            tc.get("function", {}).get("name", "tool")
+                            if isinstance(tc, dict)
+                            else getattr(tc, "name", "tool")
+                            for tc in msg.tool_calls
+                        ]
+                        console.print(
+                            f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
+                        )
+                    if msg.content:
+                        console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
+                elif msg_role in (MessageRole.SYSTEM.value, "system") and (
+                    "[Previous Conversation Summary]" in (msg.content or "")
+                ):
+                    console.print("[dim italic]📝 [Compacted Context Summary Restored][/dim italic]")
+            console.print("[dim]───────────────────────────────────────────────────────[/dim]")
+
+        prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
+        prompt_session = InteractivePrompt(console=console, stdin=stdin)
+
+        while True:
+            try:
+                user_input = prompt_session.read_input("You > ")
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
+                break
+
+            cleaned = user_input.strip()
+            if not cleaned:
+                continue
+
+            if cleaned in ("/exit", "/quit"):
+                console.print("[dim]Exiting chat session. Goodbye![/dim]")
+                break
+
+            if cleaned == "/help":
+                table = Table(
+                    title="Available Slash Commands", show_header=True, header_style="bold cyan"
                 )
+                table.add_column("Command", style="bold yellow", width=15)
+                table.add_column("Description")
+                table.add_row("/help", "Display available in-chat slash commands")
+                table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
+                table.add_row("/clear", "Clear the terminal screen")
+                table.add_row("/session", "Show active session details and message count")
+                table.add_row("/exit", "Exit the chat REPL")
+                console.print(table)
+                continue
+
+            if cleaned == "/models":
+                cred = CredentialResolver().resolve(effective_provider)
+                with console.status(f"[cyan]Fetching models for '{effective_provider}'...[/cyan]"):
+                    models_list = fetch_provider_models(effective_provider, api_key=cred.secret)
+                if not models_list:
+                    console.print(
+                        f"[yellow]No models found for provider '{effective_provider}'.[/yellow]"
+                    )
+                else:
+                    render_models_table(
+                        models_list, current_model=effective_model, provider=effective_provider
+                    )
+                    chosen = select_model_interactive(models_list, current_model=effective_model)
+                    if chosen and chosen != effective_model:
+                        effective_model = chosen
+                        cfg = cfg_manager.load_config()
+                        cfg.model = chosen
+                        cfg_manager.save_config(cfg)
+                        console.print(f"[bold green]Switched active model to '{chosen}'![/bold green]")
+                continue
+
+            if cleaned == "/session":
+                active_msgs = session_mgr.get_messages(session.id)
+                details = (
+                    f"[bold cyan]Active Session Details[/bold cyan]\n"
+                    f"ID: [yellow]{session.id}[/yellow]\n"
+                    f"Title: {session.title}\n"
+                    f"Mode: {session.mode}\n"
+                    f"Created At: {session.created_at.isoformat()}\n"
+                    f"Messages: {len(active_msgs)}"
+                )
+                console.print(Panel(details, border_style="cyan"))
+                continue
+
+            if cleaned == "/clear":
+                console.clear()
+                total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
+                render_workspace_header(
+                    console=console,
+                    model=effective_model,
+                    provider=effective_provider,
+                    session_id=session.id,
+                    tokens_used=total_tokens,
+                    token_budget=getattr(cfg, "max_tokens_budget", 128000),
+                )
+                continue
+
+            # Persist user message
+            session_mgr.append_message(session.id, MessageRole.USER, cleaned)
+            prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
+
+            # Stream assistant response
+            console.print(f"[bold green]{effective_provider} > [/bold green]")
+            observer = RichAgentObserver(console=console, stream_tokens=True)
+
+            def on_chat_message(msg: PromptMessage) -> None:
+                session_mgr.append_message(
+                    session_id=session.id,
+                    role=msg.role,
+                    content=msg.content or "",
+                    tool_calls=msg.tool_calls,
+                    tool_call_id=msg.tool_call_id,
+                    name=msg.name,
+                )
+
+            agent_loop = AgentLoop(
+                provider=provider,
+                approval_engine=approval_engine,
+                model=effective_model,
+                temperature=effective_temp,
+                max_turns=cfg.max_turns,
+                workspace_root=Path.cwd(),
+                inject_system=True,
+                message_callback=on_chat_message,
             )
-            console.print()
-            if loop_result.finish_reason == "cancelled":
-                console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
-            prompt_history = [m for m in loop_result.messages if _is_chat_prompt_message(m)]
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
-            continue
-        except ProviderError as exc:
-            err_title = f"{exc.__class__.__name__} ({effective_provider})"
-            hint = ""
-            err_str = str(exc).lower()
-            if "does not exist" in err_str or "not have access" in err_str or "404" in err_str:
-                hint = (
-                    "\n\n[bold yellow]Hint:[/bold yellow] The configured model "
-                    f"[bold]{effective_model}[/bold] is not accessible on your API key.\n"
-                    "Type [bold cyan]/models[/bold cyan] in chat or run "
-                    "[bold cyan]icarus models[/bold cyan] to pick an available model."
+            try:
+                loop_result = asyncio.run(
+                    agent_loop.run(
+                        messages=prompt_history,
+                        observer=observer,
+                    )
                 )
-            console.print(
-                Panel(
-                    f"[bold red]{err_title}:[/bold red] {exc}{hint}",
-                    title="Provider Error",
-                    border_style="red",
+                console.print()
+                if loop_result.finish_reason == "cancelled":
+                    console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
+                prompt_history = [m for m in loop_result.messages if _is_chat_prompt_message(m)]
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                console.print("\n[bold yellow]Generation interrupted by user.[/bold yellow]")
+                continue
+            except ProviderError as exc:
+                err_title = f"{exc.__class__.__name__} ({effective_provider})"
+                hint = ""
+                err_str = str(exc).lower()
+                if "does not exist" in err_str or "not have access" in err_str or "404" in err_str:
+                    hint = (
+                        "\n\n[bold yellow]Hint:[/bold yellow] The configured model "
+                        f"[bold]{effective_model}[/bold] is not accessible on your API key.\n"
+                        "Type [bold cyan]/models[/bold cyan] in chat or run "
+                        "[bold cyan]icarus models[/bold cyan] to pick an available model."
+                    )
+                console.print(
+                    Panel(
+                        f"[bold red]{err_title}:[/bold red] {exc}{hint}",
+                        title="Provider Error",
+                        border_style="red",
+                    )
                 )
-            )
-            continue
-        except Exception as exc:
-            console.print(
-                Panel(
-                    f"[bold red]Unexpected Error:[/bold red] {exc}",
-                    title="Error",
-                    border_style="red",
+                continue
+            except Exception as exc:
+                console.print(
+                    Panel(
+                        f"[bold red]Unexpected Error:[/bold red] {exc}",
+                        title="Error",
+                        border_style="red",
+                    )
                 )
-            )
-            continue
+                continue
