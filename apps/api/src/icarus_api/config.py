@@ -26,6 +26,10 @@ class ApiSettings(BaseSettings):
     default_provider: str = "mock"
     default_model: str = "mock-model"
     allow_fallback_to_system_credentials: bool = True
+    rate_limit_enabled: bool = True
+    rate_limit_rpm: int = 60
+    rate_limit_window_seconds: float = 60.0
+    max_concurrent_runs_per_tenant: int = 5
 
     @field_validator("auth_tokens", mode="before")
     @classmethod

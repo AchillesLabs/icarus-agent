@@ -18,7 +18,7 @@ from icarus_core.persistence import (
     TenantSessionRepository,
 )
 from icarus_core.providers import ProviderRegistry
-from icarus_core.security import CredentialVault
+from icarus_core.security import CredentialVault, SlidingWindowRateLimiter
 from sqlalchemy.orm import Session
 
 from icarus_api.auth import TokenValidationCache, get_current_tenant, get_settings
@@ -168,3 +168,17 @@ def get_tenant_credential_repository(
         owner_id=identity.owner_id,
         vault=vault,
     )
+
+
+def get_rate_limiter(request: Request) -> SlidingWindowRateLimiter:
+    """Resolve active SlidingWindowRateLimiter from application state."""
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        settings = get_settings(request)
+        limiter = SlidingWindowRateLimiter(
+            default_rpm=settings.rate_limit_rpm,
+            window_seconds=settings.rate_limit_window_seconds,
+            max_concurrent_runs=settings.max_concurrent_runs_per_tenant,
+        )
+        request.app.state.rate_limiter = limiter
+    return limiter

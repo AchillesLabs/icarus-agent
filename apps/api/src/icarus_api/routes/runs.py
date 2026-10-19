@@ -26,13 +26,14 @@ from icarus_core.persistence import (
     TenantSessionRepository,
 )
 from icarus_core.providers import ProviderRegistry
-from icarus_core.security import redact_secret
+from icarus_core.security import SlidingWindowRateLimiter, redact_secret
 
 from icarus_api.auth import get_current_tenant, get_settings
 from icarus_api.config import ApiSettings
 from icarus_api.dependencies import (
     get_active_run_registry,
     get_provider_registry,
+    get_rate_limiter,
     get_tenant_credential_repository,
     get_tenant_message_repository,
     get_tenant_run_repository,
@@ -57,6 +58,7 @@ async def stream_session_run(
     run_registry: Annotated[ActiveRunRegistry, Depends(get_active_run_registry)],
     provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     settings: Annotated[ApiSettings, Depends(get_settings)],
+    rate_limiter: Annotated[SlidingWindowRateLimiter, Depends(get_rate_limiter)],
     body: RunCreateRequest | None = None,
 ) -> StreamingResponse:
     """Execute an agent loop run in the background and stream real-time Server-Sent Events."""
@@ -81,7 +83,21 @@ async def stream_session_run(
             )
         )
 
-    # 3. Create persistent run entry in running status
+    # 3. Enforce active execution concurrency ceiling for authenticated tenant
+    max_concurrent = rate_limiter.get_concurrency_limit(identity.owner_id)
+    active_runs = await run_registry.list_active(owner_id=identity.owner_id)
+    if len(active_runs) >= max_concurrent:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Tenant active run concurrency limit reached (max {max_concurrent} active runs). "
+                "Please wait for an active run to complete or cancel it."
+            ),
+            headers={"Retry-After": "5"},
+        )
+    rate_limiter.acquire_concurrent_run(identity.owner_id)
+
+    # 4. Create persistent run entry in running status
     effective_provider = req.provider or getattr(settings, "default_provider", "mock")
     effective_model = req.model or getattr(settings, "default_model", None)
     run_dto = run_repo.create_run(
@@ -242,6 +258,7 @@ async def stream_session_run(
                 yield payload.to_sse_message()
         finally:
             await run_registry.unregister(run_id)
+            rate_limiter.release_concurrent_run(identity.owner_id)
             if not loop_task.done():
                 loop_task.cancel()
 
@@ -348,8 +365,10 @@ async def create_session_run(
     credential_repo: Annotated[
         TenantCredentialRepository, Depends(get_tenant_credential_repository)
     ],
+    run_registry: Annotated[ActiveRunRegistry, Depends(get_active_run_registry)],
     provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     settings: Annotated[ApiSettings, Depends(get_settings)],
+    rate_limiter: Annotated[SlidingWindowRateLimiter, Depends(get_rate_limiter)],
     body: RunCreateRequest | None = None,
 ) -> RunResponse:
     """Execute a one-shot agent loop run synchronously and return the completed run state."""
@@ -374,7 +393,21 @@ async def create_session_run(
             )
         )
 
-    # 3. Create persistent run entry in running status
+    # 3. Enforce active execution concurrency ceiling for authenticated tenant
+    max_concurrent = rate_limiter.get_concurrency_limit(identity.owner_id)
+    active_runs = await run_registry.list_active(owner_id=identity.owner_id)
+    if len(active_runs) >= max_concurrent:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Tenant active run concurrency limit reached (max {max_concurrent} active runs). "
+                "Please wait for an active run to complete or cancel it."
+            ),
+            headers={"Retry-After": "5"},
+        )
+    rate_limiter.acquire_concurrent_run(identity.owner_id)
+
+    # 4. Create persistent run entry in running status
     effective_provider = req.provider or getattr(settings, "default_provider", "mock")
     effective_model = req.model or getattr(settings, "default_model", None)
     run_dto = run_repo.create_run(
@@ -388,11 +421,11 @@ async def create_session_run(
     )
     run_id = run_dto.id
 
-    # 4. Gather existing conversation messages
+    # 5. Gather existing conversation messages
     db_messages = msg_repo.list_messages(session_id)
     prompt_messages = [m.to_prompt_message() for m in db_messages]
 
-    # 5. Resolve provider adapter with ephemerally decrypted tenant BYOK credentials
+    # 6. Resolve provider adapter with ephemerally decrypted tenant BYOK credentials
     byok_key: str | None = credential_repo.get_decrypted_secret(effective_provider)
     allow_fallback: bool = getattr(settings, "allow_fallback_to_system_credentials", True)
     try:
@@ -414,14 +447,14 @@ async def create_session_run(
             detail=f"Failed to initialize provider '{effective_provider}': {err_msg}",
         ) from exc
 
-    # 6. Configure approval engine
+    # 7. Configure approval engine
     approval_engine = (
         ApprovalEngine(policy=ApprovalPolicy.AUTO_APPROVE)
         if req.auto_approve
         else ApprovalEngine(policy=ApprovalPolicy.DENY)
     )
 
-    # 7. Callback for recording intermediate agent messages with zero-leak secret redaction
+    # 8. Callback for recording intermediate agent messages with zero-leak secret redaction
     def on_run_message(msg: PromptMessage) -> None:
         content = redact_secret(msg.content or "", byok_key)
         tool_calls = redact_secret(msg.tool_calls, byok_key)
@@ -437,7 +470,7 @@ async def create_session_run(
             )
         )
 
-    # 8. Setup agent loop and execute run
+    # 9. Setup agent loop and execute run with active run registration
     agent_loop = AgentLoop(
         provider=provider,
         approval_engine=approval_engine,
@@ -450,6 +483,9 @@ async def create_session_run(
         message_callback=on_run_message,
     )
 
+    current_task = asyncio.current_task()
+    if current_task is not None:
+        await run_registry.register(run_id=run_id, owner_id=identity.owner_id, task=current_task)
     try:
         loop_result = await agent_loop.run(messages=prompt_messages)
         if loop_result.finish_reason == "cancelled":
@@ -473,6 +509,9 @@ async def create_session_run(
             error_category=exc.__class__.__name__,
             completed=True,
         )
+    finally:
+        await run_registry.unregister(run_id)
+        rate_limiter.release_concurrent_run(identity.owner_id)
 
     final_run = updated_run or run_repo.get_run(run_id)
     return RunResponse(**final_run.model_dump())

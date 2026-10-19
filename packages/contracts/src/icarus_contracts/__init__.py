@@ -35,6 +35,7 @@ from icarus_contracts.provider import (
     ProviderCapabilities,
     StreamChunk,
 )
+from icarus_contracts.ratelimit import RateLimitConfig, RateLimitStatus
 from icarus_contracts.session import (
     MessageCreate,
     MessageCreateRequest,
@@ -109,7 +110,9 @@ __all__ = [
     "ProviderCapabilities",
     "ProviderError",
     "ProviderUnavailableError",
+    "RateLimitConfig",
     "RateLimitError",
+    "RateLimitStatus",
     "RunBudgetCounters",
     "RunCancelResponse",
     "RunCreate",

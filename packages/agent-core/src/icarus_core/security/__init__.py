@@ -1,5 +1,9 @@
 """Security primitives, token hashing, and cryptographic utilities."""
 
+from icarus_core.security.rate_limiter import (
+    RateLimitResult,
+    SlidingWindowRateLimiter,
+)
 from icarus_core.security.tokens import (
     DEFAULT_TOKEN_PREFIX,
     generate_api_token,
@@ -18,6 +22,8 @@ __all__ = [
     "CredentialVault",
     "DEFAULT_DEV_VAULT_KEY",
     "DEFAULT_TOKEN_PREFIX",
+    "RateLimitResult",
+    "SlidingWindowRateLimiter",
     "VaultDecryptionError",
     "generate_api_token",
     "hash_api_token",
