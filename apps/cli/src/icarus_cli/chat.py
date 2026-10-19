@@ -365,14 +365,72 @@ def _run_remote_chat(
 
                 if cleaned == "/help":
                     table = Table(
-                        title="Available Slash Commands", show_header=True, header_style="bold cyan"
+                        title="Available Slash Commands", show_header=True, header_style="bold #C084FC"
                     )
-                    table.add_column("Command", style="bold yellow", width=15)
+                    table.add_column("Command", style="bold #E9D5FF", width=18)
                     table.add_column("Description")
                     table.add_row("/help", "Display available in-chat slash commands")
+                    table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                     table.add_row("/clear", "Clear the terminal screen")
                     table.add_row("/session", "Show active session details and message count")
                     table.add_row("/exit", "Exit the chat REPL")
+                    console.print(table)
+                    continue
+
+                if cleaned == "/skills" or cleaned.startswith("/skills "):
+                    from icarus_core.skills import discover_skills, pull_skill
+
+                    parts = cleaned.split(maxsplit=2)
+                    subaction = parts[1].lower() if len(parts) > 1 else ""
+
+                    if subaction in ("pull", "install", "add"):
+                        if len(parts) < 3 or not parts[2].strip():
+                            console.print(
+                                "[yellow]Usage: [bold #C084FC]/skills pull <url_or_repo_or_path>[/bold #C084FC][/yellow]"
+                            )
+                            continue
+
+                        pull_src = parts[2].strip()
+                        with console.status(
+                            f"[bold #C084FC]Pulling external skill from '{pull_src}'...[/bold #C084FC]"
+                        ):
+                            try:
+                                installed_skills = pull_skill(
+                                    source=pull_src,
+                                    workspace_dir=Path.cwd(),
+                                    overwrite=True,
+                                )
+                                console.print(
+                                    f"\n[bold green]✔ Successfully installed {len(installed_skills)} skill(s) into workspace (.agents/skills/):[/bold green]"
+                                )
+                                for sk in installed_skills:
+                                    console.print(
+                                        f"  • [bold #E9D5FF]{sk.name}[/bold #E9D5FF] - {sk.description}\n    [dim]({sk.path})[/dim]"
+                                    )
+                                console.print()
+                            except Exception as exc:
+                                console.print(f"[bold red]Error pulling skill:[/bold red] {exc}")
+                        continue
+
+                    skills_list = discover_skills(Path.cwd())
+                    table = Table(
+                        title="Available Skills", show_header=True, header_style="bold #C084FC"
+                    )
+                    table.add_column("Skill Name", style="bold #E9D5FF", width=22)
+                    table.add_column("Scope", style="dim", width=12)
+                    table.add_column("Description")
+                    if not skills_list:
+                        table.add_row(
+                            "No skills loaded",
+                            "-",
+                            "Add a folder with SKILL.md to .agents/skills/ or ~/.icarus/skills/",
+                        )
+                    else:
+                        for sk in skills_list:
+                            desc_snip = sk.description[:80] + (
+                                "..." if len(sk.description) > 80 else ""
+                            )
+                            table.add_row(sk.name, sk.scope, desc_snip)
                     console.print(table)
                     continue
 
@@ -608,7 +666,7 @@ def run_chat(
                 table.add_column("Command", style="bold #E9D5FF", width=15)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
-                table.add_row("/skills", "List and inspect available local and global skills")
+                table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                 table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
                 table.add_row("/clear", "Clear the terminal screen")
                 table.add_row("/session", "Show active session details and message count")
@@ -616,8 +674,42 @@ def run_chat(
                 console.print(table)
                 continue
 
-            if cleaned == "/skills":
-                from icarus_core.skills import discover_skills
+            if cleaned == "/skills" or cleaned.startswith("/skills "):
+                from icarus_core.skills import discover_skills, pull_skill
+
+                parts = cleaned.split(maxsplit=2)
+                subaction = parts[1].lower() if len(parts) > 1 else ""
+
+                if subaction in ("pull", "install", "add"):
+                    if len(parts) < 3 or not parts[2].strip():
+                        console.print(
+                            "[yellow]Usage: [bold #C084FC]/skills pull <url_or_repo_or_path>[/bold #C084FC][/yellow]\n"
+                            "[dim]Example: /skills pull https://github.com/owner/skill-repo[/dim]\n"
+                            "[dim]Example: /skills pull https://raw.githubusercontent.com/.../SKILL.md[/dim]"
+                        )
+                        continue
+
+                    pull_src = parts[2].strip()
+                    with console.status(
+                        f"[bold #C084FC]Pulling external skill from '{pull_src}'...[/bold #C084FC]"
+                    ):
+                        try:
+                            installed_skills = pull_skill(
+                                source=pull_src,
+                                workspace_dir=Path.cwd(),
+                                overwrite=True,
+                            )
+                            console.print(
+                                f"\n[bold green]✔ Successfully installed {len(installed_skills)} skill(s) into workspace (.agents/skills/):[/bold green]"
+                            )
+                            for sk in installed_skills:
+                                console.print(
+                                    f"  • [bold #E9D5FF]{sk.name}[/bold #E9D5FF] - {sk.description}\n    [dim]({sk.path})[/dim]"
+                                )
+                            console.print()
+                        except Exception as exc:
+                            console.print(f"[bold red]Error pulling skill:[/bold red] {exc}")
+                    continue
 
                 skills_list = discover_skills(Path.cwd())
                 table = Table(
@@ -640,8 +732,8 @@ def run_chat(
                         table.add_row(sk.name, sk.scope, desc_snip)
                 console.print(table)
                 console.print(
-                    "[dim]* To create a skill, add a folder with a [bold #C084FC]SKILL.md[/bold #C084FC] to "
-                    "[bold #E9D5FF].agents/skills/<name>/[/bold #E9D5FF] or run [bold #C084FC]icarus skills new <name>[/bold #C084FC].[/dim]\n"
+                    "[dim]* To pull an external skill, run: [bold #C084FC]/skills pull <url_or_repo>[/bold #C084FC][/dim]\n"
+                    "[dim]* To create a skill, run: [bold #C084FC]icarus skills new <name>[/bold #C084FC].[/dim]\n"
                 )
                 continue
 

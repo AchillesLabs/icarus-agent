@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from icarus_core.skills import create_skill, discover_skills
+from icarus_core.skills import create_skill, discover_skills, pull_skill
 from rich.console import Console
 from rich.table import Table
 
 skills_app = typer.Typer(
     name="skills",
-    help="Manage, discover, and scaffold agent skills.",
+    help="Manage, discover, pull, and scaffold agent skills.",
     rich_markup_mode="rich",
     no_args_is_help=False,
 )
@@ -50,6 +50,7 @@ def list_skills(
     console.print(table)
     console.print(
         "[dim]* To create a new skill, run: [bold #C084FC]icarus skills new <name> --desc '<description>'[/bold #C084FC][/dim]\n"
+        "[dim]* To pull an external skill, run: [bold #C084FC]icarus skills pull <url_or_repo>[/bold #C084FC][/dim]\n"
     )
 
 
@@ -89,3 +90,140 @@ def new_skill(
     except Exception as exc:
         console.print(f"[bold red]Error creating skill:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+def _execute_pull(
+    source: str,
+    name: str | None,
+    skill: str | None,
+    global_scope: bool,
+    overwrite: bool,
+) -> None:
+    with console.status(f"[bold #C084FC]Pulling external skill from '{source}'...[/bold #C084FC]"):
+        try:
+            installed = pull_skill(
+                source=source,
+                workspace_dir=Path.cwd(),
+                global_scope=global_scope,
+                skill_name=name or skill,
+                overwrite=overwrite,
+            )
+        except Exception as exc:
+            console.print(f"[bold red]Error pulling skill:[/bold red] {exc}")
+            raise typer.Exit(code=1) from exc
+
+    scope_label = "global (~/.icarus/skills/)" if global_scope else "workspace (.agents/skills/)"
+    console.print(
+        f"\n[bold green]✔ Successfully installed {len(installed)} skill(s)[/bold green] into {scope_label}:"
+    )
+    for sk in installed:
+        console.print(
+            f"  • [bold #E9D5FF]{sk.name}[/bold #E9D5FF] - {sk.description}\n    [dim]({sk.path})[/dim]"
+        )
+    console.print()
+
+
+@skills_app.command(name="pull")
+def pull_skill_cmd(
+    source: Annotated[
+        str,
+        typer.Argument(
+            help="Source to pull from (URL to SKILL.md, Git repository, GitHub owner/repo, or local path)."
+        ),
+    ],
+    name: Annotated[
+        str | None,
+        typer.Option("--name", "-n", help="Override installed skill name."),
+    ] = None,
+    skill: Annotated[
+        str | None,
+        typer.Option(
+            "--skill", "-s", help="Specific skill name to extract from multi-skill repository."
+        ),
+    ] = None,
+    global_scope: Annotated[
+        bool,
+        typer.Option(
+            "--global", "-g", help="Install globally in ~/.icarus/skills/ instead of workspace."
+        ),
+    ] = False,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
+        ),
+    ] = False,
+) -> None:
+    """Pull and install an external skill from a URL, Git repository, GitHub shorthand, or local path."""
+    _execute_pull(source, name, skill, global_scope, overwrite)
+
+
+@skills_app.command(name="install")
+def install_skill_cmd(
+    source: Annotated[
+        str,
+        typer.Argument(
+            help="Source to install from (URL to SKILL.md, Git repository, GitHub owner/repo, or local path)."
+        ),
+    ],
+    name: Annotated[
+        str | None,
+        typer.Option("--name", "-n", help="Override installed skill name."),
+    ] = None,
+    skill: Annotated[
+        str | None,
+        typer.Option(
+            "--skill", "-s", help="Specific skill name to extract from multi-skill repository."
+        ),
+    ] = None,
+    global_scope: Annotated[
+        bool,
+        typer.Option(
+            "--global", "-g", help="Install globally in ~/.icarus/skills/ instead of workspace."
+        ),
+    ] = False,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
+        ),
+    ] = False,
+) -> None:
+    """Install an external skill (alias for 'pull')."""
+    _execute_pull(source, name, skill, global_scope, overwrite)
+
+
+@skills_app.command(name="add")
+def add_skill_cmd(
+    source: Annotated[
+        str,
+        typer.Argument(
+            help="Source to add from (URL to SKILL.md, Git repository, GitHub owner/repo, or local path)."
+        ),
+    ],
+    name: Annotated[
+        str | None,
+        typer.Option("--name", "-n", help="Override installed skill name."),
+    ] = None,
+    skill: Annotated[
+        str | None,
+        typer.Option(
+            "--skill", "-s", help="Specific skill name to extract from multi-skill repository."
+        ),
+    ] = None,
+    global_scope: Annotated[
+        bool,
+        typer.Option(
+            "--global", "-g", help="Install globally in ~/.icarus/skills/ instead of workspace."
+        ),
+    ] = False,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
+        ),
+    ] = False,
+) -> None:
+    """Add an external skill (alias for 'pull')."""
+    _execute_pull(source, name, skill, global_scope, overwrite)
+
