@@ -7,12 +7,13 @@
 
 **Blocked by:** #49, #50, #51, #52, #53
 
-**Status:** ready-for-agent
+**Status:** closed
 
 ## Acceptance criteria
 
-- [ ] Configure pyproject.toml so icarus-agent builds as a single installable wheel exposing the icarus console script.
-- [ ] Define server and worker dependencies as optional extras under [project.optional-dependencies] server.
-- [ ] Create install.sh for macOS/Linux installing uv if needed and running uv tool install icarus-agent.
-- [ ] Create install.ps1 for Windows installing uv and running uv tool install icarus-agent.
-- [ ] Automated tests verify wheel build, clean venv installation, entry point execution, and installer script syntax.
+- [x] Configure pyproject.toml so icarus-agent builds as a single installable wheel exposing the icarus console script.
+- [x] Define server and worker dependencies as optional extras under [project.optional-dependencies] server.
+- [x] Create install.sh for macOS/Linux installing uv if needed and running uv tool install icarus-agent.
+- [x] Create install.ps1 for Windows installing uv and running uv tool install icarus-agent.
+- [x] Automated tests verify wheel build, clean venv installation, entry point execution, and installer script syntax.
+
