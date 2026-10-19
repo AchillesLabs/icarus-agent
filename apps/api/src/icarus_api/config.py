@@ -30,6 +30,8 @@ class ApiSettings(BaseSettings):
     rate_limit_rpm: int = 60
     rate_limit_window_seconds: float = 60.0
     max_concurrent_runs_per_tenant: int = 5
+    audit_log_path: str = "audit.jsonl"
+    audit_log_enabled: bool = True
 
     @field_validator("auth_tokens", mode="before")
     @classmethod

@@ -3,7 +3,7 @@
 import asyncio
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from icarus_contracts import (
     MessageCreate,
@@ -59,6 +59,7 @@ async def stream_session_run(
     provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     settings: Annotated[ApiSettings, Depends(get_settings)],
     rate_limiter: Annotated[SlidingWindowRateLimiter, Depends(get_rate_limiter)],
+    request: Request,
     body: RunCreateRequest | None = None,
 ) -> StreamingResponse:
     """Execute an agent loop run in the background and stream real-time Server-Sent Events."""
@@ -87,6 +88,16 @@ async def stream_session_run(
     max_concurrent = rate_limiter.get_concurrency_limit(identity.owner_id)
     active_runs = await run_registry.list_active(owner_id=identity.owner_id)
     if len(active_runs) >= max_concurrent:
+        audit_logger = getattr(request.app.state, "audit_logger", None)
+        if audit_logger:
+            audit_logger.log_concurrency_limit_exceeded(
+                actor_id=identity.owner_id,
+                client_ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                resource=f"/v1/sessions/{session_id}/runs/stream",
+                max_concurrent=max_concurrent,
+                active_runs=len(active_runs),
+            )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
@@ -369,6 +380,7 @@ async def create_session_run(
     provider_registry: Annotated[ProviderRegistry, Depends(get_provider_registry)],
     settings: Annotated[ApiSettings, Depends(get_settings)],
     rate_limiter: Annotated[SlidingWindowRateLimiter, Depends(get_rate_limiter)],
+    request: Request,
     body: RunCreateRequest | None = None,
 ) -> RunResponse:
     """Execute a one-shot agent loop run synchronously and return the completed run state."""
@@ -397,6 +409,16 @@ async def create_session_run(
     max_concurrent = rate_limiter.get_concurrency_limit(identity.owner_id)
     active_runs = await run_registry.list_active(owner_id=identity.owner_id)
     if len(active_runs) >= max_concurrent:
+        audit_logger = getattr(request.app.state, "audit_logger", None)
+        if audit_logger:
+            audit_logger.log_concurrency_limit_exceeded(
+                actor_id=identity.owner_id,
+                client_ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                resource=f"/v1/sessions/{session_id}/runs",
+                max_concurrent=max_concurrent,
+                active_runs=len(active_runs),
+            )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(

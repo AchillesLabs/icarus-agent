@@ -1,5 +1,6 @@
 """Security primitives, token hashing, and cryptographic utilities."""
 
+from icarus_core.security.audit import AuditLogger
 from icarus_core.security.rate_limiter import (
     RateLimitResult,
     SlidingWindowRateLimiter,
@@ -19,6 +20,7 @@ from icarus_core.security.vault import (
 )
 
 __all__ = [
+    "AuditLogger",
     "CredentialVault",
     "DEFAULT_DEV_VAULT_KEY",
     "DEFAULT_TOKEN_PREFIX",

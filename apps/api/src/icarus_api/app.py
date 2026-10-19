@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from icarus_core.persistence import DatabaseManager
 from icarus_core.providers import ProviderRegistry
-from icarus_core.security import CredentialVault, SlidingWindowRateLimiter
+from icarus_core.security import AuditLogger, CredentialVault, SlidingWindowRateLimiter
 
 from icarus_api.auth import TenantAuthMiddleware, TokenValidationCache
 from icarus_api.config import ApiSettings
@@ -27,6 +27,7 @@ def create_app(
     token_cache: TokenValidationCache | None = None,
     credential_vault: CredentialVault | None = None,
     rate_limiter: SlidingWindowRateLimiter | None = None,
+    audit_logger: AuditLogger | None = None,
 ) -> FastAPI:
     """Create and configure a new FastAPI application instance."""
     resolved_settings = settings or ApiSettings()
@@ -48,6 +49,10 @@ def create_app(
         default_rpm=resolved_settings.rate_limit_rpm,
         window_seconds=resolved_settings.rate_limit_window_seconds,
         max_concurrent_runs=resolved_settings.max_concurrent_runs_per_tenant,
+    )
+    app.state.audit_logger = audit_logger or AuditLogger(
+        file_path=resolved_settings.audit_log_path,
+        enabled=resolved_settings.audit_log_enabled,
     )
 
     # Configure CORS, rate limiting, and authentication middleware

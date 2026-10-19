@@ -67,6 +67,15 @@ async def tenant_access_denied_handler(
     exc: TenantAccessDeniedError,
 ) -> JSONResponse:
     """Handle tenant isolation violations returning 403 Forbidden."""
+    audit_logger = getattr(request.app.state, "audit_logger", None)
+    if audit_logger:
+        audit_logger.log_access_denied(
+            actor_id=getattr(request.state, "owner_id", None),
+            client_ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            resource=request.url.path,
+            reason=str(exc),
+        )
     return create_error_response(
         status_code=403,
         code="forbidden",

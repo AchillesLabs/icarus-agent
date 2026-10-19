@@ -239,6 +239,17 @@ async def get_current_tenant(
     # Extract token
     token = extract_token_from_request(request, credentials)
     if not token:
+        audit_logger = getattr(request.app.state, "audit_logger", None)
+        if audit_logger:
+            client_ip = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+            audit_logger.log_auth_failure(
+                actor_id=None,
+                client_ip=client_ip,
+                user_agent=user_agent,
+                resource=request.url.path,
+                reason="missing_credentials",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials were not provided",
@@ -257,11 +268,37 @@ async def get_current_tenant(
         token_cache=token_cache,
     )
     if identity is None:
+        if not getattr(request.state, "auth_audited", False):
+            audit_logger = getattr(request.app.state, "audit_logger", None)
+            if audit_logger:
+                client_ip = request.client.host if request.client else None
+                user_agent = request.headers.get("user-agent")
+                audit_logger.log_auth_failure(
+                    actor_id=None,
+                    client_ip=client_ip,
+                    user_agent=user_agent,
+                    resource=request.url.path,
+                    reason="invalid_credentials",
+                )
+            request.state.auth_audited = True
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if not getattr(request.state, "auth_audited", False):
+        audit_logger = getattr(request.app.state, "audit_logger", None)
+        if audit_logger:
+            client_ip = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+            audit_logger.log_auth_success(
+                actor_id=identity.owner_id,
+                client_ip=client_ip,
+                user_agent=user_agent,
+                resource=request.url.path,
+            )
+        request.state.auth_audited = True
 
     # Bind immutable identity into request state
     request.state.identity = identity
@@ -295,12 +332,33 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
                 db_manager=db_manager,
                 token_cache=token_cache,
             )
+            audit_logger = getattr(request.app.state, "audit_logger", None)
+            client_ip = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+
             if identity is not None:
                 request.state.identity = identity
                 request.state.owner_id = identity.owner_id
+                if audit_logger:
+                    audit_logger.log_auth_success(
+                        actor_id=identity.owner_id,
+                        client_ip=client_ip,
+                        user_agent=user_agent,
+                        resource=request.url.path,
+                    )
+                request.state.auth_audited = True
             else:
                 request.state.identity = None
                 request.state.owner_id = None
+                if audit_logger:
+                    audit_logger.log_auth_failure(
+                        actor_id=None,
+                        client_ip=client_ip,
+                        user_agent=user_agent,
+                        resource=request.url.path,
+                        reason="invalid_credentials",
+                    )
+                request.state.auth_audited = True
         else:
             request.state.identity = None
             request.state.owner_id = None

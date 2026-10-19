@@ -18,7 +18,7 @@ from icarus_core.persistence import (
     TenantSessionRepository,
 )
 from icarus_core.providers import ProviderRegistry
-from icarus_core.security import CredentialVault, SlidingWindowRateLimiter
+from icarus_core.security import AuditLogger, CredentialVault, SlidingWindowRateLimiter
 from sqlalchemy.orm import Session
 
 from icarus_api.auth import TokenValidationCache, get_current_tenant, get_settings
@@ -182,3 +182,16 @@ def get_rate_limiter(request: Request) -> SlidingWindowRateLimiter:
         )
         request.app.state.rate_limiter = limiter
     return limiter
+
+
+def get_audit_logger(request: Request) -> AuditLogger:
+    """Resolve active AuditLogger from application state."""
+    logger = getattr(request.app.state, "audit_logger", None)
+    if logger is None:
+        settings = get_settings(request)
+        logger = AuditLogger(
+            file_path=settings.audit_log_path,
+            enabled=settings.audit_log_enabled,
+        )
+        request.app.state.audit_logger = logger
+    return logger

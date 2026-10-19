@@ -10,10 +10,10 @@
 - [#35](https://github.com/AchillesLabs/icarus-agent/issues/35) (02: Encrypted Credential Vault and Server-Side BYOK Management)
 - [#37](https://github.com/AchillesLabs/icarus-agent/issues/37) (04: Per-Tenant Sliding-Window Rate Limiting and Concurrency Throttling)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Implement structured audit logging facility emitting JSON Lines records to `audit.jsonl` and configured loggers.
-- [ ] Define standardized audit schema covering timestamps, event type, severity, actor ID, client IP, user agent, request ID, resource, action, and outcome.
-- [ ] Hook audit logger into authentication (successes, failures, revoked tokens), vault operations, token revocations, and rate limit triggers.
-- [ ] Implement automated zero-leak sanitization guaranteeing that raw API keys, authorization tokens, and prompt messages are redacted.
-- [ ] Automated audit tests verify event emission, record schema completeness, severity classifications, and secret redaction invariants.
+- [x] Implement structured audit logging facility emitting JSON Lines records to `audit.jsonl` and configured loggers.
+- [x] Define standardized audit schema covering timestamps, event type, severity, actor ID, client IP, user agent, request ID, resource, action, and outcome.
+- [x] Hook audit logger into authentication (successes, failures, revoked tokens), vault operations, token revocations, and rate limit triggers.
+- [x] Implement automated zero-leak sanitization guaranteeing that raw API keys, authorization tokens, and prompt messages are redacted.
+- [x] Automated audit tests verify event emission, record schema completeness, severity classifications, and secret redaction invariants.

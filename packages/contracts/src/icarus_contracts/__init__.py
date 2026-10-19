@@ -1,5 +1,6 @@
 """Domain contracts and Pydantic schemas for Icarus Agent."""
 
+from icarus_contracts.audit import AuditEvent, AuditEventType, AuditSeverity
 from icarus_contracts.config import (
     CredentialResult,
     CredentialSource,
@@ -88,6 +89,9 @@ __all__ = [
     "ApiTokenListResponse",
     "ApiTokenResponse",
     "ApiTokenRevokeResponse",
+    "AuditEvent",
+    "AuditEventType",
+    "AuditSeverity",
     "AuthenticationError",
     "CompactionResult",
     "CompletionResult",

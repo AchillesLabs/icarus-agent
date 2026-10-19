@@ -70,6 +70,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 result.limit,
                 result.retry_after,
             )
+            audit_logger = getattr(request.app.state, "audit_logger", None)
+            if audit_logger:
+                audit_logger.log_rate_limit_exceeded(
+                    actor_id=owner_id,
+                    client_ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    resource=request.url.path,
+                    limit=result.limit,
+                    retry_after=result.retry_after,
+                    details={"key": key},
+                )
             return create_error_response(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 message=f"Rate limit exceeded. Try again in {result.retry_after} seconds.",
