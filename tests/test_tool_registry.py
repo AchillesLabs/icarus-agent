@@ -64,12 +64,16 @@ def test_create_default_registry():
     assert registry.has("list_dir")
     assert registry.has("search")
     assert registry.has("write_file")
+    assert registry.has("web_search")
+    assert registry.has("fetch_webpage")
     definitions = registry.list_tools()
     names = [d.name for d in definitions]
     assert "read_file" in names
     assert "list_dir" in names
     assert "search" in names
     assert "write_file" in names
+    assert "web_search" in names
+    assert "fetch_webpage" in names
 
     search_def = next(d for d in definitions if d.name == "search")
     assert search_def.safety_category.value == "safe_read"

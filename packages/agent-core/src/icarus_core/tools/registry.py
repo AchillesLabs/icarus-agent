@@ -11,6 +11,7 @@ from icarus_core.tools.base import BaseTool
 from icarus_core.tools.command import RunCommandTool
 from icarus_core.tools.filesystem import ListDirTool, ReadFileTool, WriteFileTool
 from icarus_core.tools.search import SearchTool
+from icarus_core.tools.web import FetchWebpageTool, WebSearchTool
 
 
 class ToolRegistry:
@@ -67,4 +68,6 @@ def create_default_registry() -> ToolRegistry:
     registry.register(SearchTool())
     registry.register(WriteFileTool())
     registry.register(RunCommandTool())
+    registry.register(WebSearchTool())
+    registry.register(FetchWebpageTool())
     return registry
