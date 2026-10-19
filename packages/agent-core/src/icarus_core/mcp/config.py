@@ -31,7 +31,9 @@ class McpServerConfig(BaseModel):
     args: list[str] = Field(default_factory=list, description="Command arguments")
     env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
     url: str | None = Field(default=None, description="HTTP/SSE URL for sse transport")
-    headers: dict[str, str] = Field(default_factory=dict, description="HTTP headers for sse transport")
+    headers: dict[str, str] = Field(
+        default_factory=dict, description="HTTP headers for sse transport"
+    )
     cwd: str | None = Field(default=None, description="Working directory for stdio subprocess")
     timeout: float = Field(default=30.0, description="Default timeout in seconds")
 
@@ -52,7 +54,9 @@ class McpServerConfig(BaseModel):
                 cwd=self.cwd or None,
             )
         else:
-            raise ValueError(f"Unsupported MCP transport: '{self.transport}' (must be 'stdio' or 'sse').")
+            raise ValueError(
+                f"Unsupported MCP transport: '{self.transport}' (must be 'stdio' or 'sse')."
+            )
 
     def create_client(self, server_name: str) -> McpClient:
         """Instantiate an uninitialized McpClient with the configured transport."""

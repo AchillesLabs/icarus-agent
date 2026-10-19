@@ -8,8 +8,6 @@ import sys
 import zipfile
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -93,10 +91,10 @@ def test_clean_venv_installation_and_execution(tmp_path: Path):
     )
     assert venv_res.returncode == 0, f"uv venv failed: {venv_res.stderr}"
 
-    python_exe = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     icarus_exe = venv_dir / ("Scripts/icarus.exe" if sys.platform == "win32" else "bin/icarus")
 
-    # Install the wheel into the isolated venv with --no-deps to test package extraction and entrypoint generation
+    # Install the wheel into the isolated venv with --no-deps
+    # to test package extraction and entrypoint generation
     env = os.environ.copy()
     env["VIRTUAL_ENV"] = str(venv_dir)
     pip_res = subprocess.run(

@@ -18,12 +18,12 @@ from rich.table import Table
 
 from icarus_cli import __version__
 from icarus_cli.chat import run_chat
+from icarus_cli.mcp_cmd import mcp_app
 from icarus_cli.models_view import (
     render_models_table,
     resolve_model_by_input,
     select_model_interactive,
 )
-from icarus_cli.mcp_cmd import mcp_app
 from icarus_cli.remote import RemoteAgentClient
 from icarus_cli.run import execute_run
 from icarus_cli.server_cmd import server_app

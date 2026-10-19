@@ -7,11 +7,11 @@ persistent history and keybindings.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, TextIO
+from typing import Any, TextIO
 
+from icarus_core.paths import get_icarus_home
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
@@ -21,7 +21,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 from icarus_cli import __version__
-from icarus_core.paths import get_icarus_home
 
 # Standard ANSI escape codes for alternate screen buffer
 ESC_ENTER_ALT_SCREEN = "\033[?1049h"
@@ -102,7 +101,6 @@ def render_workspace_header(
     remote_url: str | None = None,
 ) -> None:
     """Render the pinned top status header bar of the terminal workspace."""
-    short_id = session_id[:8] if len(session_id) > 8 else session_id
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
 
     # Build 2-row metric grid table

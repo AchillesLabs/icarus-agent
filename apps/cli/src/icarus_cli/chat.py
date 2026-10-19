@@ -235,7 +235,9 @@ def _run_remote_chat(
             try:
                 messages = asyncio.run(remote_client.list_messages(remote_session_id))
                 if messages:
-                    console.print(f"[dim]─── Restoring {len(messages)} previous message(s) ───[/dim]")
+                    console.print(
+                        f"[dim]─── Restoring {len(messages)} previous message(s) ───[/dim]"
+                    )
                     for msg in messages:
                         msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                         if msg_role in (MessageRole.USER.value, "user"):
@@ -264,9 +266,13 @@ def _run_remote_chat(
                             console.print(
                                 "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
                             )
-                    console.print("[dim]───────────────────────────────────────────────────────[/dim]")
+                    console.print(
+                        "[dim]───────────────────────────────────────────────────────[/dim]"
+                    )
             except Exception as exc:
-                console.print(f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]")
+                console.print(
+                    f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]"
+                )
 
         prompt_session = InteractivePrompt(console=console, stdin=stdin)
         try:
@@ -450,7 +456,9 @@ def run_chat(
         # Load existing messages for context and replay if resumed
         session_messages = session_mgr.get_messages(session.id)
         if session_messages:
-            console.print(f"[dim]─── Restoring {len(session_messages)} previous message(s) ───[/dim]")
+            console.print(
+                f"[dim]─── Restoring {len(session_messages)} previous message(s) ───[/dim]"
+            )
             for msg in session_messages:
                 msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                 if msg_role == MessageRole.USER.value:
@@ -470,11 +478,15 @@ def run_chat(
                             f"[dim]{effective_provider} > [Invoked {', '.join(tc_names)}][/dim]"
                         )
                     if msg.content:
-                        console.print(f"[bold green]{effective_provider} > [/bold green]{msg.content}")
+                        console.print(
+                            f"[bold green]{effective_provider} > [/bold green]{msg.content}"
+                        )
                 elif msg_role in (MessageRole.SYSTEM.value, "system") and (
                     "[Previous Conversation Summary]" in (msg.content or "")
                 ):
-                    console.print("[dim italic]📝 [Compacted Context Summary Restored][/dim italic]")
+                    console.print(
+                        "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
+                    )
             console.print("[dim]───────────────────────────────────────────────────────[/dim]")
 
         prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
@@ -527,7 +539,9 @@ def run_chat(
                         cfg = cfg_manager.load_config()
                         cfg.model = chosen
                         cfg_manager.save_config(cfg)
-                        console.print(f"[bold green]Switched active model to '{chosen}'![/bold green]")
+                        console.print(
+                            f"[bold green]Switched active model to '{chosen}'![/bold green]"
+                        )
                 continue
 
             if cleaned == "/session":

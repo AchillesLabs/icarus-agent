@@ -53,7 +53,12 @@ class RichAgentObserver:
             return "🔌", "Model Context Protocol (MCP)", "blue", "Official MCP Server Dispatch"
         if "web_search" in lower or "search" in lower:
             return "🌐", "Web Intelligence Search", "cyan", "Live Web Intelligence"
-        if "fetch_webpage" in lower or "browser" in lower or "puppeteer" in lower or "playwright" in lower:
+        if (
+            "fetch_webpage" in lower
+            or "browser" in lower
+            or "puppeteer" in lower
+            or "playwright" in lower
+        ):
             return "🖥", "Browser Automation", "magenta", "Autonomous Web Navigation & Extraction"
         if "reminder" in lower or "schedule" in lower or "job" in lower:
             return "⏰", "Background Task Scheduler", "yellow", "Autonomous Executive Reminders"
@@ -86,7 +91,9 @@ class RichAgentObserver:
             self.console.print(Panel(summary, border_style="red"))
         else:
             output_chars = len(tool_result.output)
-            output_lines = [line.strip() for line in tool_result.output.splitlines() if line.strip()]
+            output_lines = [
+                line.strip() for line in tool_result.output.splitlines() if line.strip()
+            ]
             preview_snippet = ""
             if output_lines:
                 first_line = output_lines[0]

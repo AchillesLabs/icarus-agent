@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import sys
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from icarus_contracts.tools import ToolSafetyCategory
 from icarus_core.mcp.adapter import McpToolAdapter, create_mcp_adapters, format_mcp_content
 from icarus_core.mcp.client import McpClient
@@ -19,8 +13,6 @@ from icarus_core.mcp.protocol import (
     JsonRpcNotification,
     JsonRpcRequest,
     JsonRpcResponse,
-    McpInitializeResult,
-    McpServerCapabilities,
     McpToolSchema,
 )
 from icarus_core.mcp.transports import (
@@ -130,11 +122,7 @@ async def test_mcp_client_handshake_and_flow():
         {
             "jsonrpc": "2.0",
             "id": 4,
-            "result": {
-                "content": [
-                    {"type": "text", "text": "Tokyo: 22C, Clear sky"}
-                ]
-            },
+            "result": {"content": [{"type": "text", "text": "Tokyo: 22C, Clear sky"}]},
         }
     )
     call_res = await client.call_tool("lookup_weather", {"city": "Tokyo"})

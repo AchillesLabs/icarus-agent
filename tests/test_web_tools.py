@@ -4,8 +4,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-import pytest
-
 from icarus_core.tools.web import FetchWebpageTool, HTMLToMarkdownExtractor, WebSearchTool
 
 
@@ -66,15 +64,21 @@ def test_fetch_webpage_empty_and_invalid_scheme(tmp_path: Path):
 
 def test_fetch_webpage_success_and_truncation(tmp_path: Path):
     """FetchWebpageTool fetches HTML and truncates to max_length if budget is exceeded."""
-    html_content = "<html><body><h1>News</h1><p>" + ("Important article text. " * 200) + "</p></body></html>"
+    html_content = (
+        "<html><body><h1>News</h1><p>" + ("Important article text. " * 200) + "</p></body></html>"
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, text=html_content, headers={"Content-Type": "text/html; charset=utf-8"})
+        return httpx.Response(
+            200, text=html_content, headers={"Content-Type": "text/html; charset=utf-8"}
+        )
 
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     tool = FetchWebpageTool(client=mock_client)
 
-    result = tool.execute({"url": "https://news.example.com", "max_length": 500}, workspace_root=tmp_path)
+    result = tool.execute(
+        {"url": "https://news.example.com", "max_length": 500}, workspace_root=tmp_path
+    )
     assert result.exit_code == 0
     assert "### Webpage Content: https://news.example.com" in result.output
     assert "Important article text" in result.output
@@ -98,6 +102,7 @@ def test_fetch_webpage_plain_text(tmp_path: Path):
 
 def test_fetch_webpage_http_error(tmp_path: Path):
     """FetchWebpageTool handles HTTP 404/500 errors gracefully as ToolResult."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404)
 
@@ -111,6 +116,7 @@ def test_fetch_webpage_http_error(tmp_path: Path):
 
 def test_fetch_webpage_timeout(tmp_path: Path):
     """FetchWebpageTool handles network timeouts cleanly."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("Connection timed out")
 
@@ -158,9 +164,11 @@ def test_web_search_duckduckgo_parsing(tmp_path: Path):
     mock_client = httpx.Client(transport=httpx.MockTransport(handler))
     tool = WebSearchTool(client=mock_client)
 
-    result = tool.execute({"query": "cheap flights to NYC", "max_results": 2}, workspace_root=tmp_path)
+    result = tool.execute(
+        {"query": "cheap flights to NYC", "max_results": 2}, workspace_root=tmp_path
+    )
     assert result.exit_code == 0
-    assert "### Live Search Results for: \"cheap flights to NYC\"" in result.output
+    assert '### Live Search Results for: "cheap flights to NYC"' in result.output
     assert "1. **Delta Air Lines Flights**" in result.output
     assert "https://www.delta.com/flights" in result.output
     assert "Find cheap flights and book tickets" in result.output

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 LATEST_PROTOCOL_VERSION = "2024-11-05"

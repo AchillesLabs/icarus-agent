@@ -7,7 +7,6 @@ import platform
 import shutil
 import subprocess
 from collections.abc import Callable
-from typing import Any
 
 logger = logging.getLogger("icarus.notifications")
 

@@ -100,7 +100,9 @@ select = [
     "B",   # flake8-bugbear
     "SIM", # flake8-simplify
 ]
-ignore = []
+ignore = [
+    "E501", # Handled by ruff format
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

@@ -75,7 +75,9 @@ def mcp_add(
     """Register and persist a new MCP server configuration in ~/.icarus/mcp.json."""
     effective_transport = "sse" if sse else ("stdio" if stdio else transport.lower().strip())
     if effective_transport not in ("stdio", "sse"):
-        console.print(f"[bold red]Error:[/bold red] Unsupported transport '{effective_transport}'. Must be 'stdio' or 'sse'.")
+        console.print(
+            f"[bold red]Error:[/bold red] Unsupported transport '{effective_transport}'. Must be 'stdio' or 'sse'."
+        )
         raise typer.Exit(code=1)
 
     parsed_env: dict[str, str] = {}
@@ -98,12 +100,16 @@ def mcp_add(
     if effective_transport == "sse":
         effective_url = url or command
         if not effective_url:
-            console.print("[bold red]Error:[/bold red] SSE transport requires a valid endpoint URL.")
+            console.print(
+                "[bold red]Error:[/bold red] SSE transport requires a valid endpoint URL."
+            )
             raise typer.Exit(code=1)
     else:
         effective_cmd = command
         if not effective_cmd:
-            console.print("[bold red]Error:[/bold red] Stdio transport requires an executable command.")
+            console.print(
+                "[bold red]Error:[/bold red] Stdio transport requires an executable command."
+            )
             raise typer.Exit(code=1)
 
     combined_args = list(args or []) + list(ctx.args or [])
@@ -122,13 +128,17 @@ def mcp_add(
     mgr = McpConfigManager()
     mgr.add_server(name, config)
 
-    console.print(f"[bold green]Successfully registered MCP server '[cyan]{name}[/cyan]'![/bold green]")
+    console.print(
+        f"[bold green]Successfully registered MCP server '[cyan]{name}[/cyan]'![/bold green]"
+    )
     if effective_transport == "stdio":
         console.print(f"  [dim]Command:[/dim] {effective_cmd} {' '.join(combined_args)}")
     else:
         console.print(f"  [dim]URL:[/dim] {effective_url}")
     console.print(f"  [dim]Config saved to:[/dim] {mgr.config_path}")
-    console.print(f"[dim]Run `icarus mcp test {name}` to verify connection and inspect tools.[/dim]")
+    console.print(
+        f"[dim]Run `icarus mcp test {name}` to verify connection and inspect tools.[/dim]"
+    )
 
 
 @mcp_app.command(name="list")
@@ -139,7 +149,9 @@ def mcp_list() -> None:
 
     if not servers:
         console.print("[yellow]No MCP servers configured.[/yellow]")
-        console.print("[dim]Use `icarus mcp add <name> <command> [args...]` to register an MCP server.[/dim]")
+        console.print(
+            "[dim]Use `icarus mcp add <name> <command> [args...]` to register an MCP server.[/dim]"
+        )
         return
 
     table = Table(title="Configured MCP Servers", show_header=True, header_style="bold cyan")
@@ -179,7 +191,9 @@ def mcp_test(
     mgr = McpConfigManager()
     server = mgr.get_server(name)
     if not server:
-        console.print(f"[bold red]Error:[/bold red] MCP server '[yellow]{name}[/yellow]' is not configured.")
+        console.print(
+            f"[bold red]Error:[/bold red] MCP server '[yellow]{name}[/yellow]' is not configured."
+        )
         console.print("[dim]Run `icarus mcp list` to view configured servers.[/dim]")
         raise typer.Exit(code=1)
 
@@ -192,19 +206,23 @@ def mcp_test(
 
     s_name = server_info.get("name", name)
     s_ver = server_info.get("version", "unknown")
-    console.print(Panel(
-        f"[bold green]MCP Handshake Successful![/bold green]\n"
-        f"Server: [bold]{s_name}[/bold] (v{s_ver})\n"
-        f"Exposed Tools: [bold yellow]{len(tools)}[/bold yellow]",
-        title=f"MCP Server: {name}",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]MCP Handshake Successful![/bold green]\n"
+            f"Server: [bold]{s_name}[/bold] (v{s_ver})\n"
+            f"Exposed Tools: [bold yellow]{len(tools)}[/bold yellow]",
+            title=f"MCP Server: {name}",
+            border_style="green",
+        )
+    )
 
     if not tools:
         console.print("[dim]This server declared 0 tools.[/dim]")
         return
 
-    table = Table(title=f"Discovered Tools for '{name}'", show_header=True, header_style="bold magenta")
+    table = Table(
+        title=f"Discovered Tools for '{name}'", show_header=True, header_style="bold magenta"
+    )
     table.add_column("Tool Name", style="bold cyan", width=24)
     table.add_column("Description", style="white")
     table.add_column("Parameters", style="dim", width=28)
@@ -212,7 +230,7 @@ def mcp_test(
     for tool in tools:
         props = tool.inputSchema.get("properties", {}) if isinstance(tool.inputSchema, dict) else {}
         reqs = tool.inputSchema.get("required", []) if isinstance(tool.inputSchema, dict) else []
-        param_list = [f"{p}*" if p in reqs else p for p in props.keys()]
+        param_list = [f"{p}*" if p in reqs else p for p in props]
         param_summary = ", ".join(param_list) if param_list else "None"
         table.add_row(tool.name, tool.description or "", param_summary)
 
@@ -230,7 +248,11 @@ def mcp_remove(
     mgr = McpConfigManager()
     removed = mgr.remove_server(name)
     if not removed:
-        console.print(f"[bold red]Error:[/bold red] MCP server '[yellow]{name}[/yellow]' is not configured.")
+        console.print(
+            f"[bold red]Error:[/bold red] MCP server '[yellow]{name}[/yellow]' is not configured."
+        )
         raise typer.Exit(code=1)
 
-    console.print(f"[bold green]Successfully removed MCP server '[cyan]{name}[/cyan]'.[/bold green]")
+    console.print(
+        f"[bold green]Successfully removed MCP server '[cyan]{name}[/cyan]'.[/bold green]"
+    )

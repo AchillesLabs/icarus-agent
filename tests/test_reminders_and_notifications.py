@@ -6,10 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from icarus_contracts.jobs import ScheduledJobCreate, ScheduledJobStatus
+from icarus_contracts.jobs import ScheduledJobCreate
 from icarus_core.notifications.desktop import (
     send_desktop_notification,
     set_notification_sender,
@@ -20,7 +17,6 @@ from icarus_core.persistence.repository import ScheduledJobRepository
 from icarus_core.time_parser import parse_natural_datetime
 from icarus_core.tools.registry import create_default_registry
 from icarus_core.tools.reminders import ListRemindersTool, ScheduleReminderTool, format_timedelta
-from icarus_worker.daemon import WorkerDaemon
 from icarus_worker.handlers import JobContext, NotificationJobHandler
 
 

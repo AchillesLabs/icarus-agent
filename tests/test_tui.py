@@ -1,12 +1,10 @@
-"""Unit and integration tests for Full-Screen TUI Workspace, alternate screen buffer, and header rendering."""
+"""Unit and integration tests for Full-Screen TUI Workspace and header rendering."""
 
 import io
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from typer.testing import CliRunner
-
 from icarus_cli.main import app
 from icarus_cli.observer import RichAgentObserver
 from icarus_cli.tui import (
@@ -17,11 +15,11 @@ from icarus_cli.tui import (
     ESC_SHOW_CURSOR,
     AlternateScreenBuffer,
     InteractivePrompt,
-    get_history_file,
     render_workspace_header,
 )
 from icarus_contracts.tools import ToolCall, ToolResult
 from rich.console import Console
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -52,10 +50,12 @@ def test_alternate_screen_buffer_context_manager_guarantees_cleanup():
     """AlternateScreenBuffer context manager guarantees screen buffer exit even on error."""
     stream = io.StringIO()
 
-    with pytest.raises(RuntimeError, match="Simulated crash"):
-        with AlternateScreenBuffer(stream=stream, force=True):
-            assert ESC_ENTER_ALT_SCREEN in stream.getvalue()
-            raise RuntimeError("Simulated crash")
+    with (
+        pytest.raises(RuntimeError, match="Simulated crash"),
+        AlternateScreenBuffer(stream=stream, force=True),
+    ):
+        assert ESC_ENTER_ALT_SCREEN in stream.getvalue()
+        raise RuntimeError("Simulated crash")
 
     # Exit code must be present despite the exception
     assert ESC_LEAVE_ALT_SCREEN in stream.getvalue()
@@ -135,7 +135,9 @@ def test_tool_progress_panels_specialized_formatting():
     observer.on_tool_end(res_search)
 
     # 2. Browser action
-    call_browser = ToolCall(id="c2", name="fetch_webpage", arguments='{"url": "https://expedia.com"}')
+    call_browser = ToolCall(
+        id="c2", name="fetch_webpage", arguments='{"url": "https://expedia.com"}'
+    )
     observer.on_tool_start(call_browser)
     res_browser = ToolResult(
         call_id="c2",
@@ -145,7 +147,9 @@ def test_tool_progress_panels_specialized_formatting():
     observer.on_tool_end(res_browser)
 
     # 3. MCP tool
-    call_mcp = ToolCall(id="c3", name="mcp_puppeteer_click", arguments='{"selector": "#submit-btn"}')
+    call_mcp = ToolCall(
+        id="c3", name="mcp_puppeteer_click", arguments='{"selector": "#submit-btn"}'
+    )
     observer.on_tool_start(call_mcp)
     res_mcp = ToolResult(
         call_id="c3",

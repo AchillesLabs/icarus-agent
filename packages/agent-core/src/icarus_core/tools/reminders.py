@@ -8,6 +8,7 @@ from typing import Any
 
 from icarus_contracts.jobs import ScheduledJobCreate, ScheduledJobStatus
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.repository import ScheduledJobRepository
 from icarus_core.time_parser import parse_natural_datetime
@@ -132,7 +133,7 @@ class ScheduleReminderTool(BaseTool):
             formatted_dt = target_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
             output = (
                 f"Successfully scheduled reminder (ID: {job.id}):\n"
-                f"- Message: \"{message}\"\n"
+                f'- Message: "{message}"\n'
                 f"- Scheduled for: {formatted_dt} (in {time_diff})\n"
                 f"- Channel: Desktop Notification"
             )
@@ -228,7 +229,7 @@ class ListRemindersTool(BaseTool):
                 )
                 lines.append(
                     f"- [{j.status.value.upper()}] ID: {j.id[:8]}... | {sched_str} ({diff_str})\n"
-                    f"  Message: \"{msg}\""
+                    f'  Message: "{msg}"'
                 )
 
             return ToolResult(call_id=call_id, name=self.name, output="\n".join(lines), exit_code=0)

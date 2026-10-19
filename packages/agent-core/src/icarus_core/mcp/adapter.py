@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.mcp.client import McpClient
 from icarus_core.mcp.protocol import McpToolSchema
 from icarus_core.tools.base import BaseTool

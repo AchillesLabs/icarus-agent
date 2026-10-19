@@ -506,13 +506,35 @@ wheels = [
 [[package]]
 name = "icarus-agent"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
-    { name = "icarus-api" },
-    { name = "icarus-cli" },
-    { name = "icarus-contracts" },
-    { name = "icarus-core" },
-    { name = "icarus-worker" },
+    { name = "alembic" },
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "keyring" },
+    { name = "prompt-toolkit" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "questionary" },
+    { name = "rich" },
+    { name = "sqlalchemy" },
+    { name = "tiktoken" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "fastapi" },
+    { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+server = [
+    { name = "fastapi" },
+    { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+worker = [
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -524,12 +546,27 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "icarus-api", editable = "apps/api" },
-    { name = "icarus-cli", editable = "apps/cli" },
-    { name = "icarus-contracts", editable = "packages/contracts" },
-    { name = "icarus-core", editable = "packages/agent-core" },
-    { name = "icarus-worker", editable = "apps/worker" },
+    { name = "alembic", specifier = ">=1.13.0" },
+    { name = "cryptography", specifier = ">=42.0.0" },
+    { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.111.0" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.111.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "keyring", specifier = ">=24.0.0" },
+    { name = "prompt-toolkit", specifier = ">=3.0.41" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
+    { name = "pydantic", specifier = ">=2.7.0" },
+    { name = "pydantic-settings", marker = "extra == 'all'", specifier = ">=2.2.0" },
+    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.2.0" },
+    { name = "pydantic-settings", marker = "extra == 'worker'", specifier = ">=2.2.0" },
+    { name = "questionary", specifier = ">=2.1.1" },
+    { name = "rich", specifier = ">=13.7.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "tiktoken", specifier = ">=0.14.0" },
+    { name = "typer", specifier = ">=0.12.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'all'", specifier = ">=0.30.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30.0" },
 ]
+provides-extras = ["server", "worker", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -571,6 +608,7 @@ dependencies = [
     { name = "httpx" },
     { name = "icarus-contracts" },
     { name = "icarus-core" },
+    { name = "prompt-toolkit" },
     { name = "questionary" },
     { name = "rich" },
     { name = "typer" },
@@ -581,6 +619,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "icarus-contracts", editable = "packages/contracts" },
     { name = "icarus-core", editable = "packages/agent-core" },
+    { name = "prompt-toolkit", specifier = ">=3.0.41" },
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "rich", specifier = ">=13.7.0" },
     { name = "typer", specifier = ">=0.12.0" },

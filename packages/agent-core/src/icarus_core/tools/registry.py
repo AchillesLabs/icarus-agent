@@ -88,4 +88,3 @@ def create_default_registry(load_mcp: bool = True) -> ToolRegistry:
             pass
 
     return registry
-

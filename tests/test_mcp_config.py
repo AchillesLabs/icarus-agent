@@ -8,17 +8,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from typer.testing import CliRunner
-
 from icarus_cli.main import app
 from icarus_core.mcp.config import (
     McpConfigManager,
     McpServerConfig,
-    load_configured_mcp_servers,
     load_configured_mcp_servers_sync,
 )
 from icarus_core.mcp.transports import SseTransport, StdioTransport
-from icarus_core.tools.registry import ToolRegistry, create_default_registry
+from icarus_core.tools.registry import ToolRegistry
+from typer.testing import CliRunner
 
 
 def test_mcp_server_config_validation():
@@ -215,6 +213,7 @@ def test_mcp_auto_loader(tmp_path: Path):
     finally:
         for a in loaded_adapters:
             import asyncio
+
             asyncio.run(a.client.close())
 
 
@@ -223,7 +222,10 @@ def test_cli_mcp_commands(tmp_path: Path):
     cfg_file = tmp_path / "mcp.json"
     runner = CliRunner()
 
-    with patch("icarus_cli.mcp_cmd.McpConfigManager", lambda *a, **kw: McpConfigManager(config_path=cfg_file)):
+    with patch(
+        "icarus_cli.mcp_cmd.McpConfigManager",
+        lambda *a, **kw: McpConfigManager(config_path=cfg_file),
+    ):
         # 1. list when empty
         res = runner.invoke(app, ["mcp", "list"])
         assert res.exit_code == 0
@@ -235,7 +237,10 @@ def test_cli_mcp_commands(tmp_path: Path):
         assert "Successfully registered MCP server 'my_calc'" in res_add.stdout
 
         # 3. add sse server
-        res_sse = runner.invoke(app, ["mcp", "add", "my_remote", "https://mcp.example.com/sse", "--sse", "-H", "Auth=test"])
+        res_sse = runner.invoke(
+            app,
+            ["mcp", "add", "my_remote", "https://mcp.example.com/sse", "--sse", "-H", "Auth=test"],
+        )
         assert res_sse.exit_code == 0
         assert "Successfully registered MCP server 'my_remote'" in res_sse.stdout
 

@@ -8,11 +8,11 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
-
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.base import BaseTool
 
 DEFAULT_USER_AGENT = (
@@ -277,12 +277,14 @@ class WebSearchTool(BaseTool):
                     data = resp.json()
                     web_results = data.get("web", {}).get("results", [])
                     if web_results:
-                        lines = [f"### Live Search Results for: \"{query}\"\n"]
+                        lines = [f'### Live Search Results for: "{query}"\n']
                         for i, r in enumerate(web_results[:max_results], 1):
                             title = r.get("title", "No Title")
                             url_val = r.get("url", "")
                             description = r.get("description", "")
-                            lines.append(f"{i}. **{title}**\n   URL: {url_val}\n   Snippet: {description}\n")
+                            lines.append(
+                                f"{i}. **{title}**\n   URL: {url_val}\n   Snippet: {description}\n"
+                            )
                         return ToolResult(
                             call_id=call_id,
                             name="web_search",
@@ -327,17 +329,15 @@ class WebSearchTool(BaseTool):
                     return ToolResult(
                         call_id=call_id,
                         name="web_search",
-                        output=f"No search results found for query: \"{query}\".",
+                        output=f'No search results found for query: "{query}".',
                         exit_code=0,
                     )
 
                 top_results = parser.results[:max_results]
-                lines = [f"### Live Search Results for: \"{query}\"\n"]
+                lines = [f'### Live Search Results for: "{query}"\n']
                 for i, r in enumerate(top_results, 1):
                     lines.append(
-                        f"{i}. **{r['title']}**\n"
-                        f"   URL: {r['url']}\n"
-                        f"   Snippet: {r['snippet']}\n"
+                        f"{i}. **{r['title']}**\n   URL: {r['url']}\n   Snippet: {r['snippet']}\n"
                     )
 
                 return ToolResult(
@@ -465,10 +465,7 @@ class FetchWebpageTool(BaseTool):
                     extracted = extracted[:max_length]
                     was_truncated = True
 
-                result_output = (
-                    f"### Webpage Content: {raw_url}\n\n"
-                    f"{extracted}"
-                )
+                result_output = f"### Webpage Content: {raw_url}\n\n{extracted}"
                 if was_truncated:
                     result_output += f"\n\n[Content truncated at {max_length:,} characters to protect token budget]"
 

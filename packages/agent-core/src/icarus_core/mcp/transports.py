@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shutil
@@ -70,7 +71,6 @@ class StdioTransport(BaseTransport):
             merged_env.update(self.env)
 
         # On Windows, if invoking a .cmd or .bat or npx, shell or exec resolution
-        full_args = [cmd_path] + self.args
         use_shell = sys.platform == "win32" and (
             self.command.endswith((".cmd", ".bat"))
             or cmd_path.endswith((".cmd", ".bat"))
@@ -80,7 +80,9 @@ class StdioTransport(BaseTransport):
         try:
             if use_shell:
                 # Format full shell command string
-                cmd_str = f'"{cmd_path}" ' + " ".join(f'"{a}"' if " " in a else a for a in self.args)
+                cmd_str = f'"{cmd_path}" ' + " ".join(
+                    f'"{a}"' if " " in a else a for a in self.args
+                )
                 self.process = await asyncio.create_subprocess_shell(
                     cmd_str,
                     stdin=asyncio.subprocess.PIPE,
@@ -100,7 +102,9 @@ class StdioTransport(BaseTransport):
                     cwd=str(self.cwd) if self.cwd else None,
                 )
         except Exception as exc:
-            raise RuntimeError(f"Failed to spawn MCP server command '{self.command}': {exc}") from exc
+            raise RuntimeError(
+                f"Failed to spawn MCP server command '{self.command}': {exc}"
+            ) from exc
 
     async def send_message(self, message: dict[str, Any]) -> None:
         """Send newline-delimited JSON message to child process stdin."""
@@ -135,8 +139,8 @@ class StdioTransport(BaseTransport):
                 except json.JSONDecodeError:
                     # Ignore non-JSON diagnostic noise from child stderr/stdout
                     continue
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"MCP server response timed out after {timeout}s.")
+        except TimeoutError:
+            raise TimeoutError(f"MCP server response timed out after {timeout}s.") from None
 
     async def close(self) -> None:
         """Cleanly terminate child process and close pipes."""
@@ -146,20 +150,16 @@ class StdioTransport(BaseTransport):
         proc = self.process
         self.process = None
 
-        try:
+        with contextlib.suppress(Exception):
             if proc.stdin and not proc.stdin.is_closing():
                 proc.stdin.close()
-        except Exception:
-            pass
 
         try:
             proc.terminate()
             await asyncio.wait_for(proc.wait(), timeout=3.0)
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 proc.kill()
-            except Exception:
-                pass
 
 
 class SseTransport(BaseTransport):
@@ -256,25 +256,21 @@ class SseTransport(BaseTransport):
                     event_name = line.partition(":")[2].strip()
                 elif line.startswith("data:"):
                     data_lines.append(line.partition(":")[2].strip())
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"SSE response timed out after {timeout}s.")
+        except TimeoutError:
+            raise TimeoutError(f"SSE response timed out after {timeout}s.") from None
         except StopAsyncIteration:
-            raise RuntimeError("SSE connection closed by remote server.")
+            raise RuntimeError("SSE connection closed by remote server.") from None
 
     async def close(self) -> None:
         """Close SSE stream and HTTP client."""
         if self._sse_response:
-            try:
+            with contextlib.suppress(Exception):
                 await self._sse_response.aclose()
-            except Exception:
-                pass
             self._sse_response = None
 
         if self._owns_client and self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.aclose()
-            except Exception:
-                pass
             self._client = None
 
 
@@ -310,8 +306,8 @@ class MockTransport(BaseTransport):
     async def receive_message(self, timeout: float = 5.0) -> dict[str, Any]:
         try:
             return await asyncio.wait_for(self.outgoing.get(), timeout=timeout)
-        except asyncio.TimeoutError:
-            raise TimeoutError("Mock transport timed out.")
+        except TimeoutError:
+            raise TimeoutError("Mock transport timed out.") from None
 
     async def close(self) -> None:
         self.is_connected = False
