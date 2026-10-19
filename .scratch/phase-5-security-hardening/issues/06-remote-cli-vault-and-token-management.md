@@ -9,11 +9,11 @@
 - [#34](https://github.com/AchillesLabs/icarus-agent/issues/34) (01: Dynamic API Token Issuance, Constant-Time Verification, and Instant Revocation)
 - [#35](https://github.com/AchillesLabs/icarus-agent/issues/35) (02: Encrypted Credential Vault and Server-Side BYOK Management)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Implement `icarus vault set <provider> --key <secret>` uploading and encrypting credentials on the active remote server.
-- [ ] Implement `icarus vault list` rendering a styled Rich table of configured provider keys with masked previews.
-- [ ] Implement `icarus vault remove <provider>` removing a configured credential from the server vault.
-- [ ] Implement `icarus token create <name>` generating and safely displaying a new remote API token.
-- [ ] Implement `icarus token list` and `icarus token revoke <id>` displaying active/revoked tokens and revoking credentials.
-- [ ] CLI integration tests verify interactive command execution, Rich table outputs, and remote API client parity.
+- [x] Implement `icarus vault set <provider> --key <secret>` uploading and encrypting credentials on the active remote server.
+- [x] Implement `icarus vault list` rendering a styled Rich table of configured provider keys with masked previews.
+- [x] Implement `icarus vault remove <provider>` removing a configured credential from the server vault.
+- [x] Implement `icarus token create <name>` generating and safely displaying a new remote API token.
+- [x] Implement `icarus token list` and `icarus token revoke <id>` displaying active/revoked tokens and revoking credentials.
+- [x] CLI integration tests verify interactive command execution, Rich table outputs, and remote API client parity.

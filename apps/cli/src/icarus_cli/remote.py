@@ -3,6 +3,7 @@
 import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -21,7 +22,17 @@ from icarus_contracts.session import (
     SSEEventPayload,
     SSEEventType,
 )
+from icarus_contracts.tokens import (
+    ApiTokenCreatedResponse,
+    ApiTokenCreateRequest,
+    ApiTokenResponse,
+)
 from icarus_contracts.tools import ToolCall, ToolResult
+from icarus_contracts.vault import (
+    VaultCredentialCreate,
+    VaultCredentialDeleteResponse,
+    VaultCredentialResponse,
+)
 
 from icarus_cli.observer import RichAgentObserver
 
@@ -172,6 +183,52 @@ class RemoteAgentClient:
         resp = await client.post(url, json=payload, headers=self._get_headers())
         resp.raise_for_status()
         return RunResponse.model_validate(resp.json())
+
+    async def set_vault_credential(self, provider: str, api_key: str) -> VaultCredentialResponse:
+        """Register or update an encrypted BYOK credential via POST /v1/vault/credentials."""
+        client = await self.get_client()
+        req = VaultCredentialCreate(provider=provider, api_key=api_key)
+        resp = await client.post("/v1/vault/credentials", json=req.model_dump())
+        resp.raise_for_status()
+        return VaultCredentialResponse.model_validate(resp.json())
+
+    async def list_vault_credentials(self) -> list[VaultCredentialResponse]:
+        """List configured provider credentials via GET /v1/vault/credentials."""
+        client = await self.get_client()
+        resp = await client.get("/v1/vault/credentials")
+        resp.raise_for_status()
+        return [VaultCredentialResponse.model_validate(c) for c in resp.json()]
+
+    async def delete_vault_credential(self, provider: str) -> VaultCredentialDeleteResponse:
+        """Delete stored provider credential via DELETE /v1/vault/credentials/{provider}."""
+        client = await self.get_client()
+        resp = await client.delete(f"/v1/vault/credentials/{provider}")
+        resp.raise_for_status()
+        return VaultCredentialDeleteResponse.model_validate(resp.json())
+
+    async def create_api_token(
+        self, name: str, expires_at: datetime | None = None
+    ) -> ApiTokenCreatedResponse:
+        """Issue a new API access token via POST /v1/auth/tokens."""
+        client = await self.get_client()
+        req = ApiTokenCreateRequest(name=name, expires_at=expires_at)
+        resp = await client.post("/v1/auth/tokens", json=req.model_dump(mode="json"))
+        resp.raise_for_status()
+        return ApiTokenCreatedResponse.model_validate(resp.json())
+
+    async def list_api_tokens(self, include_revoked: bool = True) -> list[ApiTokenResponse]:
+        """List active and revoked API tokens via GET /v1/auth/tokens."""
+        client = await self.get_client()
+        resp = await client.get("/v1/auth/tokens", params={"include_revoked": include_revoked})
+        resp.raise_for_status()
+        return [ApiTokenResponse.model_validate(t) for t in resp.json()]
+
+    async def revoke_api_token(self, token_id: str) -> ApiTokenResponse:
+        """Revoke an active API token immediately via POST /v1/auth/tokens/{id}/revoke."""
+        client = await self.get_client()
+        resp = await client.post(f"/v1/auth/tokens/{token_id}/revoke")
+        resp.raise_for_status()
+        return ApiTokenResponse.model_validate(resp.json())
 
     async def stream_run(
         self,
