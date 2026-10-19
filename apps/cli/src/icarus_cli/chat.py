@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
@@ -241,7 +242,7 @@ def _run_remote_chat(
                     for msg in messages:
                         msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                         if msg_role in (MessageRole.USER.value, "user"):
-                            console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
+                            console.print(f"[bold white]> {msg.content}[/bold white]")
                         elif msg_role in (MessageRole.TOOL.value, "tool"):
                             tool_label = msg.name or "Tool"
                             console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
@@ -253,11 +254,9 @@ def _run_remote_chat(
                                     else getattr(tc, "name", "tool")
                                     for tc in msg.tool_calls
                                 ]
-                                console.print(
-                                    f"[dim]✦ Icarus > [Invoked {', '.join(tc_names)}][/dim]"
-                                )
+                                console.print(f"[dim]⚙ [Invoked {', '.join(tc_names)}][/dim]")
                             if msg.content:
-                                console.print(f"[bold gold1]✦ Icarus > [/bold gold1]{msg.content}")
+                                console.print(f"{msg.content}")
                         elif msg_role in (MessageRole.SYSTEM.value, "system") and (
                             "[Previous Conversation Summary]" in (msg.content or "")
                         ):
@@ -276,7 +275,7 @@ def _run_remote_chat(
         try:
             while True:
                 try:
-                    user_input = prompt_session.read_input("You > ")
+                    user_input = prompt_session.read_input("> ")
                 except (KeyboardInterrupt, EOFError):
                     console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                     break
@@ -330,8 +329,8 @@ def _run_remote_chat(
                     )
                     continue
 
-                console.print("[bold gold1]✦ Icarus > [/bold gold1]")
                 observer = RichAgentObserver(console=console, stream_tokens=True)
+                turn_start = time.monotonic()
 
                 try:
                     result = asyncio.run(
@@ -347,6 +346,10 @@ def _run_remote_chat(
                         )
                     )
                     console.print()
+                    elapsed = max(0.0, time.monotonic() - turn_start)
+                    elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
+                    time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
+                    console.print(f"[dim]✻ Cogitated for {elapsed_str} · done {time_str}[/dim]\n")
                     if result.finish_reason == "cancelled":
                         console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
                 except (KeyboardInterrupt, asyncio.CancelledError):
@@ -460,7 +463,7 @@ def run_chat(
             for msg in session_messages:
                 msg_role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                 if msg_role == MessageRole.USER.value:
-                    console.print(f"[bold cyan]You > [/bold cyan]{msg.content}")
+                    console.print(f"[bold white]> {msg.content}[/bold white]")
                 elif msg_role == MessageRole.TOOL.value:
                     tool_label = msg.name or "Tool"
                     console.print(f"[dim]⚙ Tool ({tool_label}) > {msg.content}[/dim]")
@@ -472,9 +475,9 @@ def run_chat(
                             else getattr(tc, "name", "tool")
                             for tc in msg.tool_calls
                         ]
-                        console.print(f"[dim]✦ Icarus > [Invoked {', '.join(tc_names)}][/dim]")
+                        console.print(f"[dim]⚙ [Invoked {', '.join(tc_names)}][/dim]")
                     if msg.content:
-                        console.print(f"[bold gold1]✦ Icarus > [/bold gold1]{msg.content}")
+                        console.print(f"{msg.content}")
                 elif msg_role in (MessageRole.SYSTEM.value, "system") and (
                     "[Previous Conversation Summary]" in (msg.content or "")
                 ):
@@ -488,7 +491,7 @@ def run_chat(
 
         while True:
             try:
-                user_input = prompt_session.read_input("You > ")
+                user_input = prompt_session.read_input("> ")
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Exiting chat session. Goodbye![/dim]")
                 break
@@ -569,7 +572,6 @@ def run_chat(
             prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
 
             # Stream assistant response
-            console.print("[bold gold1]✦ Icarus > [/bold gold1]")
             observer = RichAgentObserver(console=console, stream_tokens=True)
 
             def on_chat_message(msg: PromptMessage) -> None:
@@ -592,6 +594,7 @@ def run_chat(
                 inject_system=True,
                 message_callback=on_chat_message,
             )
+            turn_start = time.monotonic()
             try:
                 loop_result = asyncio.run(
                     agent_loop.run(
@@ -600,6 +603,10 @@ def run_chat(
                     )
                 )
                 console.print()
+                elapsed = max(0.0, time.monotonic() - turn_start)
+                elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
+                time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
+                console.print(f"[dim]✻ Cogitated for {elapsed_str} · done {time_str}[/dim]\n")
                 if loop_result.finish_reason == "cancelled":
                     console.print("\n[bold yellow]Execution interrupted by user.[/bold yellow]")
                 prompt_history = [m for m in loop_result.messages if _is_chat_prompt_message(m)]

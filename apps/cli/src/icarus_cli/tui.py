@@ -7,7 +7,6 @@ persistent history and keybindings.
 
 from __future__ import annotations
 
-import getpass
 import sys
 from pathlib import Path
 from typing import Any, TextIO
@@ -18,7 +17,6 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from icarus_cli import __version__
@@ -92,13 +90,13 @@ class AlternateScreenBuffer:
 
 
 ICARUS_SPRITE = """[bold gold1]
-             ▄█▄
-   █▄       █████       ▄█
-   ███▄   ▄██ █ ██▄   ▄███
-   ▀████▄███████████▄████▀
-     ▀██████ ▀█▀ ██████▀
-        ▀█████████▀
-            ▀█▀
+ ▄█▄        ▄█▄        ▄█▄
+█████▄  ▄█████████▄  ▄█████
+▀█████████████████████████▀
+  ▀███████ ▀███▀ ███████▀
+    ▀████   ▀█▀   ████▀
+       ▀██   █   ██▀
+          ▀  █  ▀
 [/bold gold1]"""
 
 
@@ -112,13 +110,8 @@ def render_workspace_header(
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
 ) -> None:
-    """Render the pinned top status dashboard of the terminal workspace."""
+    """Render the top status dashboard of the terminal workspace."""
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
-
-    try:
-        user = getpass.getuser().capitalize()
-    except Exception:
-        user = "Explorer"
 
     try:
         cwd = str(Path.cwd().resolve())
@@ -135,46 +128,23 @@ def render_workspace_header(
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
-    left_content = (
-        f"[bold white]Welcome back, {user}![/bold white]\n"
-        + ICARUS_SPRITE
-        + f"\n[bold cyan]Model:[/bold cyan] [bold yellow]{model}[/bold yellow] [dim]({provider})[/dim]\n"
-        + f"[dim]Session: {session_id}[/dim]\n"
-        + f"[dim]Dir: {cwd}[/dim]"
-    )
-
     right_content = (
-        f"[bold gold1]Status:[/bold gold1] {status_badge}  •  {tokens_info}\n\n"
-        "[bold gold1]Tips for getting started[/bold gold1]\n"
-        '[dim]•[/dim] [white]Near me:[/white] [italic]"Find affordable hotels near me"[/italic]\n'
-        '[dim]•[/dim] [white]Live web:[/white] [italic]"Search latest news on AI agents"[/italic]\n'
-        '[dim]•[/dim] [white]Reminders:[/white] [italic]"Remind me in 30 mins to take a break"[/italic]\n\n'
-        "[bold gold1]In-Chat Commands[/bold gold1]\n"
-        "[bold cyan]/models[/bold cyan] Switch active model   [bold cyan]/doctor[/bold cyan] Diagnostics\n"
-        "[bold cyan]/clear[/bold cyan]  Clear screen           [bold cyan]/exit[/bold cyan]   Save & quit"
+        f"[bold gold1]* ICARUS AGENT CHAT[/bold gold1] [dim]v{__version__}[/dim]\n"
+        f"[bold cyan]{model}[/bold cyan] [dim]·[/dim] [yellow]{provider}[/yellow] [dim]· Session: {session_id}[/dim]\n"
+        f"[dim]{cwd}[/dim]\n\n"
+        f"[dim]Status:[/dim] {status_badge}  [dim]·[/dim]  {tokens_info}\n"
+        f"[dim]{mode}[/dim]\n"
+        "[dim]Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/models[/bold cyan] to switch models, [bold cyan]/exit[/bold cyan] to quit[/dim]"
     )
 
-    table = Table.grid(expand=True, padding=(0, 2))
-    table.add_column(ratio=5)
-    table.add_column(ratio=6)
-    table.add_row(left_content, right_content)
+    table = Table.grid(padding=(0, 2))
+    table.add_column()
+    table.add_column()
+    table.add_row(ICARUS_SPRITE.strip("\n"), right_content)
 
-    header_title = (
-        f"[bold gold1]* ICARUS AGENT CHAT[/bold gold1] [dim]v{__version__}[/dim] | "
-        f"[bold magenta]{mode}[/bold magenta]"
-    )
-    header_subtitle = (
-        "[dim]Chief of Staff • Live Web Intelligence • MCP Protocol • 24/7 Scheduler[/dim]"
-    )
-
-    panel = Panel(
-        table,
-        title=header_title,
-        subtitle=header_subtitle,
-        border_style="gold1",
-        padding=(1, 2),
-    )
-    console.print(panel)
+    console.print()
+    console.print(table)
+    console.print()
 
 
 def get_history_file() -> Path:
@@ -243,7 +213,7 @@ class InteractivePrompt:
         except Exception:
             self._session = None
 
-    def read_input(self, prompt_text: str = "icarus ❯ ") -> str:
+    def read_input(self, prompt_text: str = "> ") -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
             return self._session.prompt(HTML(f"<b><ansicyan>{prompt_text}</ansicyan></b>"))
