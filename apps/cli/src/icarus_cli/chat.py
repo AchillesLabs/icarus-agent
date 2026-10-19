@@ -240,6 +240,7 @@ def _run_remote_chat(
 
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
+        console.clear()
         render_workspace_header(
             console=console,
             model=effective_model,
@@ -282,9 +283,7 @@ def _run_remote_chat(
                             console.print(
                                 "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
                             )
-                    console.print(
-                        "[dim]───────────────────────────────────────────────────────[/dim]"
-                    )
+                    console.print()
             except Exception as exc:
                 console.print(
                     f"[yellow]Warning: Could not restore previous messages: {exc}[/yellow]"
@@ -302,6 +301,8 @@ def _run_remote_chat(
                     break
 
                 cleaned = user_input.strip()
+                if cleaned.startswith(">"):
+                    cleaned = cleaned.lstrip("> ").strip()
                 if not cleaned:
                     continue
 
@@ -463,6 +464,7 @@ def run_chat(
 
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
+        console.clear()
         total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
         render_workspace_header(
             console=console,
@@ -503,7 +505,7 @@ def run_chat(
                     console.print(
                         "[dim italic]📝 [Compacted Context Summary Restored][/dim italic]"
                     )
-            console.print("[dim]───────────────────────────────────────────────────────[/dim]")
+            console.print()
 
         prompt_history: list[PromptMessage] = session_mgr.get_prompt_history(session.id)
         prompt_session = InteractivePrompt(console=console, stdin=stdin)
@@ -518,6 +520,8 @@ def run_chat(
                 break
 
             cleaned = user_input.strip()
+            if cleaned.startswith(">"):
+                cleaned = cleaned.lstrip("> ").strip()
             if not cleaned:
                 continue
 

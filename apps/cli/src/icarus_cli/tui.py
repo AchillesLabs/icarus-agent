@@ -7,7 +7,6 @@ persistent history and keybindings.
 
 from __future__ import annotations
 
-import shutil
 import sys
 from pathlib import Path
 from typing import Any, TextIO
@@ -92,14 +91,9 @@ class AlternateScreenBuffer:
 
 
 ICARUS_SPRITE = """[bold gold1]
- ▄█▄        ▄█▄        ▄█▄
-█████▄  ▄█████████▄  ▄█████
-▀█████████████████████████▀
-  ▀███████ ▀███▀ ███████▀
-    ▀████   ▀█▀   ████▀
-       ▀██   █   ██▀
-          ▀  █  ▀
-[/bold gold1]"""
+ ▄█▄ ▀█▀ ▄█▄
+█████ █ █████
+ ▀█▀  █  ▀█▀ [/bold gold1]"""
 
 
 def render_workspace_header(
@@ -126,20 +120,18 @@ def render_workspace_header(
         else "[bold green]LOCAL RUNTIME[/bold green]"
     )
     tokens_info = (
-        f"[bold white]Tokens:[/bold white] [bold yellow]{tokens_used:,}[/bold yellow] / "
+        f"[bold yellow]{tokens_used:,}[/bold yellow] / "
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
     right_content = (
-        f"[bold white]ICARUS AGENT CHAT[/bold white] [bold gold1]v{__version__}[/bold gold1]\n"
-        f"[bold cyan]{model}[/bold cyan] [dim]·[/dim] [yellow]{provider}[/yellow]  [dim]•  Session: {session_id}[/dim]\n"
-        f"[dim]{cwd}[/dim]\n\n"
-        f"[dim]Runtime:[/dim] {status_badge}   {tokens_info}\n"
-        f"[dim]{mode}[/dim]\n"
-        "[dim]Shortcuts:[/dim] [bold cyan]Ctrl+C[/bold cyan] Cancel  [dim]·[/dim]  "
-        "[bold cyan]Ctrl+D /exit[/bold cyan] Quit  [dim]·[/dim]  "
-        "[bold cyan]/help[/bold cyan] Commands  [dim]·[/dim]  "
-        "[bold cyan]/models[/bold cyan] Switch Model"
+        f"[bold white]ICARUS AGENT CHAT[/bold white] [bold gold1]v{__version__}[/bold gold1]  [dim]•[/dim]  "
+        f"[bold cyan]{model}[/bold cyan] [dim]({provider})[/dim]  [dim]•[/dim]  [dim]Session: {session_id}[/dim]\n"
+        f"[dim]{cwd}[/dim]  [dim]•[/dim]  {status_badge}  [dim]•[/dim]  {tokens_info}  [dim]•[/dim]  [dim]{mode}[/dim]\n"
+        "[dim]Shortcuts:[/dim] [bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim]  [dim]·[/dim]  "
+        "[bold cyan]Ctrl+D /exit[/bold cyan] [dim]Quit[/dim]  [dim]·[/dim]  "
+        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim]  [dim]·[/dim]  "
+        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim]"
     )
 
     table = Table.grid(padding=(0, 2))
@@ -152,10 +144,9 @@ def render_workspace_header(
         border_style="cyan",
         title="[bold gold1]⚔ Achilles Vanguard[/bold gold1]",
         subtitle="[dim]CLI Autonomous Personal Agent[/dim]",
-        padding=(1, 2),
+        padding=(0, 1),
     )
 
-    console.print()
     console.print(boxed_header)
     console.print()
 
@@ -220,11 +211,7 @@ class InteractivePrompt:
     def read_input(self, prompt_text: str = "> ", rprompt_text: str | None = None) -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
-            cols = shutil.get_terminal_size().columns
-            divider = "─" * max(10, cols - 1)
-            formatted_prompt = HTML(
-                f"<ansigray>{divider}</ansigray>\n<b><ansicyan>{prompt_text}</ansicyan></b>"
-            )
+            formatted_prompt = HTML(f"<b><ansicyan>{prompt_text}</ansicyan></b>")
             rprompt = HTML(f"<ansigray>{rprompt_text}</ansigray>") if rprompt_text else None
             return self._session.prompt(formatted_prompt, rprompt=rprompt)
 
