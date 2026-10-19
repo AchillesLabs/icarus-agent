@@ -1,7 +1,7 @@
 # Spec 0005: Phase 5 - Security Hardening, Server-Side Credential Vault (BYOK), Token Revocation, Rate Limiting, and Audit Logging
 
 - **GitHub Issue**: [#33](https://github.com/AchillesLabs/icarus-agent/issues/33)
-- **Status**: ready-for-agent
+- **Status**: closed
 - **Target**: Phase 5 of Icarus Agent Architecture Roadmap
 - **Estimated Scope**: Server-side encrypted credential vault, Bring-Your-Own-Key (BYOK) dynamic provider dispatch, dynamic API token management & revocation, tenant rate limiting & concurrency throttling, structured security audit logging (`audit.jsonl`), threat model penetration test suite, and CLI vault/token management commands.
 
