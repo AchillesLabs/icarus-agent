@@ -1,5 +1,5 @@
 import asyncio
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from icarus_contracts.doctor import HealthStatus
@@ -31,7 +31,27 @@ from icarus_cli.sessions_view import render_session_history, render_sessions_tab
 from icarus_cli.token_cmd import token_app
 from icarus_cli.vault_cmd import vault_app
 
+
+class IcarusGroup(typer.core.TyperGroup):
+    """Custom Typer/Click Group that auto-dispatches unrecognized words directly to 'run'."""
+
+    def resolve_command(self, ctx: Any, args: list[str]) -> Any:
+        cmd_name = args[0] if args else None
+        cmd = self.get_command(ctx, cmd_name) if cmd_name else None
+        if cmd is not None:
+            return super().resolve_command(ctx, args)
+
+        # If not a known subcommand and not an option (e.g. -v, --help), route to 'run'
+        if cmd_name and not cmd_name.startswith("-"):
+            run_cmd = self.get_command(ctx, "run")
+            if run_cmd:
+                return "run", run_cmd, args
+
+        return super().resolve_command(ctx, args)
+
+
 app = typer.Typer(
+    cls=IcarusGroup,
     name="icarus",
     help="[bold cyan]Icarus[/bold cyan] - Modular, open-source, CLI-first AI agent platform.",
     rich_markup_mode="rich",
@@ -43,6 +63,7 @@ config_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(config_app, name="config")
+
 app.add_typer(server_app, name="server")
 app.add_typer(vault_app, name="vault")
 app.add_typer(token_app, name="token")
@@ -395,7 +416,7 @@ def chat_cmd(
 @app.command(name="run")
 def run_cmd(
     prompt: Annotated[
-        str | None,
+        list[str] | None,
         typer.Argument(
             help="Prompt text to execute. If omitted or '-', reads prompt from standard input.",
         ),
@@ -438,8 +459,15 @@ def run_cmd(
     """Execute a non-interactive one-shot query and stream tokens to stdout."""
     if local or (not remote and not server and ConfigManager().get_active_server() is None):
         ensure_database_migrated()
+
+    full_prompt: str | None = None
+    if prompt:
+        full_prompt = " ".join(prompt) if isinstance(prompt, (list, tuple)) else str(prompt)
+        if not full_prompt.strip():
+            full_prompt = None
+
     exit_code = execute_run(
-        prompt=prompt,
+        prompt=full_prompt,
         provider_name=provider,
         model_name=model,
         temperature=temperature,

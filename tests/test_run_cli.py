@@ -281,3 +281,22 @@ def test_run_with_auto_approve_flags(tmp_path: Path):
 
         res2 = runner.invoke(app, ["run", "Hello", "--provider", "mock", "-y"])
         assert res2.exit_code == 0
+
+
+def test_auto_routing_unrecognized_args_to_run(tmp_path: Path):
+    """Passing direct natural language prompt to `icarus` auto-dispatches to run without 'run' keyword."""
+    db_file = tmp_path / "icarus.db"
+    log_dir = tmp_path / "logs"
+
+    with (
+        patch("icarus_core.paths.get_icarus_home", return_value=tmp_path),
+        patch("icarus_core.paths.get_icarus_db_path", return_value=db_file),
+        patch("icarus_core.paths.get_icarus_logs_dir", return_value=log_dir),
+    ):
+        res1 = runner.invoke(app, ["What is my location?", "--provider", "mock"])
+        assert res1.exit_code == 0
+        assert "Mock response" in res1.stdout
+
+        res2 = runner.invoke(app, ["What", "time", "is", "it?", "--provider", "mock"])
+        assert res2.exit_code == 0
+        assert "Mock response" in res2.stdout
