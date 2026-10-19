@@ -121,6 +121,12 @@ class SystemPromptBuilder:
                     "`fetch_webpage`, `get_current_location`, `read_file`, `run_command`) "
                     "directly in the same turn to fetch the real data and answer the user."
                 ),
+                (
+                    "7. CLI Terminal Formatting: In the terminal CLI, format output cleanly using "
+                    "bullet points, short sections, and standard indentation. Avoid raw HTML tags "
+                    "(like `<br>`) and avoid wide multi-column markdown tables that break terminal "
+                    "wrapping unless specifically requested."
+                ),
             ]
         )
 

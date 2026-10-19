@@ -26,20 +26,30 @@ class RichAgentObserver:
         self.stream_tokens = stream_tokens
         self._current_status = None
         self._active_step_lines = 0
+        self._assistant_header_printed = False
 
     def on_token(self, delta: str) -> None:
         """Stream token deltas directly to configured output stream."""
         if not self.stream_tokens or not delta:
             return
+        if not self._assistant_header_printed:
+            if self.stdout is not None:
+                self.stdout.write("\n● Icarus\n")
+                self.stdout.flush()
+            else:
+                self.console.print("\n[bold gold1]● Icarus[/bold gold1]")
+            self._assistant_header_printed = True
+
+        cleaned_delta = delta.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
         if self.stdout is not None:
-            self.stdout.write(delta)
+            self.stdout.write(cleaned_delta)
             self.stdout.flush()
         else:
-            self.console.print(delta, end="")
+            self.console.print(cleaned_delta, end="", highlight=False)
 
     def on_turn_start(self, turn: int) -> None:
-        """Invoked when turn reasoning begins. Multi-turn reasoning flows seamlessly without disruptive divider lines."""
-        pass
+        """Invoked when turn reasoning begins. Multi-turn reasoning flows seamlessly."""
+        self._assistant_header_printed = False
 
     def on_turn_end(self, turn: int) -> None:
         """Invoked when turn reasoning concludes."""

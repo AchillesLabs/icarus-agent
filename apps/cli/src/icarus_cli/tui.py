@@ -49,13 +49,12 @@ class AlternateScreenBuffer:
 
     @property
     def should_activate(self) -> bool:
-        """Return True if alternate screen buffer should be activated."""
-        if self.force:
-            return True
-        try:
-            return hasattr(self.stream, "isatty") and self.stream.isatty()
-        except Exception:
-            return False
+        """Return True if alternate screen buffer should be activated.
+
+        Defaults to False so terminal preserves native scrollback and mouse wheel scrolling,
+        matching standard CLI behavior (e.g. Hermes Agent).
+        """
+        return self.force
 
     def enter(self) -> None:
         """Switch to alternate screen buffer and home cursor."""
@@ -90,10 +89,18 @@ class AlternateScreenBuffer:
         self.exit()
 
 
+ICARUS_BANNER = """[bold gold1]█ █▀▀ ▄▀█ █▀█ █░█ █▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄░█ ▀█▀
+█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█ ░░ █▀█ █▄█ ██▄ █░▀█ ░█░[/bold gold1]"""
+
 ICARUS_SPRITE = """[bold gold1]
- ▄█▄ ▀█▀ ▄█▄
-█████ █ █████
- ▀█▀  █  ▀█▀ [/bold gold1]"""
+       ,▄▄████▄▄,
+   ▄▄██████████████▄▄
+  ▀▀▀████▀▀██▀▀████▀▀▀
+    ▄██▀   ██   ▀██▄
+   ▀▀      ██      ▀▀
+           ██
+           ██
+          ▄██▄[/bold gold1]"""
 
 
 def render_workspace_header(
@@ -106,7 +113,7 @@ def render_workspace_header(
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
 ) -> None:
-    """Render the top status dashboard of the terminal workspace."""
+    """Render the Hermes-style top status dashboard of the terminal workspace."""
     pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
 
     try:
@@ -124,30 +131,59 @@ def render_workspace_header(
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
-    right_content = (
-        f"[bold white]ICARUS AGENT CHAT[/bold white] [bold gold1]v{__version__}[/bold gold1]  [dim]•[/dim]  "
-        f"[bold cyan]{model}[/bold cyan] [dim]({provider})[/dim]  [dim]•[/dim]  [dim]Session: {session_id}[/dim]\n"
-        f"[dim]{cwd}[/dim]  [dim]•[/dim]  {status_badge}  [dim]•[/dim]  {tokens_info}  [dim]•[/dim]  [dim]{mode}[/dim]\n"
-        "[dim]Shortcuts:[/dim] [bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim]  [dim]·[/dim]  "
-        "[bold cyan]Ctrl+D /exit[/bold cyan] [dim]Quit[/dim]  [dim]·[/dim]  "
-        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim]  [dim]·[/dim]  "
-        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim]"
+    meta_text = (
+        f"[bold cyan]{model}[/bold cyan] [dim]· {provider}[/dim]\n"
+        f"[dim]{cwd}[/dim]\n"
+        f"[dim]Session: {session_id}[/dim]"
     )
 
-    table = Table.grid(padding=(0, 2))
-    table.add_column()
-    table.add_column()
-    table.add_row(ICARUS_SPRITE.strip("\n"), right_content)
-
-    boxed_header = Panel(
-        table,
-        border_style="cyan",
-        title="[bold gold1]⚔ Achilles Vanguard[/bold gold1]",
-        subtitle="[dim]CLI Autonomous Personal Agent[/dim]",
-        padding=(0, 1),
+    right_text = (
+        "[bold gold1]Available Tools[/bold gold1]\n"
+        "[dim]  file: read_file, write_file, search\n"
+        "  shell: run_command\n"
+        "  web: web_search, fetch_webpage\n"
+        "  system: get_current_location, reminders\n"
+        "  (8 tools)[/dim]\n\n"
+        "[bold gold1]Available Skills[/bold gold1]\n"
+        "[dim]  architecture: codebase-design, code-review\n"
+        "  diagnostics: diagnosing-bugs\n"
+        "  research: research\n"
+        "  development: tdd, writing-for-agents\n"
+        "  (6 skills)[/dim]\n\n"
+        "[bold gold1]Shortcuts[/bold gold1]\n"
+        "[bold cyan]/help[/bold cyan] [dim]Commands[/dim]  ·  "
+        "[bold cyan]/models[/bold cyan] [dim]Switch[/dim]  ·  "
+        "[bold cyan]Ctrl+C[/bold cyan] [dim]Cancel[/dim]  ·  "
+        "[bold cyan]/exit[/bold cyan] [dim]Quit[/dim]"
     )
 
-    console.print(boxed_header)
+    left_table = Table.grid(padding=(0, 0))
+    left_table.add_row(ICARUS_SPRITE)
+    left_table.add_row(meta_text)
+
+    main_grid = Table.grid(padding=(0, 4))
+    main_grid.add_column()
+    main_grid.add_column()
+    main_grid.add_row(left_table, right_text)
+
+    panel = Panel(
+        main_grid,
+        border_style="gold1",
+        title=f"[bold gold1]─── ICARUS AGENT CHAT v{__version__} ───[/bold gold1]",
+        subtitle=f"[dim]{mode}  •  {status_badge}  •  {tokens_info}[/dim]",
+        padding=(1, 2),
+    )
+
+    console.print()
+    console.print(ICARUS_BANNER)
+    console.print()
+    console.print(panel)
+    console.print(
+        "[dim]Welcome to Icarus Agent! Type your message or [bold cyan]/help[/bold cyan] for commands.[/dim]"
+    )
+    console.print(
+        "[dim]* Tip: Icarus can search live flights, weather, compare prices, edit code, and manage tasks.[/dim]"
+    )
     console.print()
 
 
@@ -211,14 +247,14 @@ class InteractivePrompt:
     def read_input(self, prompt_text: str = "> ", rprompt_text: str | None = None) -> str:
         """Read a line of user input, supporting interactive prompt_toolkit or fallback."""
         if self._session is not None and self.is_interactive:
-            formatted_prompt = HTML(f"<b><ansicyan>{prompt_text}</ansicyan></b>")
+            formatted_prompt = HTML(f"<b><ansiyellow>{prompt_text}</ansiyellow></b>")
             rprompt = HTML(f"<ansigray>{rprompt_text}</ansigray>") if rprompt_text else None
             return self._session.prompt(formatted_prompt, rprompt=rprompt)
 
         # Fallback for non-interactive runners or redirected stdin
         if hasattr(self.console, "input") and self.stdin is sys.stdin:
             try:
-                return self.console.input(f"[bold cyan]{prompt_text}[/bold cyan]")
+                return self.console.input(f"[bold gold1]{prompt_text}[/bold gold1]")
             except EOFError:
                 raise
         line = self.stdin.readline()

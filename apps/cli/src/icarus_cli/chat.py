@@ -240,7 +240,6 @@ def _run_remote_chat(
 
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
-        console.clear()
         render_workspace_header(
             console=console,
             model=effective_model,
@@ -292,6 +291,12 @@ def _run_remote_chat(
         prompt_session = InteractivePrompt(console=console, stdin=stdin)
         try:
             while True:
+                status_bar = (
+                    f"[bold gold1]⚡ {effective_model}[/bold gold1] [dim]│[/dim] "
+                    f"[dim]REMOTE ({server_label})[/dim] [dim]│[/dim] "
+                    f"[dim]/help for commands[/dim]"
+                )
+                console.print(status_bar)
                 try:
                     user_input = prompt_session.read_input(
                         "> ", rprompt_text=f"{effective_model} · {effective_provider}"
@@ -464,7 +469,6 @@ def run_chat(
 
     alt_buffer = AlternateScreenBuffer(stream=getattr(console, "file", sys.stdout), force=False)
     with alt_buffer:
-        console.clear()
         total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
         render_workspace_header(
             console=console,
@@ -511,6 +515,16 @@ def run_chat(
         prompt_session = InteractivePrompt(console=console, stdin=stdin)
 
         while True:
+            total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
+            token_budget = getattr(cfg, "max_tokens_budget", 128000)
+            pct = (total_tokens / token_budget * 100) if token_budget > 0 else 0.0
+            status_bar = (
+                f"[bold gold1]⚡ {effective_model}[/bold gold1] [dim]│[/dim] "
+                f"[yellow]{total_tokens:,}[/yellow][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
+                f"[dim]LOCAL RUNTIME[/dim] [dim]│[/dim] "
+                f"[dim]/help for commands[/dim]"
+            )
+            console.print(status_bar)
             try:
                 user_input = prompt_session.read_input(
                     "> ", rprompt_text=f"{effective_model} · {effective_provider}"
