@@ -18,7 +18,7 @@ from icarus_core.tools.base import BaseTool
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/128.0.0.0 Safari/537.36 IcarusAgent/0.1.0"
+    "Chrome/128.0.0.0 Safari/537.36"
 )
 
 
@@ -313,6 +313,11 @@ class WebSearchTool(BaseTool):
             should_close = self._client is None
             try:
                 resp = client.post(url, headers=headers, data=data)
+                if resp.status_code != 200:
+                    resp = client.post(
+                        "https://lite.duckduckgo.com/lite/", headers=headers, data=data
+                    )
+
                 if resp.status_code != 200:
                     return ToolResult(
                         call_id=call_id,
