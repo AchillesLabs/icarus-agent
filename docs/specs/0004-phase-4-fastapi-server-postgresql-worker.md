@@ -1,7 +1,7 @@
 # Spec 0004: Phase 4 - Remote FastAPI Server, Authenticated SSE Streaming, Dual-Engine PostgreSQL Persistence, and Background Worker Scheduler
 
 - **GitHub Issue**: [#25](https://github.com/AchillesLabs/icarus-agent/issues/25)
-- **Status**: ready-for-agent
+- **Status**: completed
 - **Target**: Phase 4 of Icarus Agent Architecture Roadmap
 - **Estimated Scope**: Remote execution API, HTTP/SSE streaming, bearer token auth, tenant isolation, PostgreSQL database support, background worker daemon, durable reminder jobs, and Docker Compose deployment.
 
