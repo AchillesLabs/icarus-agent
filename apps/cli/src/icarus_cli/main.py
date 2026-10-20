@@ -11,6 +11,17 @@ if sys.platform == "win32":
         with contextlib.suppress(Exception):
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+    def _silence_asyncio_windows_pipe_cleanup(unraisable: Any) -> None:
+        exc_type = getattr(unraisable, "exc_type", None)
+        exc_val_str = str(getattr(unraisable, "exc_value", ""))
+        if exc_type and issubclass(exc_type, (RuntimeError, ValueError)):
+            if "Event loop is closed" in exc_val_str or "I/O operation on closed pipe" in exc_val_str:
+                return
+        if hasattr(sys, "__unraisablehook__"):
+            sys.__unraisablehook__(unraisable)
+
+    sys.unraisablehook = _silence_asyncio_windows_pipe_cleanup
+
 import typer
 from icarus_contracts.doctor import HealthStatus
 from icarus_contracts.session import SessionDTO

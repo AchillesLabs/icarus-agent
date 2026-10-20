@@ -435,8 +435,12 @@ class FetchWebpageTool(BaseTool):
 
         headers = {
             "User-Agent": DEFAULT_USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Ch-Ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Upgrade-Insecure-Requests": "1",
         }
 
         try:
@@ -444,6 +448,16 @@ class FetchWebpageTool(BaseTool):
             should_close = self._client is None
             try:
                 resp = client.get(raw_url, headers=headers)
+                if resp.status_code == 403:
+                    # Fallback for sites like Wikipedia requiring descriptive user-agent
+                    bot_headers = {
+                        "User-Agent": "IcarusAgent/0.1.0 (https://github.com/AchillesLabs/icarus-agent; support@achilleslabs.io)",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                    fallback_resp = client.get(raw_url, headers=bot_headers)
+                    if fallback_resp.status_code < 400:
+                        resp = fallback_resp
+
                 if resp.status_code >= 400:
                     return ToolResult(
                         call_id=call_id,

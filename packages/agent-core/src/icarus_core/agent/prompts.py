@@ -127,6 +127,13 @@ class SystemPromptBuilder:
                     "(like `<br>`) and avoid wide multi-column markdown tables that break terminal "
                     "wrapping unless specifically requested."
                 ),
+                (
+                    "8. Search & Token Efficiency: When `web_search` results already contain "
+                    "the direct answer to the user's question (e.g. current leaders, dates, "
+                    "facts, weather, or definitions), answer the user immediately. Do NOT trigger "
+                    "redundant follow-up searches or `fetch_webpage` calls unless deep long-form "
+                    "page content was explicitly requested."
+                ),
             ]
         )
 

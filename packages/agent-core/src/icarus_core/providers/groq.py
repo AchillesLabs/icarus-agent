@@ -1,6 +1,8 @@
 """Direct provider adapter for Groq using ultra-fast REST and SSE streaming."""
 
+import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -46,11 +48,13 @@ class GroqProvider:
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
         timeout: float = 60.0,
+        max_retries: int = 2,
     ) -> None:
         self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
         self._client = client
         self.timeout = timeout
+        self.max_retries = max_retries
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is not None:
@@ -62,6 +66,22 @@ class GroqProvider:
             },
             timeout=self.timeout,
         )
+
+    def _get_retry_delay(self, response: httpx.Response, body_text: str) -> float | None:
+        """Extract retry-after seconds from response headers or error body if specified."""
+        retry_header = response.headers.get("retry-after")
+        if retry_header:
+            try:
+                return max(float(retry_header), 0.5)
+            except ValueError:
+                pass
+        match = re.search(r"try again in ([\d\.]+)s", body_text, re.IGNORECASE)
+        if match:
+            try:
+                return max(float(match.group(1)), 0.5)
+            except ValueError:
+                pass
+        return None
 
     def _format_messages(self, messages: list[PromptMessage]) -> list[dict[str, Any]]:
         return format_chat_messages(messages)
@@ -125,21 +145,30 @@ class GroqProvider:
         url = f"{self.base_url}/chat/completions"
         client = self._get_client()
 
-        try:
-            response = await client.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-            )
-        except (httpx.TimeoutException, httpx.NetworkError) as exc:
-            raise ProviderUnavailableError(
-                message=f"Network error connecting to Groq API: {exc}",
-                provider="groq",
-                raw_error=exc,
-            ) from exc
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                raise ProviderUnavailableError(
+                    message=f"Network error connecting to Groq API: {exc}",
+                    provider="groq",
+                    raw_error=exc,
+                ) from exc
 
-        if response.is_error:
-            self._handle_error_response(response)
+            if response.status_code == 429 and attempt < self.max_retries:
+                body_text = response.text if hasattr(response, "text") else ""
+                delay = self._get_retry_delay(response, body_text)
+                if delay is not None and delay <= 25.0:
+                    await asyncio.sleep(delay + 0.2)
+                    continue
+
+            if response.is_error:
+                self._handle_error_response(response)
+            break
 
         data = response.json()
         choice = data["choices"][0]
@@ -163,7 +192,7 @@ class GroqProvider:
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream token deltas from Groq SSE chat completions endpoint."""
+        """Stream token deltas from Groq SSE chat completions endpoint with automatic rate-limit backoff."""
         target_model = model or self.DEFAULT_MODEL
         payload: dict[str, Any] = {
             "model": target_model,
@@ -180,69 +209,81 @@ class GroqProvider:
         client = self._get_client()
         tool_accumulator = ToolCallAccumulator()
 
-        try:
-            async with client.stream(
-                "POST",
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-            ) as response:
-                if response.is_error:
-                    await response.aread()
-                    self._handle_error_response(response)
+        for attempt in range(self.max_retries + 1):
+            try:
+                async with client.stream(
+                    "POST",
+                    url,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                ) as response:
+                    if response.status_code == 429 and attempt < self.max_retries:
+                        await response.aread()
+                        body_text = response.text
+                        delay = self._get_retry_delay(response, body_text)
+                        if delay is not None and delay <= 25.0:
+                            await asyncio.sleep(delay + 0.2)
+                            continue
 
-                async for line in response.aiter_lines():
-                    cleaned = line.strip()
-                    if not cleaned or not cleaned.startswith("data:"):
-                        continue
-                    data_str = cleaned[5:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        chunk_dict = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        continue
+                    if response.is_error:
+                        await response.aread()
+                        self._handle_error_response(response)
 
-                    choices = chunk_dict.get("choices", [])
-                    if not choices:
-                        continue
-                    choice = choices[0]
-                    delta = choice.get("delta", {})
-                    delta_text = delta.get("content") or ""
-                    finish_reason = choice.get("finish_reason")
-                    raw_tool_deltas = delta.get("tool_calls")
+                    async for line in response.aiter_lines():
+                        cleaned = line.strip()
+                        if not cleaned or not cleaned.startswith("data:"):
+                            continue
+                        data_str = cleaned[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk_dict = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
 
-                    if raw_tool_deltas:
-                        tool_accumulator.update(raw_tool_deltas)
+                        choices = chunk_dict.get("choices", [])
+                        if not choices:
+                            continue
+                        choice = choices[0]
+                        delta = choice.get("delta", {})
+                        delta_text = delta.get("content") or ""
+                        finish_reason = choice.get("finish_reason")
+                        raw_tool_deltas = delta.get("tool_calls")
 
-                    accumulated_tools = []
-                    if finish_reason == "tool_calls" or (
-                        finish_reason and tool_accumulator.get_tool_calls()
-                    ):
-                        accumulated_tools = tool_accumulator.get_tool_calls()
+                        if raw_tool_deltas:
+                            tool_accumulator.update(raw_tool_deltas)
 
-                    yield StreamChunk(
-                        delta=delta_text,
-                        finish_reason=finish_reason,
-                        usage=chunk_dict.get("usage"),
-                        tool_calls=accumulated_tools,
-                        tool_call_deltas=raw_tool_deltas,
-                    )
+                        accumulated_tools = []
+                        if finish_reason == "tool_calls" or (
+                            finish_reason and tool_accumulator.get_tool_calls()
+                        ):
+                            accumulated_tools = tool_accumulator.get_tool_calls()
 
-                # If stream finished and tool calls were accumulated but not yet yielded
-                remaining_tools = tool_accumulator.get_tool_calls()
-                if remaining_tools and not accumulated_tools:
-                    yield StreamChunk(
-                        delta="",
-                        finish_reason="tool_calls",
-                        tool_calls=remaining_tools,
-                    )
-        except (httpx.TimeoutException, httpx.NetworkError) as exc:
-            raise ProviderUnavailableError(
-                message=f"Network error during Groq token streaming: {exc}",
-                provider="groq",
-                raw_error=exc,
-            ) from exc
+                        yield StreamChunk(
+                            delta=delta_text,
+                            finish_reason=finish_reason,
+                            usage=chunk_dict.get("usage"),
+                            tool_calls=accumulated_tools,
+                            tool_call_deltas=raw_tool_deltas,
+                        )
+
+                    # If stream finished and tool calls were accumulated but not yet yielded
+                    remaining_tools = tool_accumulator.get_tool_calls()
+                    if remaining_tools and not accumulated_tools:
+                        yield StreamChunk(
+                            delta="",
+                            finish_reason="tool_calls",
+                            tool_calls=remaining_tools,
+                        )
+                    return
+            except (RateLimitError, ProviderError, AuthenticationError, ContextLengthExceededError, ProviderUnavailableError):
+                raise
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                raise ProviderUnavailableError(
+                    message=f"Network error during Groq token streaming: {exc}",
+                    provider="groq",
+                    raw_error=exc,
+                ) from exc
 
     def get_capabilities(self, model: str | None = None) -> ProviderCapabilities:
         """Return Groq model capabilities and token boundaries."""
