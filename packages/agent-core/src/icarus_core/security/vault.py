@@ -79,8 +79,7 @@ class CredentialVault:
         raw_key = master_key or os.environ.get("ICARUS_VAULT_MASTER_KEY")
         if not raw_key:
             dev_permitted = (
-                allow_insecure_dev_key
-                or os.environ.get("ICARUS_ALLOW_INSECURE_DEV_VAULT") == "1"
+                allow_insecure_dev_key or os.environ.get("ICARUS_ALLOW_INSECURE_DEV_VAULT") == "1"
             )
             if not dev_permitted:
                 raise MissingMasterKeyError(

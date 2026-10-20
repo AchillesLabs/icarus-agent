@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.base import BaseTool
 
 
@@ -100,7 +101,11 @@ class HttpRequestTool(BaseTool):
 
         headers.setdefault("User-Agent", "IcarusAgent/0.1.0")
 
-        from icarus_core.security.url_policy import SSRFProtectionError, create_safe_client, validate_url
+        from icarus_core.security.url_policy import (
+            SSRFProtectionError,
+            create_safe_client,
+            validate_url,
+        )
 
         try:
             validated_url = validate_url(url)
@@ -135,17 +140,23 @@ class HttpRequestTool(BaseTool):
                         pass
 
                 if len(text_body) > 30000:
-                    text_body = text_body[:30000] + f"\n... (truncated {len(text_body) - 30000} characters)"
+                    text_body = (
+                        text_body[:30000] + f"\n... (truncated {len(text_body) - 30000} characters)"
+                    )
 
                 status_line = f"HTTP {response.status_code} {response.reason_phrase}"
-                output = f"Status: {status_line}\nURL: {response.url}\n\nResponse Body:\n{text_body}"
+                output = (
+                    f"Status: {status_line}\nURL: {response.url}\n\nResponse Body:\n{text_body}"
+                )
 
                 return ToolResult(
                     call_id=call_id,
                     name=self.name,
                     output=output,
                     exit_code=0 if response.is_success else 1,
-                    error="" if response.is_success else f"HTTP error status: {response.status_code}",
+                    error=""
+                    if response.is_success
+                    else f"HTTP error status: {response.status_code}",
                 )
         except SSRFProtectionError as exc:
             return ToolResult(

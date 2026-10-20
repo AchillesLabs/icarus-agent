@@ -149,9 +149,7 @@ def pull_skill_cmd(
     ] = False,
     overwrite: Annotated[
         bool,
-        typer.Option(
-            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
-        ),
+        typer.Option("--overwrite", "-f", help="Overwrite existing skill if it already exists."),
     ] = False,
 ) -> None:
     """Pull and install an external skill from a URL, Git repository, GitHub shorthand, or local path."""
@@ -184,9 +182,7 @@ def install_skill_cmd(
     ] = False,
     overwrite: Annotated[
         bool,
-        typer.Option(
-            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
-        ),
+        typer.Option("--overwrite", "-f", help="Overwrite existing skill if it already exists."),
     ] = False,
 ) -> None:
     """Install an external skill (alias for 'pull')."""
@@ -219,11 +215,8 @@ def add_skill_cmd(
     ] = False,
     overwrite: Annotated[
         bool,
-        typer.Option(
-            "--overwrite", "-f", help="Overwrite existing skill if it already exists."
-        ),
+        typer.Option("--overwrite", "-f", help="Overwrite existing skill if it already exists."),
     ] = False,
 ) -> None:
     """Add an external skill (alias for 'pull')."""
     _execute_pull(source, name, skill, global_scope, overwrite)
-

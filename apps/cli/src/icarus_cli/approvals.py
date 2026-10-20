@@ -49,7 +49,10 @@ def format_action_preview(tool_call: ToolCall) -> str:
         )
 
     name_lower = tool_call.name.lower()
-    if any(k in name_lower for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")):
+    if any(
+        k in name_lower
+        for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")
+    ):
         lines = [
             "[bold red]CRITICAL FINANCIAL / PAYMENT ACTION[/bold red]",
             f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
@@ -94,7 +97,10 @@ def prompt_for_approval(
     preview_content = format_action_preview(tool_call)
 
     name_lower = tool_call.name.lower()
-    if any(k in name_lower for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")):
+    if any(
+        k in name_lower
+        for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")
+    ):
         title = "[bold red]⚠️ Financial Payment Approval Required[/bold red]"
         border_style = "red"
         subtitle = "[bold yellow]Verify amount, recipient, and payment authorization[/bold yellow]"

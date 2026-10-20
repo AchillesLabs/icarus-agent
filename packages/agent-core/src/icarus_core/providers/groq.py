@@ -276,7 +276,13 @@ class GroqProvider:
                             tool_calls=remaining_tools,
                         )
                     return
-            except (RateLimitError, ProviderError, AuthenticationError, ContextLengthExceededError, ProviderUnavailableError):
+            except (
+                RateLimitError,
+                ProviderError,
+                AuthenticationError,
+                ContextLengthExceededError,
+                ProviderUnavailableError,
+            ):
                 raise
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 raise ProviderUnavailableError(

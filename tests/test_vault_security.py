@@ -7,6 +7,7 @@ import pytest
 from icarus_core.security.vault import (
     CredentialVault,
     MissingMasterKeyError,
+    VaultDecryptionError,
     mask_secret,
     redact_secret,
     rotate_secret,
@@ -16,15 +17,16 @@ from icarus_core.tools.auth import (
     get_credentials_file,
     get_legacy_credentials_file,
     load_stored_credentials,
-    save_stored_credentials,
 )
 
 
 def test_missing_master_key_fails_closed():
     """In production without ICARUS_VAULT_MASTER_KEY or explicit key, vault must fail closed."""
-    with patch.dict("os.environ", {}, clear=True):
-        with pytest.raises(MissingMasterKeyError, match="No encryption master key provided"):
-            CredentialVault(allow_insecure_dev_key=False)
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(MissingMasterKeyError, match="No encryption master key provided"),
+    ):
+        CredentialVault(allow_insecure_dev_key=False)
 
 
 def test_key_rotation_and_rekey():
@@ -36,7 +38,7 @@ def test_key_rotation_and_rekey():
     old_ciphertext = vault_old.encrypt(secret_value)
 
     # Cannot decrypt old ciphertext with new vault directly
-    with pytest.raises(Exception):
+    with pytest.raises(VaultDecryptionError):
         vault_new.decrypt(old_ciphertext)
 
     # Rotate secret

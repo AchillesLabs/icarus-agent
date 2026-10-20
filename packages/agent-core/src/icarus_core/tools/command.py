@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
@@ -72,9 +73,6 @@ def resolve_shell_args(command: str, shell: str | None = None) -> list[str]:
         return [bash, "-c", command]
     sh = shutil.which("sh") or "/bin/sh"
     return [sh, "-c", command]
-
-
-from abc import ABC, abstractmethod
 
 
 class CommandSandboxBackend(ABC):

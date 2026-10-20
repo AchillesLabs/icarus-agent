@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
+import contextlib
 from typing import Annotated
 
 import typer
-from icarus_contracts.tools import ToolDefinition, ToolSafetyCategory
+from icarus_contracts.tools import ToolSafetyCategory
 from icarus_core.theme import get_theme
 from icarus_core.tools.registry import create_default_registry
 from rich.console import Console
@@ -28,7 +28,9 @@ def render_tools_table(console: Console, filter_text: str | None = None) -> None
 
     if filter_text:
         query = filter_text.strip().lower()
-        tools = [t for t in tools if query in t.name.lower() or query in (t.description or "").lower()]
+        tools = [
+            t for t in tools if query in t.name.lower() or query in (t.description or "").lower()
+        ]
 
     from icarus_core.tools.toolsets import ToolsetManager
 
@@ -71,7 +73,9 @@ def render_tools_table(console: Console, filter_text: str | None = None) -> None
             desc = desc[:52] + "..."
 
         name_display = tool.name if is_ts_active else f"[dim]{tool.name} (disabled)[/dim]"
-        table.add_row(name_display, ts_display, f"[{cat_style}]{cat_label}[/{cat_style}]", source, desc)
+        table.add_row(
+            name_display, ts_display, f"[{cat_style}]{cat_label}[/{cat_style}]", source, desc
+        )
 
     console.print(table)
     console.print(
@@ -96,12 +100,26 @@ def render_tool_detail(console: Console, tool_name: str) -> None:
     definition = tool.definition
     is_approval = definition.safety_category == ToolSafetyCategory.REQUIRES_APPROVAL
     cat_style = "bold yellow" if is_approval else "bold green"
-    cat_label = "REQUIRES APPROVAL (Interactive [y/N] prompt)" if is_approval else "SAFE READ (Auto-approved)"
+    cat_label = (
+        "REQUIRES APPROVAL (Interactive [y/N] prompt)"
+        if is_approval
+        else "SAFE READ (Auto-approved)"
+    )
 
-    props = definition.parameters.get("properties", {}) if isinstance(definition.parameters, dict) else {}
-    required = set(definition.parameters.get("required", [])) if isinstance(definition.parameters, dict) else set()
+    props = (
+        definition.parameters.get("properties", {})
+        if isinstance(definition.parameters, dict)
+        else {}
+    )
+    required = (
+        set(definition.parameters.get("required", []))
+        if isinstance(definition.parameters, dict)
+        else set()
+    )
 
-    param_table = Table(title="Parameters Schema", show_header=True, header_style=f"bold {th.primary}")
+    param_table = Table(
+        title="Parameters Schema", show_header=True, header_style=f"bold {th.primary}"
+    )
     param_table.add_column("Parameter", style=f"bold {th.secondary}", width=18)
     param_table.add_column("Type", width=10)
     param_table.add_column("Required", width=10)
@@ -123,7 +141,13 @@ def render_tool_detail(console: Console, tool_name: str) -> None:
         f"[bold {th.primary}]Description:[/bold {th.primary}] {definition.description}\n"
     )
 
-    console.print(Panel(meta_text, border_style=th.border, title=f"[bold {th.secondary}]Tool Details: {definition.name}[/bold {th.secondary}]"))
+    console.print(
+        Panel(
+            meta_text,
+            border_style=th.border,
+            title=f"[bold {th.secondary}]Tool Details: {definition.name}[/bold {th.secondary}]",
+        )
+    )
     console.print(param_table)
     console.print()
 
@@ -187,9 +211,10 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
     """Walk through connecting an essential tool connector from catalog with auto-browser launch."""
     import os
     import webbrowser
+
     from icarus_core.mcp.config import McpConfigManager, McpServerConfig
     from icarus_core.tools.auth import ToolAuthManager
-    from icarus_core.tools.catalog import ESSENTIAL_CATALOG, get_connector
+    from icarus_core.tools.catalog import get_connector
 
     mgr = McpConfigManager()
     th = get_theme()
@@ -197,7 +222,9 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
     if not connector_id:
         render_connectors_catalog(console)
         try:
-            val = console.input(f"[bold {th.primary}]Enter Connector ID to connect (or press Enter to cancel): [/bold {th.primary}]").strip()
+            val = console.input(
+                f"[bold {th.primary}]Enter Connector ID to connect (or press Enter to cancel): [/bold {th.primary}]"
+            ).strip()
             if not val:
                 return False
             connector_id = val
@@ -212,7 +239,9 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
 
     # Fully zero-config built-ins without credentials
     if conn.is_built_in and not conn.env_vars:
-        console.print(f"[bold green]✔ '{conn.name}' is already built-in and active out-of-the-box![/bold green]")
+        console.print(
+            f"[bold green]✔ '{conn.name}' is already built-in and active out-of-the-box![/bold green]"
+        )
         return True
 
     console.print(f"\n[bold {th.primary}]Connecting {conn.name}...[/bold {th.primary}]")
@@ -220,32 +249,42 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
 
     # Auto-launch default browser for OAuth / developer keys
     if conn.doc_url:
-        console.print(f"\n[bold cyan]🌐 Opening authorization page in your default browser...[/bold cyan]")
+        console.print(
+            "\n[bold cyan]🌐 Opening authorization page in your default browser...[/bold cyan]"
+        )
         console.print(f"   👉 [bold underline blue]{conn.doc_url}[/bold underline blue]\n")
-        try:
+        with contextlib.suppress(Exception):
             webbrowser.open(conn.doc_url)
-        except Exception:
-            pass
 
     # Special handling for Gmail
     if conn.id == "gmail":
         console.print("[bold white]Google Account Security -> App Passwords:[/bold white]")
         console.print("[dim]1. Enter app name 'Icarus' and click Create.[/dim]")
         console.print("[dim]2. Copy the 16-character password (e.g., 'abcd efgh ijkl mnop').[/dim]")
-        console.print("[dim]Tip: For 1-click OAuth without app passwords, connect Composio: `icarus connect composio`[/dim]\n")
+        console.print(
+            "[dim]Tip: For 1-click OAuth without app passwords, connect Composio: `icarus connect composio`[/dim]\n"
+        )
 
         try:
-            email_addr = console.input("[bold yellow]Enter your Gmail address (e.g. you@gmail.com): [/bold yellow]").strip()
-            pwd = console.input("[bold yellow]Enter your 16-char App Password: [/bold yellow]", password=True).strip()
+            email_addr = console.input(
+                "[bold yellow]Enter your Gmail address (e.g. you@gmail.com): [/bold yellow]"
+            ).strip()
+            pwd = console.input(
+                "[bold yellow]Enter your 16-char App Password: [/bold yellow]", password=True
+            ).strip()
             if not pwd:
                 console.print("\n[dim]Connection cancelled.[/dim]")
                 return False
-            
+
             combined = f"{email_addr}:{pwd}" if email_addr else pwd
             ToolAuthManager.save_token("gmail", combined)
             os.environ["GMAIL_APP_PASSWORD"] = combined
-            console.print(f"[bold green]✔ Successfully connected Gmail ({email_addr or 'default'})![/bold green]")
-            console.print("[dim]Tools `gmail_search` and `gmail_send` are now ready for your commands.[/dim]\n")
+            console.print(
+                f"[bold green]✔ Successfully connected Gmail ({email_addr or 'default'})![/bold green]"
+            )
+            console.print(
+                "[dim]Tools `gmail_search` and `gmail_send` are now ready for your commands.[/dim]\n"
+            )
             return True
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Connection cancelled.[/dim]")
@@ -254,16 +293,22 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
     # Special handling for Google Calendar
     if conn.id == "calendar":
         console.print("[bold white]Google Calendar Credentials:[/bold white]")
-        console.print("[dim]Use your Google App Password or Calendar API token to authorize events & scheduling.[/dim]\n")
+        console.print(
+            "[dim]Use your Google App Password or Calendar API token to authorize events & scheduling.[/dim]\n"
+        )
         try:
-            pwd = console.input("[bold yellow]Enter Google App Password or Token: [/bold yellow]", password=True).strip()
+            pwd = console.input(
+                "[bold yellow]Enter Google App Password or Token: [/bold yellow]", password=True
+            ).strip()
             if not pwd:
                 console.print("\n[dim]Connection cancelled.[/dim]")
                 return False
             ToolAuthManager.save_token("calendar", pwd)
             os.environ["GOOGLE_CALENDAR_TOKEN"] = pwd
-            console.print(f"[bold green]✔ Successfully connected Google Calendar![/bold green]")
-            console.print("[dim]Tools `calendar_events` and `calendar_create_event` are now ready.[/dim]\n")
+            console.print("[bold green]✔ Successfully connected Google Calendar![/bold green]")
+            console.print(
+                "[dim]Tools `calendar_events` and `calendar_create_event` are now ready.[/dim]\n"
+            )
             return True
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Connection cancelled.[/dim]")
@@ -278,8 +323,12 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
         )
         try:
             mgr.add_server(conn.id, server_cfg)
-            console.print(f"[bold green]✔ Successfully connected '{conn.name}' (Zero keys required)![/bold green]")
-            console.print(f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n")
+            console.print(
+                f"[bold green]✔ Successfully connected '{conn.name}' (Zero keys required)![/bold green]"
+            )
+            console.print(
+                f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n"
+            )
             return True
         except Exception as exc:
             console.print(f"[bold red]Failed to save connector:[/bold red] {exc}")
@@ -302,7 +351,9 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
             elif existing:
                 env_dict[ev] = existing
             else:
-                console.print(f"[yellow]Warning: {ev} was left empty. Tool may fail if required.[/yellow]")
+                console.print(
+                    f"[yellow]Warning: {ev} was left empty. Tool may fail if required.[/yellow]"
+                )
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Connection cancelled.[/dim]")
             return False
@@ -317,7 +368,9 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
     try:
         mgr.add_server(conn.id, server_cfg)
         console.print(f"[bold green]✔ Successfully connected '{conn.name}'![/bold green]")
-        console.print(f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n")
+        console.print(
+            f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n"
+        )
         return True
     except Exception as exc:
         console.print(f"[bold red]Failed to save connector:[/bold red] {exc}")
@@ -332,8 +385,9 @@ def catalog_tools() -> None:
 
 @tools_app.command(name="connect")
 def connect_tool(
-    connector_id: Annotated[str | None, typer.Argument(help="Optional Connector ID (e.g. browser, github, stripe).")] = None,
+    connector_id: Annotated[
+        str | None, typer.Argument(help="Optional Connector ID (e.g. browser, github, stripe).")
+    ] = None,
 ) -> None:
     """Connect and authenticate an essential tool connector."""
     connect_tool_interactive(console, connector_id=connector_id)
-

@@ -1,10 +1,11 @@
 """Tests for CLI tools command suite and /tools inspection view."""
 
 import io
-from typer.testing import CliRunner
-from rich.console import Console
+
 from icarus_cli.main import app
-from icarus_cli.tools_cmd import render_tools_table, render_tool_detail
+from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+from rich.console import Console
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -92,12 +93,15 @@ def test_get_connector_with_aliases():
 def test_cli_connect_gmail_interactive(monkeypatch):
     """icarus connect gmail prompts for credentials and saves them safely."""
     from unittest.mock import patch
+
     from icarus_core.tools.auth import ToolAuthManager
 
     with patch("webbrowser.open") as mock_open:
         try:
             # Simulate entering email and app password
-            result = runner.invoke(app, ["connect", "gmail"], input="testuser@gmail.com\nabcdefghijklmnop\n")
+            result = runner.invoke(
+                app, ["connect", "gmail"], input="testuser@gmail.com\nabcdefghijklmnop\n"
+            )
             assert result.exit_code == 0
             assert "Connecting Gmail" in result.output
             assert "Successfully connected Gmail" in result.output
@@ -110,6 +114,7 @@ def test_cli_connect_gmail_interactive(monkeypatch):
 def test_cli_connect_browser_no_auth():
     """icarus connect browser connects Puppeteer without requiring API keys."""
     from unittest.mock import patch
+
     from icarus_core.mcp.config import McpConfigManager
 
     with patch("webbrowser.open"):
@@ -128,4 +133,3 @@ def test_cli_connect_unknown_connector():
     assert result.exit_code == 0
     assert "Unknown connector ID 'totally_unknown_service'" in result.output
     assert "icarus tools catalog" in result.output
-

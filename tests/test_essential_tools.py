@@ -1,18 +1,14 @@
 """Comprehensive tests for all Essential Personal Agent tools and external auth links."""
 
 import io
-from pathlib import Path
 from unittest.mock import patch
 
-from icarus_contracts.tools import ToolCall, ToolSafetyCategory
 from icarus_core.tools.auth import ToolAuthManager
-from icarus_core.tools.browser import BrowserNavigateTool
-from icarus_core.tools.calendar import CalendarCreateEventTool, CalendarEventsTool
-from icarus_core.tools.github import GithubCreateIssueTool, GithubIssuesTool
-from icarus_core.tools.gmail import GmailSearchTool, GmailSendTool
+from icarus_core.tools.calendar import CalendarEventsTool
+from icarus_core.tools.github import GithubIssuesTool
+from icarus_core.tools.gmail import GmailSearchTool
 from icarus_core.tools.http import HttpRequestTool
 from icarus_core.tools.registry import create_default_registry
-from icarus_core.tools.slack import SlackSendMessageTool
 from icarus_core.tools.stripe import StripePaymentLinkTool
 from icarus_core.tools.weather import GetWeatherTool
 from rich.console import Console
@@ -72,41 +68,49 @@ def test_tool_auth_prompt_renders_link_and_collects_token():
 def test_gmail_unauthorized_gracefully_guides_user():
     """GmailSearchTool prompts or reports authorization link when token is empty."""
     tool = GmailSearchTool()
-    with patch.object(ToolAuthManager, "get_token", return_value=None):
-        with patch.object(ToolAuthManager, "prompt_authorization", return_value=None):
-            res = tool.execute({"query": "is:unread"}, workspace_root=".")
-            assert res.exit_code == 1
-            assert "myaccount.google.com/apppasswords" in res.error
+    with (
+        patch.object(ToolAuthManager, "get_token", return_value=None),
+        patch.object(ToolAuthManager, "prompt_authorization", return_value=None),
+    ):
+        res = tool.execute({"query": "is:unread"}, workspace_root=".")
+        assert res.exit_code == 1
+        assert "myaccount.google.com/apppasswords" in res.error
 
 
 def test_calendar_unauthorized_gracefully_guides_user():
     """CalendarEventsTool reports authorization link when unauthenticated."""
     tool = CalendarEventsTool()
-    with patch.object(ToolAuthManager, "get_token", return_value=None):
-        with patch.object(ToolAuthManager, "prompt_authorization", return_value=None):
-            res = tool.execute({"time_min": "today"}, workspace_root=".")
-            assert res.exit_code == 1
-            assert "myaccount.google.com/apppasswords" in res.error
+    with (
+        patch.object(ToolAuthManager, "get_token", return_value=None),
+        patch.object(ToolAuthManager, "prompt_authorization", return_value=None),
+    ):
+        res = tool.execute({"time_min": "today"}, workspace_root=".")
+        assert res.exit_code == 1
+        assert "myaccount.google.com/apppasswords" in res.error
 
 
 def test_github_unauthorized_gracefully_guides_user():
     """GithubIssuesTool reports github token link when unauthenticated."""
     tool = GithubIssuesTool()
-    with patch.object(ToolAuthManager, "get_token", return_value=None):
-        with patch.object(ToolAuthManager, "prompt_authorization", return_value=None):
-            res = tool.execute({"repo": "owner/repo"}, workspace_root=".")
-            assert res.exit_code == 1
-            assert "github.com/settings/tokens" in res.error
+    with (
+        patch.object(ToolAuthManager, "get_token", return_value=None),
+        patch.object(ToolAuthManager, "prompt_authorization", return_value=None),
+    ):
+        res = tool.execute({"repo": "owner/repo"}, workspace_root=".")
+        assert res.exit_code == 1
+        assert "github.com/settings/tokens" in res.error
 
 
 def test_stripe_unauthorized_gracefully_guides_user():
     """StripePaymentLinkTool reports stripe dashboard link when unauthenticated."""
     tool = StripePaymentLinkTool()
-    with patch.object(ToolAuthManager, "get_token", return_value=None):
-        with patch.object(ToolAuthManager, "prompt_authorization", return_value=None):
-            res = tool.execute({"amount": 10.0, "item_name": "Pro"}, workspace_root=".")
-            assert res.exit_code == 1
-            assert "dashboard.stripe.com/apikeys" in res.error
+    with (
+        patch.object(ToolAuthManager, "get_token", return_value=None),
+        patch.object(ToolAuthManager, "prompt_authorization", return_value=None),
+    ):
+        res = tool.execute({"amount": 10.0, "item_name": "Pro"}, workspace_root=".")
+        assert res.exit_code == 1
+        assert "dashboard.stripe.com/apikeys" in res.error
 
 
 def test_weather_tool_validation():

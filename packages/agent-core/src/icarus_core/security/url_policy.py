@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import logging
 import socket
@@ -22,7 +23,7 @@ FORBIDDEN_HOSTNAMES = {
 
 CLOUD_METADATA_IPS = {
     "169.254.169.254",  # AWS/GCP/Azure/OpenStack metadata
-    "fd00:ec2::254",    # AWS IPv6 metadata
+    "fd00:ec2::254",  # AWS IPv6 metadata
 }
 
 
@@ -108,10 +109,8 @@ def validate_url(
 
     # Check if host is a raw IP literal
     raw_ip = None
-    try:
+    with contextlib.suppress(ValueError):
         raw_ip = ipaddress.ip_address(lowered_host)
-    except ValueError:
-        pass
 
     if raw_ip is not None:
         if not is_ip_allowed(str(raw_ip), allow_private=allow_private):
@@ -160,6 +159,7 @@ def create_safe_client(
     transport: httpx.BaseTransport | None = None,
 ) -> httpx.Client:
     """Instantiate an httpx.Client configured with SSRF redirect validation hooks."""
+
     def _validate_request_hook(request: httpx.Request) -> None:
         validate_url(str(request.url), allow_private=allow_private, resolve_dns=resolve_dns)
 
@@ -196,6 +196,7 @@ def create_safe_async_client(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> httpx.AsyncClient:
     """Instantiate an httpx.AsyncClient configured with SSRF redirect validation hooks."""
+
     async def _validate_request_hook(request: httpx.Request) -> None:
         validate_url(str(request.url), allow_private=allow_private, resolve_dns=resolve_dns)
 

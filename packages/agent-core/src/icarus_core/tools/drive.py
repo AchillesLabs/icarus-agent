@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.integrations.clients.google_client import GoogleDriveApiClient
 from icarus_core.tools.auth import ToolAuthManager
 from icarus_core.tools.base import BaseTool
@@ -74,8 +75,12 @@ class DriveSearchTool(BaseTool):
                 )
             lines = [f"Google Drive Search Results ({len(files)} files):\n"]
             for f in files:
-                lines.append(f"• {f.get('name', 'Untitled')} (ID: {f.get('id')}, Type: {f.get('mimeType')})")
-            return ToolResult(call_id=call_id, name=self.name, output="\n".join(lines).strip(), exit_code=0)
+                lines.append(
+                    f"• {f.get('name', 'Untitled')} (ID: {f.get('id')}, Type: {f.get('mimeType')})"
+                )
+            return ToolResult(
+                call_id=call_id, name=self.name, output="\n".join(lines).strip(), exit_code=0
+            )
         except Exception as exc:
             return ToolResult(
                 call_id=call_id,

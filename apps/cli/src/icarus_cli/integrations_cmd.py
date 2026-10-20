@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
-import os
 import webbrowser
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import typer
-from icarus_contracts.integrations import AuthMethod, ConnectionStatus, IntegrationManifest
+from icarus_contracts.integrations import AuthMethod, IntegrationManifest
 from icarus_core.integrations.google import (
     DEFAULT_GOOGLE_SCOPES,
     GOOGLE_MANIFEST,
     GoogleOAuthClient,
-    GoogleOAuthError,
 )
 from icarus_core.integrations.loopback import LoopbackCallbackServer
 from icarus_core.theme import get_theme
@@ -118,7 +117,9 @@ def list_integrations() -> None:
         else:
             status = "[dim]○ Available[/dim]"
 
-        auth_label = "OAuth 2.0 PKCE" if manifest.auth_method == AuthMethod.OAUTH2_PKCE else "API Token"
+        auth_label = (
+            "OAuth 2.0 PKCE" if manifest.auth_method == AuthMethod.OAUTH2_PKCE else "API Token"
+        )
         tools_str = ", ".join(manifest.tools) if manifest.tools else "[dim]None[/dim]"
 
         table.add_row(manifest.id, manifest.display_name, auth_label, status, tools_str)
@@ -132,9 +133,13 @@ def list_integrations() -> None:
     )
 
 
-@integrations_app.command(name="connect", help="Connect an integration via OAuth 2.0 PKCE or token prompt.")
+@integrations_app.command(
+    name="connect", help="Connect an integration via OAuth 2.0 PKCE or token prompt."
+)
 def connect_integration(
-    provider: Annotated[str, typer.Argument(help="Integration provider ID (e.g. 'google', 'github', 'slack')")],
+    provider: Annotated[
+        str, typer.Argument(help="Integration provider ID (e.g. 'google', 'github', 'slack')")
+    ],
 ) -> None:
     """Authenticate and connect an integration with secure local credential storage."""
     th = get_theme()
@@ -142,7 +147,9 @@ def connect_integration(
 
     if provider_key not in AVAILABLE_MANIFESTS:
         console.print(f"[bold red]Error:[/bold red] Unknown integration provider '{provider}'.")
-        console.print("[dim]Supported providers: " + ", ".join(AVAILABLE_MANIFESTS.keys()) + "[/dim]")
+        console.print(
+            "[dim]Supported providers: " + ", ".join(AVAILABLE_MANIFESTS.keys()) + "[/dim]"
+        )
         raise typer.Exit(1)
 
     manifest = AVAILABLE_MANIFESTS[provider_key]
@@ -157,8 +164,8 @@ def connect_integration(
                 "1. Go to Google Cloud Console: [bold underline blue]https://console.cloud.google.com/apis/credentials[/bold underline blue]\n"
                 "2. Create an [bold white]OAuth 2.0 Client ID[/bold white] with type [bold white]Desktop App[/bold white]\n"
                 "3. Set the environment variable in your terminal or .env:\n"
-                "   [bold green]export GOOGLE_CLIENT_ID=\"your-client-id.apps.googleusercontent.com\"[/bold green]\n"
-                "   [dim](Optional: export GOOGLE_CLIENT_SECRET=\"your-secret\")[/dim]\n\n"
+                '   [bold green]export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"[/bold green]\n'
+                '   [dim](Optional: export GOOGLE_CLIENT_SECRET="your-secret")[/dim]\n\n'
                 "[dim]Once set, rerun: `icarus integrations connect google`[/dim]",
                 title="[bold yellow]Google OAuth Setup[/bold yellow]",
                 border_style="yellow",
@@ -175,14 +182,16 @@ def connect_integration(
             )
             server.expected_state = state
 
-            console.print(f"\n[bold {th.primary}]Initiating Google OAuth 2.0 (PKCE)...[/bold {th.primary}]")
-            console.print("[dim]Opening authorization consent screen in your default browser...[/dim]")
+            console.print(
+                f"\n[bold {th.primary}]Initiating Google OAuth 2.0 (PKCE)...[/bold {th.primary}]"
+            )
+            console.print(
+                "[dim]Opening authorization consent screen in your default browser...[/dim]"
+            )
             console.print(f"👉 [bold underline blue]{auth_url}[/bold underline blue]\n")
 
-            try:
+            with contextlib.suppress(Exception):
                 webbrowser.open(auth_url)
-            except Exception:
-                pass
 
             console.print("[cyan]Waiting for authorization in browser (timeout: 120s)...[/cyan]")
             code = server.wait_for_code()
@@ -195,11 +204,16 @@ def connect_integration(
             )
 
             # Retrieve account email
-            email = oauth_client.get_account_email(token_payload.get("access_token", "")) or "Connected Account"
+            email = (
+                oauth_client.get_account_email(token_payload.get("access_token", ""))
+                or "Connected Account"
+            )
 
             # Compute expiration timestamp
             expires_in = token_payload.get("expires_in", 3600)
-            token_payload["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(expires_in))).isoformat()
+            token_payload["expires_at"] = (
+                datetime.now(UTC) + timedelta(seconds=int(expires_in))
+            ).isoformat()
             token_payload["account_email"] = email
 
             # Encrypt and store locally
@@ -218,11 +232,13 @@ def connect_integration(
             console.print(success_panel)
 
         except TimeoutError:
-            console.print("[bold red]Connection timed out.[/bold red] Authorization was not completed in the browser.")
-            raise typer.Exit(1)
+            console.print(
+                "[bold red]Connection timed out.[/bold red] Authorization was not completed in the browser."
+            )
+            raise typer.Exit(1) from None
         except Exception as exc:
             console.print(f"[bold red]Authorization failed:[/bold red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from exc
         finally:
             server.shutdown()
 
@@ -230,14 +246,20 @@ def connect_integration(
         # Standard token prompt
         token = ToolAuthManager.prompt_authorization(provider_key, console=console)
         if token:
-            console.print(f"[bold green]✔ Successfully connected {manifest.display_name}![/bold green]")
+            console.print(
+                f"[bold green]✔ Successfully connected {manifest.display_name}![/bold green]"
+            )
         else:
             console.print("[yellow]Connection skipped or cancelled.[/yellow]")
 
 
-@integrations_app.command(name="status", help="Inspect connection status, account email, and granted scopes.")
+@integrations_app.command(
+    name="status", help="Inspect connection status, account email, and granted scopes."
+)
 def status_integration(
-    provider: Annotated[str | None, typer.Argument(help="Integration provider ID (default: google)")] = "google",
+    provider: Annotated[
+        str | None, typer.Argument(help="Integration provider ID (default: google)")
+    ] = "google",
 ) -> None:
     """Inspect integration health and configuration details without exposing secret tokens."""
     th = get_theme()
@@ -252,7 +274,7 @@ def status_integration(
     if provider_key == "google":
         stored = _get_google_stored_data()
         if not stored:
-            console.print(f"[yellow]Google Workspace is not connected.[/yellow]")
+            console.print("[yellow]Google Workspace is not connected.[/yellow]")
             console.print("[dim]Run `icarus integrations connect google` to connect.[/dim]")
             return
 
@@ -276,7 +298,9 @@ def status_integration(
 
     else:
         has_token = ToolAuthManager.has_token(provider_key)
-        status_str = "[bold green]● Connected[/bold green]" if has_token else "[dim]○ Not Connected[/dim]"
+        status_str = (
+            "[bold green]● Connected[/bold green]" if has_token else "[dim]○ Not Connected[/dim]"
+        )
         panel = Panel(
             f"[bold white]Provider:[/bold white] {manifest.display_name}\n"
             f"[bold white]Status:[/bold white] {status_str}\n"
@@ -290,7 +314,9 @@ def status_integration(
 
 @integrations_app.command(name="disconnect", help="Revoke access and remove stored credentials.")
 def disconnect_integration(
-    provider: Annotated[str, typer.Argument(help="Integration provider ID to disconnect (e.g. 'google')")],
+    provider: Annotated[
+        str, typer.Argument(help="Integration provider ID to disconnect (e.g. 'google')")
+    ],
 ) -> None:
     """Revoke credentials at remote provider endpoint and delete from local secure vault."""
     provider_key = provider.lower().strip()
@@ -312,21 +338,29 @@ def disconnect_integration(
 
         deleted = ToolAuthManager.delete_token("google")
         if deleted:
-            console.print("[bold green]✔ Successfully disconnected Google Workspace and purged stored credentials.[/bold green]")
+            console.print(
+                "[bold green]✔ Successfully disconnected Google Workspace and purged stored credentials.[/bold green]"
+            )
         else:
             console.print("[dim]Google credentials were not found or already removed.[/dim]")
 
     else:
         deleted = ToolAuthManager.delete_token(provider_key)
         if deleted:
-            console.print(f"[bold green]✔ Successfully disconnected {provider_key} and purged credentials.[/bold green]")
+            console.print(
+                f"[bold green]✔ Successfully disconnected {provider_key} and purged credentials.[/bold green]"
+            )
         else:
             console.print(f"[dim]No stored credentials found for {provider_key}.[/dim]")
 
 
-@integrations_app.command(name="doctor", help="Verify integration connectivity, token freshness, and health.")
+@integrations_app.command(
+    name="doctor", help="Verify integration connectivity, token freshness, and health."
+)
 def doctor_integration(
-    provider: Annotated[str | None, typer.Argument(help="Integration provider ID to verify (default: google)")] = "google",
+    provider: Annotated[
+        str | None, typer.Argument(help="Integration provider ID to verify (default: google)")
+    ] = "google",
 ) -> None:
     """Run diagnostic checks on configured integrations."""
     provider_key = (provider or "google").lower().strip()
@@ -335,33 +369,49 @@ def doctor_integration(
         console.print("[bold cyan]Running Google Workspace Diagnostics...[/bold cyan]\n")
         client = GoogleOAuthClient()
         if not client.is_configured():
-            console.print("  [bold red]✖ Client Config:[/bold red] GOOGLE_CLIENT_ID environment variable is missing.")
+            console.print(
+                "  [bold red]✖ Client Config:[/bold red] GOOGLE_CLIENT_ID environment variable is missing."
+            )
             return
 
         console.print("  [bold green]✔ Client Config:[/bold green] GOOGLE_CLIENT_ID configured.")
 
         stored = _get_google_stored_data()
         if not stored:
-            console.print("  [bold yellow]○ Credentials:[/bold yellow] No Google account connected. Run `icarus integrations connect google`.")
+            console.print(
+                "  [bold yellow]○ Credentials:[/bold yellow] No Google account connected. Run `icarus integrations connect google`."
+            )
             return
 
         access_token = ToolAuthManager.get_access_token("google")
         if not access_token:
-            console.print("  [bold red]✖ Token Resolution:[/bold red] Failed to obtain valid access token.")
+            console.print(
+                "  [bold red]✖ Token Resolution:[/bold red] Failed to obtain valid access token."
+            )
             return
 
-        console.print("  [bold green]✔ Credentials:[/bold green] Token found and decrypted from local vault.")
+        console.print(
+            "  [bold green]✔ Credentials:[/bold green] Token found and decrypted from local vault."
+        )
 
         # Test userinfo
         email = client.get_account_email(access_token)
         if email:
-            console.print(f"  [bold green]✔ API Connectivity:[/bold green] Validated token with Google UserInfo endpoint ({email}).")
-            console.print("\n[bold green]All Google Workspace diagnostic checks PASSED.[/bold green]")
+            console.print(
+                f"  [bold green]✔ API Connectivity:[/bold green] Validated token with Google UserInfo endpoint ({email})."
+            )
+            console.print(
+                "\n[bold green]All Google Workspace diagnostic checks PASSED.[/bold green]"
+            )
         else:
-            console.print("  [bold yellow]⚠ API Connectivity:[/bold yellow] Could not verify email with Google UserInfo endpoint (token may be expired or offline).")
+            console.print(
+                "  [bold yellow]⚠ API Connectivity:[/bold yellow] Could not verify email with Google UserInfo endpoint (token may be expired or offline)."
+            )
     else:
         has_tok = ToolAuthManager.has_token(provider_key)
         if has_tok:
-            console.print(f"[bold green]✔ {provider_key}:[/bold green] Credential present in secure vault.")
+            console.print(
+                f"[bold green]✔ {provider_key}:[/bold green] Credential present in secure vault."
+            )
         else:
             console.print(f"[yellow]○ {provider_key}:[/yellow] No credentials configured.")

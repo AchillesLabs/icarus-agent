@@ -1,4 +1,4 @@
-"""Hermes-inspired modular toolsets system for grouping, enabling, and disabling agent capabilities."""
+"""Modular toolsets system for grouping, enabling, and disabling agent capabilities."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from icarus_core.paths import get_icarus_home
 
@@ -25,7 +24,7 @@ class ToolsetDefinition:
     tags: list[str] = field(default_factory=list)
 
 
-# Hermes-inspired standard toolset categories
+# Standard toolset categories
 DEFAULT_TOOLSETS: dict[str, ToolsetDefinition] = {
     "core": ToolsetDefinition(
         name="core",

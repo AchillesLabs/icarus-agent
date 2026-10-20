@@ -70,17 +70,23 @@ def test_validate_url_cloud_metadata_and_localhost():
     with pytest.raises(SSRFProtectionError, match="forbidden internal destination"):
         validate_url("http://metadata.google.internal/computeMetadata/v1/")
 
-    with pytest.raises(SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"):
+    with pytest.raises(
+        SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"
+    ):
         validate_url("http://169.254.169.254/latest/meta-data/")
 
-    with pytest.raises(SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"):
+    with pytest.raises(
+        SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"
+    ):
         validate_url("http://[fd00:ec2::254]/latest/meta-data/")
 
 
 def test_validate_url_private_ip_literals():
     """Private IP literals must be rejected without DNS lookup."""
     for forbidden in ["127.0.0.1", "10.10.10.10", "192.168.1.1", "172.20.0.1"]:
-        with pytest.raises(SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"):
+        with pytest.raises(
+            SSRFProtectionError, match="Destination IP .* is private, loopback, or cloud metadata"
+        ):
             validate_url(f"http://{forbidden}:8080/api")
 
 
@@ -89,9 +95,11 @@ def test_validate_url_dns_resolution_failure():
     fake_addr_info = [
         (2, 1, 6, "", ("127.0.0.1", 80)),
     ]
-    with patch("socket.getaddrinfo", return_value=fake_addr_info):
-        with pytest.raises(SSRFProtectionError, match="resolved to forbidden IP"):
-            validate_url("http://attacker-controlled-rebinding.com/steal")
+    with (
+        patch("socket.getaddrinfo", return_value=fake_addr_info),
+        pytest.raises(SSRFProtectionError, match="resolved to forbidden IP"),
+    ):
+        validate_url("http://attacker-controlled-rebinding.com/steal")
 
 
 def test_validate_url_permitted_public():
@@ -130,6 +138,7 @@ def test_fetch_webpage_tool_blocks_ssrf(tmp_path):
 
 def test_redirect_to_private_ip_is_blocked():
     """create_safe_client event hook must catch and abort SSRF redirects."""
+
     def redirect_handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/initial":
             return httpx.Response(

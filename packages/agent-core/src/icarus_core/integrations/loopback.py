@@ -92,7 +92,9 @@ class LoopbackCallbackServer:
                     self.send_response(400)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.end_headers()
-                    html = ERROR_HTML_TEMPLATE.replace("__ERROR_MSG__", f"Provider reported error: {error_param}")
+                    html = ERROR_HTML_TEMPLATE.replace(
+                        "__ERROR_MSG__", f"Provider reported error: {error_param}"
+                    )
                     self.wfile.write(html.encode("utf-8"))
                     outer._event.set()
                     return
@@ -101,11 +103,15 @@ class LoopbackCallbackServer:
                 code_param = params.get("code", [None])[0]
 
                 if not state_param or state_param != outer.expected_state:
-                    outer.received_error = "OAuth state mismatch or missing (potential CSRF attempt)."
+                    outer.received_error = (
+                        "OAuth state mismatch or missing (potential CSRF attempt)."
+                    )
                     self.send_response(403)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.end_headers()
-                    html = ERROR_HTML_TEMPLATE.replace("__ERROR_MSG__", "Security Error: OAuth state mismatch.")
+                    html = ERROR_HTML_TEMPLATE.replace(
+                        "__ERROR_MSG__", "Security Error: OAuth state mismatch."
+                    )
                     self.wfile.write(html.encode("utf-8"))
                     outer._event.set()
                     return
@@ -115,7 +121,9 @@ class LoopbackCallbackServer:
                     self.send_response(400)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.end_headers()
-                    html = ERROR_HTML_TEMPLATE.replace("__ERROR_MSG__", "Missing authorization code.")
+                    html = ERROR_HTML_TEMPLATE.replace(
+                        "__ERROR_MSG__", "Missing authorization code."
+                    )
                     self.wfile.write(html.encode("utf-8"))
                     outer._event.set()
                     return
@@ -142,7 +150,9 @@ class LoopbackCallbackServer:
         self.shutdown()
 
         if not finished:
-            raise TimeoutError(f"OAuth callback timed out after {self.timeout} seconds waiting for authorization.")
+            raise TimeoutError(
+                f"OAuth callback timed out after {self.timeout} seconds waiting for authorization."
+            )
 
         if self.received_error:
             raise ValueError(f"OAuth authorization failed: {self.received_error}")

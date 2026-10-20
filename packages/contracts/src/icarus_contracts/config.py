@@ -79,4 +79,3 @@ class IcarusConfig(BaseModel):
         default="purple",
         description="UI accent color theme (purple, cyan, green, amber, red, blue, pink, or custom hex)",
     )
-

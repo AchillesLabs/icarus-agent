@@ -1,16 +1,14 @@
-"""Unit tests for Hermes-inspired modular toolsets system and CLI management."""
+"""Unit tests for modular toolsets system and CLI management."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
-from icarus_core.tools.registry import create_default_registry
-from icarus_core.tools.toolsets import DEFAULT_TOOLSETS, ToolsetDefinition, ToolsetManager
-from typer.testing import CliRunner
-
 from icarus_cli.toolsets_cmd import toolsets_app
+from icarus_core.tools.registry import create_default_registry
+from icarus_core.tools.toolsets import ToolsetManager
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -110,7 +108,6 @@ def test_toolsets_cli_list() -> None:
 
 
 def test_toolsets_cli_enable_disable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    custom_conf = tmp_path / "toolsets.json"
     monkeypatch.setattr("icarus_core.tools.toolsets.get_icarus_home", lambda: tmp_path)
 
     disable_res = runner.invoke(toolsets_app, ["disable", "terminal"])

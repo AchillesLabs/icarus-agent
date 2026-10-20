@@ -48,7 +48,9 @@ class GoogleCalendarApiClient:
             url = f"{CALENDAR_BASE_URL}/calendars/{calendar_id}/events"
             resp = client.get(url, headers=self._headers(), params=params)
             if resp.status_code == 401:
-                raise PermissionError("Google Calendar token expired or unauthorized. Re-authentication required.")
+                raise PermissionError(
+                    "Google Calendar token expired or unauthorized. Re-authentication required."
+                )
             if resp.status_code != 200:
                 raise RuntimeError(f"Google Calendar API error ({resp.status_code}): {resp.text}")
             data = resp.json()
@@ -81,7 +83,9 @@ class GoogleCalendarApiClient:
             if resp.status_code == 401:
                 raise PermissionError("Google Calendar token expired or unauthorized.")
             if resp.status_code not in (200, 201):
-                raise RuntimeError(f"Failed to create Google Calendar event ({resp.status_code}): {resp.text}")
+                raise RuntimeError(
+                    f"Failed to create Google Calendar event ({resp.status_code}): {resp.text}"
+                )
             return resp.json()
         finally:
             if should_close:
@@ -115,7 +119,9 @@ class GmailApiClient:
             url = f"{GMAIL_BASE_URL}/users/me/messages"
             resp = client.get(url, headers=self._headers(), params=params)
             if resp.status_code == 401:
-                raise PermissionError("Gmail token expired or unauthorized. Re-authentication required.")
+                raise PermissionError(
+                    "Gmail token expired or unauthorized. Re-authentication required."
+                )
             if resp.status_code != 200:
                 raise RuntimeError(f"Gmail API search error ({resp.status_code}): {resp.text}")
 
@@ -230,7 +236,9 @@ class GoogleDriveApiClient:
                 if export_resp.status_code == 200:
                     text = export_resp.text
                     return text[:max_bytes]
-                raise RuntimeError(f"Failed to read file from Google Drive ({resp.status_code}): {resp.text}")
+                raise RuntimeError(
+                    f"Failed to read file from Google Drive ({resp.status_code}): {resp.text}"
+                )
             text = resp.text
             return text[:max_bytes]
         finally:

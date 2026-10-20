@@ -1,8 +1,9 @@
 """Tests for UITheme customization and color management."""
 
 from pathlib import Path
+
 import pytest
-from icarus_core.theme import get_theme, set_theme, list_themes, PRESET_THEMES
+from icarus_core.theme import get_theme, list_themes, set_theme
 
 
 def test_get_theme_default():
@@ -60,6 +61,7 @@ def test_set_theme_persists_and_resets(tmp_path: Path, monkeypatch: pytest.Monke
     """set_theme persists the chosen theme into ~/.icarus/config.toml."""
     fake_config = tmp_path / "config.toml"
     from icarus_core import paths
+
     monkeypatch.setattr(paths, "get_icarus_config_path", lambda: fake_config)
 
     # Set to cyan

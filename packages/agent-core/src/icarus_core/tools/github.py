@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.auth import ToolAuthManager
 from icarus_core.tools.base import BaseTool
 
@@ -100,7 +101,9 @@ class GithubIssuesTool(BaseTool):
                         kind = "PR" if is_pr else "Issue"
                         lines.append(f"• [#{number}] ({kind}) {title} - by @{user}")
 
-                    return ToolResult(call_id=call_id, name=self.name, output="\n".join(lines), exit_code=0)
+                    return ToolResult(
+                        call_id=call_id, name=self.name, output="\n".join(lines), exit_code=0
+                    )
                 return ToolResult(
                     call_id=call_id,
                     name=self.name,
@@ -109,7 +112,13 @@ class GithubIssuesTool(BaseTool):
                     exit_code=1,
                 )
         except Exception as exc:
-            return ToolResult(call_id=call_id, name=self.name, output="", error=f"GitHub request failed: {exc}", exit_code=1)
+            return ToolResult(
+                call_id=call_id,
+                name=self.name,
+                output="",
+                error=f"GitHub request failed: {exc}",
+                exit_code=1,
+            )
 
 
 class GithubCreateIssueTool(BaseTool):
@@ -187,6 +196,18 @@ class GithubCreateIssueTool(BaseTool):
                         output=f"Successfully created GitHub issue #{num} in {repo}: {html_url}",
                         exit_code=0,
                     )
-                return ToolResult(call_id=call_id, name=self.name, output="", error=f"GitHub issue creation failed ({resp.status_code}): {resp.text}", exit_code=1)
+                return ToolResult(
+                    call_id=call_id,
+                    name=self.name,
+                    output="",
+                    error=f"GitHub issue creation failed ({resp.status_code}): {resp.text}",
+                    exit_code=1,
+                )
         except Exception as exc:
-            return ToolResult(call_id=call_id, name=self.name, output="", error=f"GitHub request error: {exc}", exit_code=1)
+            return ToolResult(
+                call_id=call_id,
+                name=self.name,
+                output="",
+                error=f"GitHub request error: {exc}",
+                exit_code=1,
+            )

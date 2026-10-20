@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
@@ -263,10 +264,8 @@ async def disconnect_integration(
         tok_to_revoke = refresh_tok or access_tok
         client = GoogleOAuthClient()
         if tok_to_revoke:
-            try:
+            with contextlib.suppress(Exception):
                 client.revoke_token(tok_to_revoke)
-            except Exception:
-                pass
 
     deleted = repo.delete_connection(norm_provider)
     return {

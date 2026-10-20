@@ -1,4 +1,4 @@
-"""CLI command suite for inspecting and managing Hermes-inspired modular toolsets."""
+"""CLI command suite for inspecting and managing modular toolsets."""
 
 from __future__ import annotations
 
@@ -8,13 +8,12 @@ import typer
 from icarus_core.theme import get_theme
 from icarus_core.tools.toolsets import ToolsetManager
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
 toolsets_app = typer.Typer(
     name="toolsets",
-    help="Manage modular Hermes-inspired toolsets (enable/disable tool categories).",
+    help="Manage modular toolsets (enable/disable tool categories).",
     no_args_is_help=False,
 )
 
@@ -47,7 +46,9 @@ def list_toolsets() -> None:
 
     for ts in toolsets:
         is_enabled = ts.name in active_toolsets
-        status = "[bold green]● Enabled[/bold green]" if is_enabled else "[dim red]○ Disabled[/dim red]"
+        status = (
+            "[bold green]● Enabled[/bold green]" if is_enabled else "[dim red]○ Disabled[/dim red]"
+        )
         tags = ", ".join(ts.tags)
         tools = ", ".join(ts.tools)
 
@@ -64,7 +65,9 @@ def list_toolsets() -> None:
 
 @toolsets_app.command(name="enable", help="Enable a toolset category.")
 def enable_toolset(
-    name: Annotated[str, typer.Argument(help="Name of the toolset to enable (e.g. 'integrations', 'web')")],
+    name: Annotated[
+        str, typer.Argument(help="Name of the toolset to enable (e.g. 'integrations', 'web')")
+    ],
 ) -> None:
     """Enable a toolset category."""
     mgr = ToolsetManager()
@@ -76,12 +79,16 @@ def enable_toolset(
         raise typer.Exit(1)
 
     mgr.enable_toolset(ts_name)
-    console.print(f"[bold green]✔ Toolset '{ts.display_name}' ({ts_name}) is now ENABLED.[/bold green]")
+    console.print(
+        f"[bold green]✔ Toolset '{ts.display_name}' ({ts_name}) is now ENABLED.[/bold green]"
+    )
 
 
 @toolsets_app.command(name="disable", help="Disable a toolset category.")
 def disable_toolset(
-    name: Annotated[str, typer.Argument(help="Name of the toolset to disable (e.g. 'terminal', 'mcp')")],
+    name: Annotated[
+        str, typer.Argument(help="Name of the toolset to disable (e.g. 'terminal', 'mcp')")
+    ],
 ) -> None:
     """Disable a toolset category."""
     mgr = ToolsetManager()

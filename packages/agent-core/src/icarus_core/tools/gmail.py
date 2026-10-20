@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.auth import ToolAuthManager
 from icarus_core.tools.base import BaseTool
 
@@ -74,7 +75,9 @@ class GmailSearchTool(BaseTool):
         max_results = min(int(arguments.get("max_results", 5)), 10)
 
         # 1. Prefer modern Gmail REST API (OAuth access token or explicit client)
-        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or ":" not in token)):
+        if getattr(self, "client", None) or (
+            token and (token.startswith("ya29.") or ":" not in token)
+        ):
             try:
                 api_client = getattr(self, "client", None) or GmailApiClient(access_token=token)
                 messages = api_client.search_messages(query=query, max_results=max_results)
@@ -87,11 +90,21 @@ class GmailSearchTool(BaseTool):
                     )
                 lines = [f"Gmail Search Results for '{query}' ({len(messages)} messages):\n"]
                 for m in messages:
-                    lines.append(f"• From: {m['from']}\n  Subject: {m['subject']}\n  Date: {m.get('date', '')}\n  Snippet: {m['snippet']}")
-                return ToolResult(call_id=call_id, name=self.name, output="\n\n".join(lines).strip(), exit_code=0)
+                    lines.append(
+                        f"• From: {m['from']}\n  Subject: {m['subject']}\n  Date: {m.get('date', '')}\n  Snippet: {m['snippet']}"
+                    )
+                return ToolResult(
+                    call_id=call_id, name=self.name, output="\n\n".join(lines).strip(), exit_code=0
+                )
             except Exception as exc:
                 if ":" not in (token or ""):
-                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Gmail API error: {exc}", exit_code=1)
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output="",
+                        error=f"Gmail API error: {exc}",
+                        exit_code=1,
+                    )
 
         # 2. Legacy IMAP fallback
         user = "me"
@@ -128,7 +141,10 @@ class GmailSearchTool(BaseTool):
                         date = msg.get("Date", "")
                         results.append(f"• From: {sender}\n  Subject: {subject}\n  Date: {date}")
 
-                output = f"Gmail Search Results for '{query}' ({len(results)} messages):\n\n" + "\n\n".join(results)
+                output = (
+                    f"Gmail Search Results for '{query}' ({len(results)} messages):\n\n"
+                    + "\n\n".join(results)
+                )
                 return ToolResult(call_id=call_id, name=self.name, output=output, exit_code=0)
         except Exception as exc:
             return ToolResult(
@@ -207,7 +223,9 @@ class GmailSendTool(BaseTool):
             )
 
         # 1. Prefer modern Gmail REST API (OAuth access token or explicit client)
-        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or ":" not in token)):
+        if getattr(self, "client", None) or (
+            token and (token.startswith("ya29.") or ":" not in token)
+        ):
             try:
                 api_client = getattr(self, "client", None) or GmailApiClient(access_token=token)
                 res = api_client.send_message(to=to_addr, subject=subject, body=body)
@@ -219,7 +237,13 @@ class GmailSendTool(BaseTool):
                 )
             except Exception as exc:
                 if ":" not in (token or ""):
-                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Failed to send email: {exc}", exit_code=1)
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output="",
+                        error=f"Failed to send email: {exc}",
+                        exit_code=1,
+                    )
 
         # 2. Legacy SMTP fallback
         user = "me"

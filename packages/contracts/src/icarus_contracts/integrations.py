@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
 
-class ConnectionStatus(str, Enum):
+class ConnectionStatus(StrEnum):
     """Lifecycle connection status for an external application integration."""
 
     DISCONNECTED = "disconnected"
@@ -19,7 +19,7 @@ class ConnectionStatus(str, Enum):
     FAILED = "failed"
 
 
-class AuthMethod(str, Enum):
+class AuthMethod(StrEnum):
     """Authentication mechanism utilized by the integration provider."""
 
     OAUTH2_PKCE = "oauth2_pkce"
@@ -68,10 +68,14 @@ class IntegrationConnection(BaseModel):
     scopes: list[str] = Field(default_factory=list, description="Granted scopes")
     account_email: str | None = Field(default=None, description="Connected account email preview")
     token_type: str = Field(default="Bearer", description="HTTP token type")
-    expires_at: datetime | None = Field(default=None, description="Access token expiration timestamp")
+    expires_at: datetime | None = Field(
+        default=None, description="Access token expiration timestamp"
+    )
     created_at: datetime = Field(..., description="Connection record creation timestamp")
     updated_at: datetime = Field(..., description="Connection record last updated timestamp")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Non-secret provider metadata")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Non-secret provider metadata"
+    )
 
 
 class OAuthAuthorizationInitiate(BaseModel):

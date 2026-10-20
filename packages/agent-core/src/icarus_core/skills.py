@@ -272,7 +272,11 @@ def _pull_from_git_repo(
                 dest_dir,
                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
             )
-            return [_parse_skill_file(dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope)]
+            return [
+                _parse_skill_file(
+                    dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope
+                )
+            ]
 
         # Case B: Multi-skill or nested skills repository
         found = _find_skills_in_tree(tmp_dir, target_scope, skill_name)
@@ -300,7 +304,9 @@ def _pull_from_git_repo(
                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
             )
             installed.append(
-                _parse_skill_file(dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope)
+                _parse_skill_file(
+                    dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope
+                )
             )
         return installed
 
@@ -408,7 +414,9 @@ def pull_skill(
                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
             )
             return [
-                _parse_skill_file(dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope)
+                _parse_skill_file(
+                    dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope
+                )
             ]
 
         # Nested skills in local directory
@@ -435,7 +443,9 @@ def pull_skill(
                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
             )
             installed_list.append(
-                _parse_skill_file(dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope)
+                _parse_skill_file(
+                    dest_dir / "SKILL.md", default_name=clean_name, scope=target_scope
+                )
             )
         return installed_list
 
@@ -495,4 +505,3 @@ def pull_skill(
         f"Unrecognized skill source: '{source}'. Please provide a valid Git repository URL, "
         "GitHub shorthand (owner/repo), direct markdown URL, or local path."
     )
-

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.base import BaseTool
 
 
@@ -55,6 +56,7 @@ class BrowserNavigateTool(BaseTool):
 
         # Use fetch webpage tool or fallback extraction
         from icarus_core.tools.web import FetchWebpageTool
+
         fetcher = FetchWebpageTool()
         result = fetcher.execute({"url": url}, workspace_root=".")
         if result.exit_code == 0:

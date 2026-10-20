@@ -14,9 +14,15 @@ if sys.platform == "win32":
     def _silence_asyncio_windows_pipe_cleanup(unraisable: Any) -> None:
         exc_type = getattr(unraisable, "exc_type", None)
         exc_val_str = str(getattr(unraisable, "exc_value", ""))
-        if exc_type and issubclass(exc_type, (RuntimeError, ValueError)):
-            if "Event loop is closed" in exc_val_str or "I/O operation on closed pipe" in exc_val_str:
-                return
+        if (
+            exc_type
+            and issubclass(exc_type, (RuntimeError, ValueError))
+            and (
+                "Event loop is closed" in exc_val_str
+                or "I/O operation on closed pipe" in exc_val_str
+            )
+        ):
+            return
         if hasattr(sys, "__unraisablehook__"):
             sys.__unraisablehook__(unraisable)
 
@@ -53,7 +59,7 @@ from icarus_cli.sessions_view import render_session_history, render_sessions_tab
 from icarus_cli.skills_cmd import skills_app
 from icarus_cli.theme_cmd import theme_app
 from icarus_cli.token_cmd import token_app
-from icarus_cli.tools_cmd import tools_app
+from icarus_cli.tools_cmd import connect_tool, tools_app
 from icarus_cli.toolsets_cmd import toolsets_app
 from icarus_cli.vault_cmd import vault_app
 
@@ -100,8 +106,10 @@ app.add_typer(tools_app, name="tools")
 app.add_typer(integrations_app, name="integrations")
 app.add_typer(toolsets_app, name="toolsets")
 
-from icarus_cli.tools_cmd import connect_tool
-app.command(name="connect", help="Connect and authenticate essential tools (browser, stripe, github, slack, etc.)")(connect_tool)
+app.command(
+    name="connect",
+    help="Connect and authenticate essential tools (browser, stripe, github, slack, etc.)",
+)(connect_tool)
 
 console = Console()
 

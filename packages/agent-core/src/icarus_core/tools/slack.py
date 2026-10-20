@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.auth import ToolAuthManager
 from icarus_core.tools.base import BaseTool
 
@@ -81,6 +82,18 @@ class SlackSendMessageTool(BaseTool):
                         exit_code=0,
                     )
                 err_msg = resp.json().get("error", resp.text)
-                return ToolResult(call_id=call_id, name=self.name, output="", error=f"Slack API error: {err_msg}", exit_code=1)
+                return ToolResult(
+                    call_id=call_id,
+                    name=self.name,
+                    output="",
+                    error=f"Slack API error: {err_msg}",
+                    exit_code=1,
+                )
         except Exception as exc:
-            return ToolResult(call_id=call_id, name=self.name, output="", error=f"Slack request failed: {exc}", exit_code=1)
+            return ToolResult(
+                call_id=call_id,
+                name=self.name,
+                output="",
+                error=f"Slack request failed: {exc}",
+                exit_code=1,
+            )

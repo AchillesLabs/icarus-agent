@@ -91,6 +91,7 @@ def test_pull_skill_from_local_folder(tmp_path: Path):
 def test_pull_skill_from_raw_url(tmp_path: Path):
     """pull_skill downloads a raw markdown file and extracts name/description."""
     from unittest.mock import MagicMock
+
     from icarus_core.skills import pull_skill
 
     mock_client = MagicMock()
@@ -119,6 +120,7 @@ def test_pull_skill_from_raw_url(tmp_path: Path):
 def test_pull_skill_github_blob_url_translates_to_raw(tmp_path: Path):
     """pull_skill detects GitHub web blob URLs and downloads from raw.githubusercontent.com."""
     from unittest.mock import MagicMock
+
     from icarus_core.skills import pull_skill
 
     mock_client = MagicMock()
@@ -172,6 +174,7 @@ def test_pull_skill_overwrite_protection(tmp_path: Path):
 def test_pull_skill_from_git_repo(tmp_path: Path):
     """pull_skill clones a git repository and discovers its skills."""
     import subprocess
+
     from icarus_core.skills import pull_skill
 
     # Create a dummy git repo
@@ -220,6 +223,7 @@ def test_pull_skill_from_git_repo(tmp_path: Path):
 def test_pull_skill_pasted_command_wrapper(tmp_path: Path):
     """pull_skill handles pasted strings like 'npx skills@latest add owner/repo --skill=foo'."""
     from unittest.mock import patch
+
     from icarus_core.skills import pull_skill
 
     ws = tmp_path / "my-workspace"
@@ -236,6 +240,3 @@ def test_pull_skill_pasted_command_wrapper(tmp_path: Path):
         args, kwargs = mock_git.call_args
         assert args[0] == "https://github.com/mattpocock/skills.git"
         assert kwargs["skill_name"] == "grill-with-docs"
-
-
-

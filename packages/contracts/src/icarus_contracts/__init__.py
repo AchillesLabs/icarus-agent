@@ -23,6 +23,16 @@ from icarus_contracts.exceptions import (
     WorkspaceJailError,
 )
 from icarus_contracts.identity import TenantIdentity
+from icarus_contracts.integrations import (
+    AuthMethod,
+    ConnectionStatus,
+    CredentialStore,
+    IntegrationConnection,
+    IntegrationManifest,
+    OAuthAuthorizationInitiate,
+    OAuthAuthorizationRequest,
+    OAuthCallbackResult,
+)
 from icarus_contracts.jobs import (
     ScheduledJobCreate,
     ScheduledJobDTO,
@@ -74,16 +84,6 @@ from icarus_contracts.tools import (
     ToolResult,
     ToolSafetyCategory,
 )
-from icarus_contracts.integrations import (
-    AuthMethod,
-    ConnectionStatus,
-    CredentialStore,
-    IntegrationConnection,
-    IntegrationManifest,
-    OAuthAuthorizationInitiate,
-    OAuthAuthorizationRequest,
-    OAuthCallbackResult,
-)
 from icarus_contracts.vault import (
     VaultCredentialCreate,
     VaultCredentialDeleteResponse,
@@ -103,6 +103,7 @@ __all__ = [
     "CredentialStore",
     "IntegrationConnection",
     "IntegrationManifest",
+    "OAuthAuthorizationInitiate",
     "OAuthAuthorizationRequest",
     "OAuthCallbackResult",
     "ApiTokenRevokeResponse",

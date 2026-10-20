@@ -4,29 +4,23 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import urllib.parse
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from icarus_contracts.identity import TenantIdentity
+from icarus_api.app import create_app
 from icarus_contracts.integrations import (
-    AuthMethod,
     ConnectionStatus,
-    OAuthAuthorizationRequest,
 )
 from icarus_core.integrations.google import (
     DEFAULT_GOOGLE_SCOPES,
     GOOGLE_AUTH_URL,
     GOOGLE_REVOKE_URL,
     GOOGLE_TOKEN_URL,
-    GOOGLE_USERINFO_URL,
     GoogleOAuthClient,
-    GoogleOAuthError,
 )
 from icarus_core.integrations.loopback import LoopbackCallbackServer
 from icarus_core.integrations.pkce import (
@@ -35,15 +29,11 @@ from icarus_core.integrations.pkce import (
     generate_oauth_state,
 )
 from icarus_core.persistence.database import DatabaseManager
-from icarus_core.persistence.migrations.runner import MigrationRunner
 from icarus_core.persistence.repository import (
     IntegrationRepository,
     TenantIntegrationRepository,
 )
 from icarus_core.security.vault import CredentialVault
-
-from icarus_api.app import create_app
-
 
 # ---------------------------------------------------------------------------
 # 1. PKCE and Security Primitives Tests
@@ -244,7 +234,9 @@ def test_integration_repository_encryption_and_tenant_isolation(
     with sqlite_db_manager.session_scope() as session:
         from icarus_core.persistence.models import IntegrationConnectionModel
 
-        raw_row = session.query(IntegrationConnectionModel).filter_by(owner_id="tenant-alpha").first()
+        raw_row = (
+            session.query(IntegrationConnectionModel).filter_by(owner_id="tenant-alpha").first()
+        )
         assert raw_row is not None
         assert "alpha_token_secret" not in raw_row.encrypted_access_token
         assert "alpha_refresh_secret" not in raw_row.encrypted_refresh_token
@@ -256,7 +248,9 @@ def test_integration_repository_encryption_and_tenant_isolation(
     assert tokens["refresh_token"] == "1//alpha_refresh_secret"
 
     # 4. Tenant isolation: Tenant Beta cannot read Tenant Alpha's connection
-    tenant_beta_repo = TenantIntegrationRepository(sqlite_db_manager, owner_id="tenant-beta", vault=vault)
+    tenant_beta_repo = TenantIntegrationRepository(
+        sqlite_db_manager, owner_id="tenant-beta", vault=vault
+    )
     beta_connections = tenant_beta_repo.list_connections()
     assert len(beta_connections) == 0
 
@@ -337,18 +331,21 @@ def test_fastapi_integrations_routes(
     state = data["state"]
 
     # 3. Mock GoogleOAuthClient.exchange_code and get_account_email for callback
-    with patch.object(
-        GoogleOAuthClient,
-        "exchange_code",
-        return_value={
-            "access_token": "ya29.mock_api_token",
-            "refresh_token": "1//mock_api_refresh",
-            "expires_in": 3600,
-        },
-    ), patch.object(
-        GoogleOAuthClient,
-        "get_account_email",
-        return_value="developer@example.com",
+    with (
+        patch.object(
+            GoogleOAuthClient,
+            "exchange_code",
+            return_value={
+                "access_token": "ya29.mock_api_token",
+                "refresh_token": "1//mock_api_refresh",
+                "expires_in": 3600,
+            },
+        ),
+        patch.object(
+            GoogleOAuthClient,
+            "get_account_email",
+            return_value="developer@example.com",
+        ),
     ):
         # 4. GET /v1/integrations/callback (first attempt succeeds, callback does not require auth headers)
         cb_resp = client.get(

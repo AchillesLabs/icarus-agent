@@ -40,7 +40,9 @@ class RichAgentObserver:
                 self.stdout.write("\n● Icarus\n")
                 self.stdout.flush()
             else:
-                self.console.print(f"\n[bold {self.theme.primary}]● Icarus[/bold {self.theme.primary}]")
+                self.console.print(
+                    f"\n[bold {self.theme.primary}]● Icarus[/bold {self.theme.primary}]"
+                )
             self._assistant_header_printed = True
 
         cleaned_delta = delta.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")

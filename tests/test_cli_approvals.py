@@ -259,4 +259,3 @@ def test_scheduling_approval_displays_calendar_panel():
     rendered = output.getvalue()
     assert "Calendar / Schedule Approval Required" in rendered
     assert "Sprint Review" in rendered
-

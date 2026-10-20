@@ -80,7 +80,7 @@ def render_shutdown_summary(
     messages: list[Any],
     theme: UITheme | None = None,
 ) -> None:
-    """Render Hermes-style session finalization and shutdown summary."""
+    """Render session finalization and shutdown summary."""
     th = theme or get_theme()
     user_count = 0
     tool_count = 0
@@ -378,10 +378,20 @@ def _run_remote_chat(
                     table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                     table.add_column("Description")
                     table.add_row("/help", "Display available in-chat slash commands")
-                    table.add_row("/connect [id]", "Connect essential tools (browser, stripe, github, slack, etc.)")
-                    table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
-                    table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
-                    table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
+                    table.add_row(
+                        "/connect [id]",
+                        "Connect essential tools (browser, stripe, github, slack, etc.)",
+                    )
+                    table.add_row(
+                        "/tools [name]", "List all tools (core & MCP) or inspect parameter schemas"
+                    )
+                    table.add_row(
+                        "/skills [pull <src>]", "List skills or pull/install from URL or repo"
+                    )
+                    table.add_row(
+                        "/theme [name]",
+                        "Change UI accent color (purple, cyan, green, amber, red, or hex)",
+                    )
                     table.add_row("/clear", "Clear the terminal screen")
                     table.add_row("/session", "Show active session details and message count")
                     table.add_row("/exit", "Exit the chat REPL")
@@ -392,12 +402,14 @@ def _run_remote_chat(
                     parts = cleaned.split(maxsplit=1)
                     conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
                     from icarus_cli.tools_cmd import connect_tool_interactive
+
                     connect_tool_interactive(console, connector_id=conn_id)
                     continue
 
                 if cleaned == "/tools" or cleaned.startswith("/tools "):
                     parts = cleaned.split(maxsplit=1)
                     from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+
                     if len(parts) > 1 and parts[1].strip():
                         render_tool_detail(console, tool_name=parts[1].strip())
                     else:
@@ -746,10 +758,20 @@ def run_chat(
                 table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
-                table.add_row("/connect [id]", "Connect essential tools (browser, stripe, github, slack, etc.)")
-                table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
-                table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
-                table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
+                table.add_row(
+                    "/connect [id]",
+                    "Connect essential tools (browser, stripe, github, slack, etc.)",
+                )
+                table.add_row(
+                    "/tools [name]", "List all tools (core & MCP) or inspect parameter schemas"
+                )
+                table.add_row(
+                    "/skills [pull <src>]", "List skills or pull/install from URL or repo"
+                )
+                table.add_row(
+                    "/theme [name]",
+                    "Change UI accent color (purple, cyan, green, amber, red, or hex)",
+                )
                 table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
                 table.add_row("/clear", "Clear the terminal screen")
                 table.add_row("/session", "Show active session details and message count")
@@ -761,12 +783,14 @@ def run_chat(
                 parts = cleaned.split(maxsplit=1)
                 conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
                 from icarus_cli.tools_cmd import connect_tool_interactive
+
                 connect_tool_interactive(console, connector_id=conn_id)
                 continue
 
             if cleaned == "/tools" or cleaned.startswith("/tools "):
                 parts = cleaned.split(maxsplit=1)
                 from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+
                 if len(parts) > 1 and parts[1].strip():
                     render_tool_detail(console, tool_name=parts[1].strip())
                 else:
@@ -934,9 +958,7 @@ def run_chat(
             prompt_history.append(PromptMessage(role=MessageRole.USER, content=cleaned))
 
             # Stream assistant response
-            observer = RichAgentObserver(
-                console=console, stream_tokens=True, theme=active_theme
-            )
+            observer = RichAgentObserver(console=console, stream_tokens=True, theme=active_theme)
 
             def on_chat_message(msg: PromptMessage) -> None:
                 session_mgr.append_message(

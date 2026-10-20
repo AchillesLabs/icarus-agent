@@ -34,7 +34,9 @@ def upgrade() -> None:
         sa.Column("metadata_json", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("owner_id", "provider", name="uq_integration_connections_owner_provider"),
+        sa.UniqueConstraint(
+            "owner_id", "provider", name="uq_integration_connections_owner_provider"
+        ),
     )
     op.create_index("ix_integration_connections_owner_id", "integration_connections", ["owner_id"])
     op.create_index("ix_integration_connections_provider", "integration_connections", ["provider"])

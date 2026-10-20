@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.base import BaseTool
 
 
@@ -98,7 +98,9 @@ class GetWeatherTool(BaseTool):
                             .get("weatherDesc", [{}])[0]
                             .get("value", desc)
                         )
-                        output_lines.append(f"  • {date}: {day_desc}, High: {max_c}°C, Low: {min_c}°C")
+                        output_lines.append(
+                            f"  • {date}: {day_desc}, High: {max_c}°C, Low: {min_c}°C"
+                        )
 
                     return ToolResult(
                         call_id=call_id,

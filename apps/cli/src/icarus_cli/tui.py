@@ -53,7 +53,7 @@ class AlternateScreenBuffer:
         """Return True if alternate screen buffer should be activated.
 
         Defaults to False so terminal preserves native scrollback and mouse wheel scrolling,
-        matching standard CLI behavior (e.g. Hermes Agent).
+        matching standard CLI behavior.
         """
         return self.force
 
@@ -174,7 +174,7 @@ def render_workspace_header(
     info_table.add_row("Session", f"[dim]{session_id}[/dim]")
     info_table.add_row("Tools", "[dim]file, web, gmail, calendar, api, shell (21 tools)[/dim]")
     info_table.add_row("Skills", f"[dim]{skills_line}[/dim]")
-    info_table.add_row("Cmds", f"[dim]/help · /tools · /connect · /skills · /theme[/dim]")
+    info_table.add_row("Cmds", "[dim]/help · /tools · /connect · /skills · /theme[/dim]")
 
     main_grid = Table.grid(padding=(0, 2))
     main_grid.add_column(width=26)
@@ -286,4 +286,3 @@ class InteractivePrompt:
 
 # Alias for backwards compatibility
 IcarusInputPrompt = InteractivePrompt
-

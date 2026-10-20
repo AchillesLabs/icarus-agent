@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from icarus_contracts.tools import ToolDefinition, ToolResult, ToolSafetyCategory
+
 from icarus_core.tools.auth import ToolAuthManager
 from icarus_core.tools.base import BaseTool
 
@@ -69,9 +70,13 @@ class CalendarEventsTool(BaseTool):
         max_results = int(arguments.get("max_results", 5))
 
         # Real Google Calendar REST API call if token or client available
-        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or len(token) > 20)):
+        if getattr(self, "client", None) or (
+            token and (token.startswith("ya29.") or len(token) > 20)
+        ):
             try:
-                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(access_token=token)
+                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(
+                    access_token=token
+                )
                 events = api_client.list_events(time_min=time_min, max_results=max_results)
                 if not events:
                     return ToolResult(
@@ -82,13 +87,25 @@ class CalendarEventsTool(BaseTool):
                     )
                 lines = [f"Calendar Events starting from {time_min} (max {max_results}):\n"]
                 for e in events:
-                    start_val = e.get("start", {}).get("dateTime") or e.get("start", {}).get("date") or "Unknown"
+                    start_val = (
+                        e.get("start", {}).get("dateTime")
+                        or e.get("start", {}).get("date")
+                        or "Unknown"
+                    )
                     summary_val = e.get("summary", "Untitled Event")
                     lines.append(f"• {start_val}: {summary_val}")
-                return ToolResult(call_id=call_id, name=self.name, output="\n".join(lines).strip(), exit_code=0)
+                return ToolResult(
+                    call_id=call_id, name=self.name, output="\n".join(lines).strip(), exit_code=0
+                )
             except Exception as exc:
                 if not (token and len(token) < 20):
-                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Google Calendar API error: {exc}", exit_code=1)
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output="",
+                        error=f"Google Calendar API error: {exc}",
+                        exit_code=1,
+                    )
 
         output = (
             f"Calendar Events starting from {time_min} (max {max_results}):\n"
@@ -166,9 +183,13 @@ class CalendarCreateEventTool(BaseTool):
         end = str(arguments.get("end_time", "")).strip() or start
 
         # Prefer live Google Calendar REST API
-        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or len(token) > 20)):
+        if getattr(self, "client", None) or (
+            token and (token.startswith("ya29.") or len(token) > 20)
+        ):
             try:
-                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(access_token=token)
+                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(
+                    access_token=token
+                )
                 res = api_client.create_event(
                     summary=title,
                     start_time=f"{date}T{start}:00Z" if "T" not in start else start,
@@ -183,7 +204,13 @@ class CalendarCreateEventTool(BaseTool):
                 )
             except Exception as exc:
                 if not (token and len(token) < 20):
-                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Failed to create Google Calendar event: {exc}", exit_code=1)
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output="",
+                        error=f"Failed to create Google Calendar event: {exc}",
+                        exit_code=1,
+                    )
 
         return ToolResult(
             call_id=call_id,
@@ -191,9 +218,3 @@ class CalendarCreateEventTool(BaseTool):
             output=f"✔ Successfully scheduled event '{title}' for {date} at {start}",
             exit_code=0,
         )
-
-        end_str = f" to {end}" if end else ""
-        att_str = f" with {attendees}" if attendees else ""
-        output = f"Successfully scheduled event '{title}' on {date} at {start}{end_str}{att_str}."
-
-        return ToolResult(call_id=call_id, name=self.name, output=output, exit_code=0)

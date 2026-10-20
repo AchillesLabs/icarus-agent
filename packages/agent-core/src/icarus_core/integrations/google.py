@@ -8,7 +8,6 @@ from urllib.parse import urlencode
 
 import httpx
 from icarus_contracts.integrations import AuthMethod, IntegrationManifest
-
 from icarus_core.integrations.pkce import (
     generate_code_challenge,
     generate_code_verifier,
@@ -147,7 +146,9 @@ class GoogleOAuthClient:
                 data = resp.json()
                 if resp.status_code != 200:
                     err_msg = data.get("error_description") or data.get("error") or resp.text
-                    raise GoogleOAuthError(f"Google token exchange failed ({resp.status_code}): {err_msg}")
+                    raise GoogleOAuthError(
+                        f"Google token exchange failed ({resp.status_code}): {err_msg}"
+                    )
                 return data
             finally:
                 if should_close:
@@ -182,7 +183,9 @@ class GoogleOAuthClient:
                 data = resp.json()
                 if resp.status_code != 200:
                     err_msg = data.get("error_description") or data.get("error") or resp.text
-                    raise GoogleOAuthError(f"Google token refresh failed ({resp.status_code}): {err_msg}")
+                    raise GoogleOAuthError(
+                        f"Google token refresh failed ({resp.status_code}): {err_msg}"
+                    )
                 return data
             finally:
                 if should_close:

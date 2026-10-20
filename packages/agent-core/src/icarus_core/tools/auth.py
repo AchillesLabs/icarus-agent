@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import json
 import os
@@ -10,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from cryptography.fernet import Fernet
-from icarus_core.paths import get_icarus_home
-from icarus_core.theme import get_theme
 from rich.console import Console
 from rich.panel import Panel
+
+from icarus_core.paths import get_icarus_home
+from icarus_core.theme import get_theme
 
 
 def _get_or_create_local_master_key() -> bytes:
@@ -63,7 +63,11 @@ def load_stored_credentials() -> dict[str, str]:
             if isinstance(data, dict):
                 save_stored_credentials(data)
                 legacy_file.write_text(
-                    json.dumps({"_notice": "Credentials migrated to secure encrypted storage credentials.enc"}),
+                    json.dumps(
+                        {
+                            "_notice": "Credentials migrated to secure encrypted storage credentials.enc"
+                        }
+                    ),
                     encoding="utf-8",
                 )
                 with contextlib.suppress(Exception):
@@ -182,7 +186,9 @@ class ToolAuthManager:
         service_key = service.lower().strip()
 
         # 1. Check environment variables
-        candidates = cls.ENV_MAPPINGS.get(service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"])
+        candidates = cls.ENV_MAPPINGS.get(
+            service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"]
+        )
         for env_var in candidates:
             val = os.environ.get(env_var)
             if val and val.strip():
@@ -191,6 +197,7 @@ class ToolAuthManager:
         # 2. Check OS keyring first (preferred secure storage)
         try:
             import keyring
+
             secret = keyring.get_password("icarus_services", service_key)
             if secret and secret.strip():
                 return secret.strip()
@@ -217,6 +224,7 @@ class ToolAuthManager:
                 if isinstance(data, dict):
                     if service.lower() == "google" and data.get("refresh_token"):
                         from datetime import UTC, datetime, timedelta
+
                         expires_at_str = data.get("expires_at")
                         is_expired = False
                         if expires_at_str:
@@ -229,12 +237,18 @@ class ToolAuthManager:
                         if is_expired:
                             try:
                                 from icarus_core.integrations.google import GoogleOAuthClient
+
                                 client = GoogleOAuthClient()
                                 if client.is_configured():
                                     refreshed = client.refresh_access_token(data["refresh_token"])
-                                    data["access_token"] = refreshed.get("access_token", data["access_token"])
+                                    data["access_token"] = refreshed.get(
+                                        "access_token", data["access_token"]
+                                    )
                                     if "expires_in" in refreshed:
-                                        data["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(refreshed["expires_in"]))).isoformat()
+                                        data["expires_at"] = (
+                                            datetime.now(UTC)
+                                            + timedelta(seconds=int(refreshed["expires_in"]))
+                                        ).isoformat()
                                     cls.save_token(service, json.dumps(data))
                             except Exception:
                                 pass
@@ -254,6 +268,7 @@ class ToolAuthManager:
         # 1. Prioritize OS keyring
         try:
             import keyring
+
             keyring.set_password("icarus_services", service_key, cleaned)
         except Exception:
             pass
@@ -264,7 +279,9 @@ class ToolAuthManager:
         save_stored_credentials(stored)
 
         # 3. Synchronize in-process environment variables if currently active
-        candidates = cls.ENV_MAPPINGS.get(service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"])
+        candidates = cls.ENV_MAPPINGS.get(
+            service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"]
+        )
         for env_var in candidates:
             if env_var in os.environ:
                 os.environ[env_var] = cleaned
@@ -277,6 +294,7 @@ class ToolAuthManager:
 
         try:
             import keyring
+
             keyring.delete_password("icarus_services", service_key)
             deleted = True
         except Exception:
@@ -288,7 +306,9 @@ class ToolAuthManager:
             save_stored_credentials(stored)
             deleted = True
 
-        candidates = cls.ENV_MAPPINGS.get(service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"])
+        candidates = cls.ENV_MAPPINGS.get(
+            service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"]
+        )
         for env_var in candidates:
             if env_var in os.environ:
                 del os.environ[env_var]
@@ -310,7 +330,7 @@ class ToolAuthManager:
     ) -> str | None:
         """Prompt user with the external authorization link and collect credentials."""
         cons = console or Console()
-        th = get_theme()
+        get_theme()
         service_key = service.lower().strip()
         info = cls.AUTH_URLS.get(
             service_key,
@@ -321,7 +341,9 @@ class ToolAuthManager:
             },
         )
 
-        title = f"[bold yellow]🔐 External Account Authorization Required: {info['name']}[/bold yellow]"
+        title = (
+            f"[bold yellow]🔐 External Account Authorization Required: {info['name']}[/bold yellow]"
+        )
         content = (
             f"[bold white]To let Icarus access your {info['name']} account:[/bold white]\n\n"
             f"[bold cyan]1. Open Authorization Link in your browser:[/bold cyan]\n"
@@ -352,7 +374,9 @@ class ToolAuthManager:
         cleaned = val.strip()
         if cleaned:
             cls.save_token(service_key, cleaned)
-            cons.print(f"[bold green]✔ Successfully authorized and saved credentials for {info['name']}![/bold green]\n")
+            cons.print(
+                f"[bold green]✔ Successfully authorized and saved credentials for {info['name']}![/bold green]\n"
+            )
             return cleaned
 
         cons.print(f"[dim]Authorization skipped. Tool '{service}' remains unauthorized.[/dim]\n")
