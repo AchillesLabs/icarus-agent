@@ -74,6 +74,16 @@ from icarus_contracts.tools import (
     ToolResult,
     ToolSafetyCategory,
 )
+from icarus_contracts.integrations import (
+    AuthMethod,
+    ConnectionStatus,
+    CredentialStore,
+    IntegrationConnection,
+    IntegrationManifest,
+    OAuthAuthorizationInitiate,
+    OAuthAuthorizationRequest,
+    OAuthCallbackResult,
+)
 from icarus_contracts.vault import (
     VaultCredentialCreate,
     VaultCredentialDeleteResponse,
@@ -88,6 +98,13 @@ __all__ = [
     "ApiTokenCreateRequest",
     "ApiTokenListResponse",
     "ApiTokenResponse",
+    "AuthMethod",
+    "ConnectionStatus",
+    "CredentialStore",
+    "IntegrationConnection",
+    "IntegrationManifest",
+    "OAuthAuthorizationRequest",
+    "OAuthCallbackResult",
     "ApiTokenRevokeResponse",
     "AuditEvent",
     "AuditEventType",

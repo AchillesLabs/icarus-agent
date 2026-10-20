@@ -30,14 +30,20 @@ def render_tools_table(console: Console, filter_text: str | None = None) -> None
         query = filter_text.strip().lower()
         tools = [t for t in tools if query in t.name.lower() or query in (t.description or "").lower()]
 
+    from icarus_core.tools.toolsets import ToolsetManager
+
+    mgr = ToolsetManager()
+    active_toolsets = mgr.load_active_toolsets()
+
     table = Table(
         title=f"Available Tools ({len(tools)} registered)",
         show_header=True,
         header_style=f"bold {th.primary}",
     )
-    table.add_column("Tool Name", style=f"bold {th.secondary}", width=24)
-    table.add_column("Category", width=19)
-    table.add_column("Source", width=14)
+    table.add_column("Tool Name", style=f"bold {th.secondary}", width=22)
+    table.add_column("Toolset", width=14)
+    table.add_column("Category", width=18)
+    table.add_column("Source", width=12)
     table.add_column("Description")
 
     for tool in tools:
@@ -47,18 +53,32 @@ def render_tools_table(console: Console, filter_text: str | None = None) -> None
 
         if tool.name.startswith("mcp_"):
             source = "[cyan]MCP[/cyan]"
+            ts_name = "mcp"
         else:
             source = "[dim]Core[/dim]"
+            ts_name = "custom"
+            for candidate_ts, ts_def in mgr._toolsets.items():
+                if tool.name in ts_def.tools:
+                    ts_name = candidate_ts
+                    break
+
+        is_ts_active = ts_name in active_toolsets if ts_name != "custom" else True
+        ts_style = "cyan" if is_ts_active else "dim red strike"
+        ts_display = f"[{ts_style}]{ts_name}[/{ts_style}]"
 
         desc = (tool.description or "").split("\n")[0]
-        if len(desc) > 60:
-            desc = desc[:57] + "..."
+        if len(desc) > 55:
+            desc = desc[:52] + "..."
 
-        table.add_row(tool.name, f"[{cat_style}]{cat_label}[/{cat_style}]", source, desc)
+        name_display = tool.name if is_ts_active else f"[dim]{tool.name} (disabled)[/dim]"
+        table.add_row(name_display, ts_display, f"[{cat_style}]{cat_label}[/{cat_style}]", source, desc)
 
     console.print(table)
     console.print(
-        f"\n[dim]Run [bold {th.primary}]/tools <name>[/bold {th.primary}] or [bold {th.primary}]icarus tools show <name>[/bold {th.primary}] for parameters schema.[/dim]\n"
+        f"\n[dim]Run [bold {th.primary}]/tools <name>[/bold {th.primary}] or [bold {th.primary}]icarus tools show <name>[/bold {th.primary}] for parameters schema.[/dim]"
+    )
+    console.print(
+        f"[dim]Run [bold {th.primary}]icarus toolsets list[/bold {th.primary}] to inspect or enable/disable toolsets.[/dim]\n"
     )
 
 

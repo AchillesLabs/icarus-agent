@@ -8,6 +8,7 @@ import pytest
 os.environ["NO_COLOR"] = "1"
 os.environ["TERM"] = "dumb"
 os.environ.pop("FORCE_COLOR", None)
+os.environ.setdefault("ICARUS_ALLOW_INSECURE_DEV_VAULT", "1")
 
 
 @pytest.fixture(autouse=True, scope="session")

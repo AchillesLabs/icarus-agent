@@ -1,5 +1,7 @@
 """Repository interfaces and implementations for session, message, and run entities."""
 
+from __future__ import annotations
+
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -31,7 +33,9 @@ from sqlalchemy.orm import Session
 from icarus_core.persistence.database import DatabaseManager
 from icarus_core.persistence.models import (
     AgentRunModel,
+    IntegrationConnectionModel,
     MessageModel,
+    OAuthStateModel,
     ScheduledJobModel,
     SessionModel,
     TenantApiTokenModel,
@@ -1451,3 +1455,298 @@ class TenantCredentialRepository(CredentialRepository):
             owner_id=self.owner_id,
             provider=provider,
         )
+
+
+class IntegrationRepository:
+    """Manages integration connections and OAuth states with symmetric encryption for tokens."""
+
+    def __init__(
+        self,
+        db_manager: DatabaseManager | Session,
+        vault: CredentialVault | None = None,
+    ) -> None:
+        self.db = db_manager
+        self.vault = vault or CredentialVault()
+
+    @contextmanager
+    def _session_scope(self, tenant_id: str | None = None) -> Generator[Session, None, None]:
+        if hasattr(self.db, "session_scope"):
+            with self.db.session_scope(tenant_id=tenant_id) as session:
+                yield session
+        else:
+            yield self.db  # type: ignore[misc]
+
+    def create_oauth_state(
+        self,
+        owner_id: str,
+        provider: str,
+        state: str,
+        redirect_uri: str,
+        expires_at: datetime,
+        code_verifier: str | None = None,
+        scopes: list[str] | None = None,
+    ) -> OAuthStateModel:
+        """Persist a single-use OAuth anti-forgery state with PKCE verifier."""
+        now = datetime.now(UTC)
+        with self._session_scope(tenant_id=owner_id) as session:
+            model = OAuthStateModel(
+                owner_id=owner_id,
+                provider=provider.strip().lower(),
+                state=state,
+                redirect_uri=redirect_uri,
+                code_verifier=code_verifier,
+                scopes=scopes,
+                expires_at=expires_at,
+                consumed=False,
+                created_at=now,
+            )
+            session.add(model)
+            session.flush()
+            return model
+
+    def consume_oauth_state(
+        self,
+        state: str,
+        owner_id: str | None = None,
+        provider: str | None = None,
+    ) -> OAuthStateModel | None:
+        """Find matching state, verify ownership and expiry, and mark consumed (replay prevention)."""
+        now = datetime.now(UTC)
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = select(OAuthStateModel).where(OAuthStateModel.state == state)
+            if owner_id is not None:
+                stmt = stmt.where(OAuthStateModel.owner_id == owner_id)
+            if provider is not None:
+                stmt = stmt.where(OAuthStateModel.provider == provider.strip().lower())
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+            if model.consumed:
+                return None
+            exp = model.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=UTC)
+            if exp < now:
+                return None
+
+            # Mark state as consumed so it cannot be replayed
+            model.consumed = True
+            session.flush()
+            return model
+
+    def set_connection(
+        self,
+        owner_id: str,
+        provider: str,
+        status: str,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        token_type: str = "Bearer",
+        scopes: list[str] | None = None,
+        account_email: str | None = None,
+        expires_at: datetime | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        """Persist or update an integration connection with encrypted tokens."""
+        norm_provider = provider.strip().lower()
+        now = datetime.now(UTC)
+
+        enc_access = self.vault.encrypt(access_token) if access_token else None
+        enc_refresh = self.vault.encrypt(refresh_token) if refresh_token else None
+
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = select(IntegrationConnectionModel).where(
+                IntegrationConnectionModel.owner_id == owner_id,
+                IntegrationConnectionModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is not None:
+                model.status = status
+                if enc_access is not None:
+                    model.encrypted_access_token = enc_access
+                if enc_refresh is not None:
+                    model.encrypted_refresh_token = enc_refresh
+                model.token_type = token_type
+                if scopes is not None:
+                    model.scopes = scopes
+                if account_email is not None:
+                    model.account_email = account_email
+                if expires_at is not None:
+                    model.expires_at = expires_at
+                if metadata is not None:
+                    model.metadata_json = metadata
+                model.updated_at = now
+            else:
+                model = IntegrationConnectionModel(
+                    owner_id=owner_id,
+                    provider=norm_provider,
+                    status=status,
+                    encrypted_access_token=enc_access,
+                    encrypted_refresh_token=enc_refresh,
+                    token_type=token_type,
+                    scopes=scopes or [],
+                    account_email=account_email,
+                    expires_at=expires_at,
+                    metadata_json=metadata or {},
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(model)
+            session.flush()
+            return model.to_dto()
+
+    def get_connection(self, owner_id: str, provider: str) -> Any | None:
+        """Retrieve connection public DTO without raw secrets."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = select(IntegrationConnectionModel).where(
+                IntegrationConnectionModel.owner_id == owner_id,
+                IntegrationConnectionModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            return model.to_dto() if model is not None else None
+
+    def get_decrypted_tokens(
+        self,
+        owner_id: str,
+        provider: str,
+    ) -> tuple[str | None, str | None]:
+        """Decrypt and return (access_token, refresh_token) for provider API calls."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = select(IntegrationConnectionModel).where(
+                IntegrationConnectionModel.owner_id == owner_id,
+                IntegrationConnectionModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None, None
+
+            access_token = (
+                self.vault.decrypt(model.encrypted_access_token)
+                if model.encrypted_access_token
+                else None
+            )
+            refresh_token = (
+                self.vault.decrypt(model.encrypted_refresh_token)
+                if model.encrypted_refresh_token
+                else None
+            )
+            return access_token, refresh_token
+
+    def get_connection_tokens(self, owner_id: str, provider: str) -> dict[str, str | None] | None:
+        """Convenience method returning tokens as dict."""
+        access, refresh = self.get_decrypted_tokens(owner_id=owner_id, provider=provider)
+        if access is None and refresh is None:
+            return None
+        return {"access_token": access, "refresh_token": refresh}
+
+    upsert_connection = set_connection
+
+    def list_connections(self, owner_id: str) -> list[Any]:
+        """List all integration connections belonging to a tenant."""
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = (
+                select(IntegrationConnectionModel)
+                .where(IntegrationConnectionModel.owner_id == owner_id)
+                .order_by(IntegrationConnectionModel.created_at.asc())
+            )
+            models = session.execute(stmt).scalars().all()
+            return [m.to_dto() for m in models]
+
+    def delete_connection(self, owner_id: str, provider: str) -> bool:
+        """Remove connection record for an integration."""
+        norm_provider = provider.strip().lower()
+        with self._session_scope(tenant_id=owner_id) as session:
+            stmt = select(IntegrationConnectionModel).where(
+                IntegrationConnectionModel.owner_id == owner_id,
+                IntegrationConnectionModel.provider == norm_provider,
+            )
+            model = session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return False
+            session.delete(model)
+            return True
+
+
+class TenantIntegrationRepository(IntegrationRepository):
+    """Tenant-scoped proxy enforcing strict owner isolation for integration connections."""
+
+    def __init__(
+        self,
+        db_manager: DatabaseManager | Session,
+        owner_id: str,
+        vault: CredentialVault | None = None,
+    ) -> None:
+        super().__init__(db_manager=db_manager, vault=vault)
+        if not owner_id or not isinstance(owner_id, str):
+            raise ValueError("owner_id must be a non-empty string")
+        self.owner_id = owner_id
+
+    def create_oauth_state(
+        self,
+        provider: str,
+        state: str,
+        redirect_uri: str,
+        expires_at: datetime,
+        code_verifier: str | None = None,
+        scopes: list[str] | None = None,
+    ) -> OAuthStateModel:
+        return super().create_oauth_state(
+            owner_id=self.owner_id,
+            provider=provider,
+            state=state,
+            redirect_uri=redirect_uri,
+            expires_at=expires_at,
+            code_verifier=code_verifier,
+            scopes=scopes,
+        )
+
+    def consume_oauth_state(self, state: str) -> OAuthStateModel | None:
+        return super().consume_oauth_state(state=state, owner_id=self.owner_id)
+
+    def set_connection(
+        self,
+        provider: str,
+        status: str,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        token_type: str = "Bearer",
+        scopes: list[str] | None = None,
+        account_email: str | None = None,
+        expires_at: datetime | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        return super().set_connection(
+            owner_id=self.owner_id,
+            provider=provider,
+            status=status,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type=token_type,
+            scopes=scopes,
+            account_email=account_email,
+            expires_at=expires_at,
+            metadata=metadata,
+        )
+
+    def get_connection(self, provider: str) -> Any | None:
+        return super().get_connection(owner_id=self.owner_id, provider=provider)
+
+    def get_decrypted_tokens(self, provider: str) -> tuple[str | None, str | None]:
+        return super().get_decrypted_tokens(owner_id=self.owner_id, provider=provider)
+
+    def list_connections(self) -> list[Any]:
+        return super().list_connections(owner_id=self.owner_id)
+
+    upsert_connection = set_connection
+
+    def get_tokens(self, provider: str) -> dict[str, str | None] | None:
+        """Convenience method returning decrypted tokens as dict."""
+        access, refresh = self.get_decrypted_tokens(provider=provider)
+        if access is None and refresh is None:
+            return None
+        return {"access_token": access, "refresh_token": refresh}
+
+    def delete_connection(self, provider: str) -> bool:
+        return super().delete_connection(owner_id=self.owner_id, provider=provider)

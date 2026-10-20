@@ -52,8 +52,10 @@ class GmailSearchTool(BaseTool):
         call_id: str = "direct_call",
     ) -> ToolResult:
         del workspace_root
-        token = ToolAuthManager.get_token("gmail")
-        if not token:
+        from icarus_core.integrations.clients.google_client import GmailApiClient
+
+        token = ToolAuthManager.get_access_token("google") or ToolAuthManager.get_token("gmail")
+        if not token and getattr(self, "client", None) is None:
             token = ToolAuthManager.prompt_authorization("gmail")
             if not token:
                 return ToolResult(
@@ -61,7 +63,8 @@ class GmailSearchTool(BaseTool):
                     name=self.name,
                     output="",
                     error=(
-                        "Gmail authorization is required. Please authorize your Google account at "
+                        "Gmail authorization is required. Please connect your Google account with "
+                        "`icarus integrations connect google` or visit "
                         "https://myaccount.google.com/apppasswords or run `/connect gmail`."
                     ),
                     exit_code=1,
@@ -70,11 +73,31 @@ class GmailSearchTool(BaseTool):
         query = str(arguments.get("query", "ALL")).strip()
         max_results = min(int(arguments.get("max_results", 5)), 10)
 
-        # Parse user/token if stored as "email:password" or password alone
+        # 1. Prefer modern Gmail REST API (OAuth access token or explicit client)
+        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or ":" not in token)):
+            try:
+                api_client = getattr(self, "client", None) or GmailApiClient(access_token=token)
+                messages = api_client.search_messages(query=query, max_results=max_results)
+                if not messages:
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output=f"No emails found matching query '{query}'.",
+                        exit_code=0,
+                    )
+                lines = [f"Gmail Search Results for '{query}' ({len(messages)} messages):\n"]
+                for m in messages:
+                    lines.append(f"• From: {m['from']}\n  Subject: {m['subject']}\n  Date: {m.get('date', '')}\n  Snippet: {m['snippet']}")
+                return ToolResult(call_id=call_id, name=self.name, output="\n\n".join(lines).strip(), exit_code=0)
+            except Exception as exc:
+                if ":" not in (token or ""):
+                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Gmail API error: {exc}", exit_code=1)
+
+        # 2. Legacy IMAP fallback
         user = "me"
-        password = token
-        if ":" in token and "@" in token.split(":", 1)[0]:
-            user, password = token.split(":", 1)
+        password = token or ""
+        if ":" in password and "@" in password.split(":", 1)[0]:
+            user, password = password.split(":", 1)
 
         try:
             with imaplib.IMAP4_SSL("imap.gmail.com") as mail:
@@ -156,15 +179,17 @@ class GmailSendTool(BaseTool):
         call_id: str = "direct_call",
     ) -> ToolResult:
         del workspace_root
-        token = ToolAuthManager.get_token("gmail")
-        if not token:
+        from icarus_core.integrations.clients.google_client import GmailApiClient
+
+        token = ToolAuthManager.get_access_token("google") or ToolAuthManager.get_token("gmail")
+        if not token and getattr(self, "client", None) is None:
             token = ToolAuthManager.prompt_authorization("gmail")
             if not token:
                 return ToolResult(
                     call_id=call_id,
                     name=self.name,
                     output="",
-                    error="Gmail authorization required. Please authorize at https://myaccount.google.com/apppasswords",
+                    error="Gmail authorization required. Please authorize with `icarus integrations connect google` or at https://myaccount.google.com/apppasswords",
                     exit_code=1,
                 )
 
@@ -181,10 +206,26 @@ class GmailSendTool(BaseTool):
                 exit_code=1,
             )
 
+        # 1. Prefer modern Gmail REST API (OAuth access token or explicit client)
+        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or ":" not in token)):
+            try:
+                api_client = getattr(self, "client", None) or GmailApiClient(access_token=token)
+                res = api_client.send_message(to=to_addr, subject=subject, body=body)
+                return ToolResult(
+                    call_id=call_id,
+                    name=self.name,
+                    output=f"Successfully sent email to {to_addr} with subject '{subject}' (ID: {res.get('id', 'sent')}).",
+                    exit_code=0,
+                )
+            except Exception as exc:
+                if ":" not in (token or ""):
+                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Failed to send email: {exc}", exit_code=1)
+
+        # 2. Legacy SMTP fallback
         user = "me"
-        password = token
-        if ":" in token and "@" in token.split(":", 1)[0]:
-            user, password = token.split(":", 1)
+        password = token or ""
+        if ":" in password and "@" in password.split(":", 1)[0]:
+            user, password = password.split(":", 1)
 
         msg = EmailMessage()
         msg["From"] = user

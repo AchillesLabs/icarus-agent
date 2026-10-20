@@ -100,11 +100,24 @@ class HttpRequestTool(BaseTool):
 
         headers.setdefault("User-Agent", "IcarusAgent/0.1.0")
 
+        from icarus_core.security.url_policy import SSRFProtectionError, create_safe_client, validate_url
+
         try:
-            with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            validated_url = validate_url(url)
+        except SSRFProtectionError as exc:
+            return ToolResult(
+                call_id=call_id,
+                name=self.name,
+                output="",
+                error=f"SSRF Protection Error: {exc}",
+                exit_code=1,
+            )
+
+        try:
+            with create_safe_client(timeout=timeout) as client:
                 response = client.request(
                     method=method,
-                    url=url,
+                    url=validated_url,
                     headers=headers,
                     params=params,
                     json=json_body if json_body is not None else None,
@@ -134,6 +147,14 @@ class HttpRequestTool(BaseTool):
                     exit_code=0 if response.is_success else 1,
                     error="" if response.is_success else f"HTTP error status: {response.status_code}",
                 )
+        except SSRFProtectionError as exc:
+            return ToolResult(
+                call_id=call_id,
+                name=self.name,
+                output="",
+                error=f"SSRF Protection Error (redirect blocked): {exc}",
+                exit_code=1,
+            )
         except httpx.TimeoutException:
             return ToolResult(
                 call_id=call_id,

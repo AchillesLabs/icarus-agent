@@ -95,13 +95,16 @@ def test_cli_connect_gmail_interactive(monkeypatch):
     from icarus_core.tools.auth import ToolAuthManager
 
     with patch("webbrowser.open") as mock_open:
-        # Simulate entering email and app password
-        result = runner.invoke(app, ["connect", "gmail"], input="testuser@gmail.com\nabcdefghijklmnop\n")
-        assert result.exit_code == 0
-        assert "Connecting Gmail" in result.output
-        assert "Successfully connected Gmail" in result.output
-        assert ToolAuthManager.get_token("gmail") == "testuser@gmail.com:abcdefghijklmnop"
-        mock_open.assert_called_once()
+        try:
+            # Simulate entering email and app password
+            result = runner.invoke(app, ["connect", "gmail"], input="testuser@gmail.com\nabcdefghijklmnop\n")
+            assert result.exit_code == 0
+            assert "Connecting Gmail" in result.output
+            assert "Successfully connected Gmail" in result.output
+            assert ToolAuthManager.get_token("gmail") == "testuser@gmail.com:abcdefghijklmnop"
+            mock_open.assert_called_once()
+        finally:
+            ToolAuthManager.delete_token("gmail")
 
 
 def test_cli_connect_browser_no_auth():

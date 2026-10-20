@@ -3,6 +3,7 @@
 from icarus_core.tools.browser import BrowserNavigateTool
 from icarus_core.tools.calendar import CalendarCreateEventTool, CalendarEventsTool
 from icarus_core.tools.command import RunCommandTool
+from icarus_core.tools.drive import DriveReadFileTool, DriveSearchTool
 from icarus_core.tools.filesystem import ListDirTool, ReadFileTool, WriteFileTool
 from icarus_core.tools.github import GithubCreateIssueTool, GithubIssuesTool
 from icarus_core.tools.gmail import GmailSearchTool, GmailSendTool
@@ -18,6 +19,8 @@ __all__ = [
     "BrowserNavigateTool",
     "CalendarCreateEventTool",
     "CalendarEventsTool",
+    "DriveReadFileTool",
+    "DriveSearchTool",
     "FetchWebpageTool",
     "GetCurrentLocationTool",
     "GetWeatherTool",

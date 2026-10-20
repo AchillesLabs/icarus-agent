@@ -39,6 +39,7 @@ from rich.table import Table
 
 from icarus_cli import __version__
 from icarus_cli.chat import run_chat
+from icarus_cli.integrations_cmd import integrations_app
 from icarus_cli.mcp_cmd import mcp_app
 from icarus_cli.models_view import (
     render_models_table,
@@ -53,6 +54,7 @@ from icarus_cli.skills_cmd import skills_app
 from icarus_cli.theme_cmd import theme_app
 from icarus_cli.token_cmd import token_app
 from icarus_cli.tools_cmd import tools_app
+from icarus_cli.toolsets_cmd import toolsets_app
 from icarus_cli.vault_cmd import vault_app
 
 
@@ -95,6 +97,8 @@ app.add_typer(mcp_app, name="mcp")
 app.add_typer(skills_app, name="skills")
 app.add_typer(theme_app, name="theme")
 app.add_typer(tools_app, name="tools")
+app.add_typer(integrations_app, name="integrations")
+app.add_typer(toolsets_app, name="toolsets")
 
 from icarus_cli.tools_cmd import connect_tool
 app.command(name="connect", help="Connect and authenticate essential tools (browser, stripe, github, slack, etc.)")(connect_tool)

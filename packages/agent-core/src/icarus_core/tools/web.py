@@ -421,13 +421,20 @@ class FetchWebpageTool(BaseTool):
                 exit_code=1,
             )
 
-        parsed_url = urlparse(raw_url)
-        if parsed_url.scheme not in ("http", "https"):
+        from icarus_core.security.url_policy import (
+            SSRFProtectionError,
+            create_safe_client,
+            validate_url,
+        )
+
+        try:
+            validated_url = validate_url(raw_url, resolve_dns=self._client is None)
+        except SSRFProtectionError as exc:
             return ToolResult(
                 call_id=call_id,
                 name="fetch_webpage",
                 output="",
-                error=f"Invalid URL scheme '{parsed_url.scheme}'. Only http and https URLs are allowed.",
+                error=f"SSRF Protection Error: {exc}",
                 exit_code=1,
             )
 
@@ -444,10 +451,10 @@ class FetchWebpageTool(BaseTool):
         }
 
         try:
-            client = self._client or httpx.Client(timeout=12.0, follow_redirects=True)
+            client = self._client or create_safe_client(timeout=12.0)
             should_close = self._client is None
             try:
-                resp = client.get(raw_url, headers=headers)
+                resp = client.get(validated_url, headers=headers)
                 if resp.status_code == 403:
                     # Fallback for sites like Wikipedia requiring descriptive user-agent
                     bot_headers = {

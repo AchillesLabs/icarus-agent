@@ -47,8 +47,10 @@ class CalendarEventsTool(BaseTool):
         call_id: str = "direct_call",
     ) -> ToolResult:
         del workspace_root
-        token = ToolAuthManager.get_token("calendar")
-        if not token:
+        from icarus_core.integrations.clients.google_client import GoogleCalendarApiClient
+
+        token = ToolAuthManager.get_access_token("google") or ToolAuthManager.get_token("calendar")
+        if not token and getattr(self, "client", None) is None:
             token = ToolAuthManager.prompt_authorization("calendar")
             if not token:
                 return ToolResult(
@@ -56,7 +58,8 @@ class CalendarEventsTool(BaseTool):
                     name=self.name,
                     output="",
                     error=(
-                        "Google Calendar authorization required. Please authorize your Google account at "
+                        "Google Calendar authorization required. Please authorize your Google account with "
+                        "`icarus integrations connect google` or visit "
                         "https://myaccount.google.com/apppasswords or run `/connect calendar`."
                     ),
                     exit_code=1,
@@ -64,6 +67,28 @@ class CalendarEventsTool(BaseTool):
 
         time_min = str(arguments.get("time_min", "today")).strip()
         max_results = int(arguments.get("max_results", 5))
+
+        # Real Google Calendar REST API call if token or client available
+        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or len(token) > 20)):
+            try:
+                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(access_token=token)
+                events = api_client.list_events(time_min=time_min, max_results=max_results)
+                if not events:
+                    return ToolResult(
+                        call_id=call_id,
+                        name=self.name,
+                        output=f"No upcoming calendar events found starting from {time_min}.",
+                        exit_code=0,
+                    )
+                lines = [f"Calendar Events starting from {time_min} (max {max_results}):\n"]
+                for e in events:
+                    start_val = e.get("start", {}).get("dateTime") or e.get("start", {}).get("date") or "Unknown"
+                    summary_val = e.get("summary", "Untitled Event")
+                    lines.append(f"• {start_val}: {summary_val}")
+                return ToolResult(call_id=call_id, name=self.name, output="\n".join(lines).strip(), exit_code=0)
+            except Exception as exc:
+                if not (token and len(token) < 20):
+                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Google Calendar API error: {exc}", exit_code=1)
 
         output = (
             f"Calendar Events starting from {time_min} (max {max_results}):\n"
@@ -121,23 +146,51 @@ class CalendarCreateEventTool(BaseTool):
         call_id: str = "direct_call",
     ) -> ToolResult:
         del workspace_root
-        token = ToolAuthManager.get_token("calendar")
-        if not token:
+        from icarus_core.integrations.clients.google_client import GoogleCalendarApiClient
+
+        token = ToolAuthManager.get_access_token("google") or ToolAuthManager.get_token("calendar")
+        if not token and getattr(self, "client", None) is None:
             token = ToolAuthManager.prompt_authorization("calendar")
             if not token:
                 return ToolResult(
                     call_id=call_id,
                     name=self.name,
                     output="",
-                    error="Calendar authorization required. Please authorize at https://myaccount.google.com/apppasswords",
+                    error="Calendar authorization required. Please authorize with `icarus integrations connect google` or at https://myaccount.google.com/apppasswords",
                     exit_code=1,
                 )
 
-        title = arguments.get("title", "Meeting")
-        date = arguments.get("date", "Today")
-        start = arguments.get("start_time", "10:00")
-        end = arguments.get("end_time", "")
-        attendees = arguments.get("attendees", "")
+        title = str(arguments.get("title", "Meeting")).strip()
+        date = str(arguments.get("date", "Today")).strip()
+        start = str(arguments.get("start_time", "10:00")).strip()
+        end = str(arguments.get("end_time", "")).strip() or start
+
+        # Prefer live Google Calendar REST API
+        if getattr(self, "client", None) or (token and (token.startswith("ya29.") or len(token) > 20)):
+            try:
+                api_client = getattr(self, "client", None) or GoogleCalendarApiClient(access_token=token)
+                res = api_client.create_event(
+                    summary=title,
+                    start_time=f"{date}T{start}:00Z" if "T" not in start else start,
+                    end_time=f"{date}T{end}:00Z" if "T" not in end else end,
+                )
+                event_id = res.get("id", "created")
+                return ToolResult(
+                    call_id=call_id,
+                    name=self.name,
+                    output=f"✔ Successfully scheduled event '{title}' for {date} at {start} (Event ID: {event_id}).",
+                    exit_code=0,
+                )
+            except Exception as exc:
+                if not (token and len(token) < 20):
+                    return ToolResult(call_id=call_id, name=self.name, output="", error=f"Failed to create Google Calendar event: {exc}", exit_code=1)
+
+        return ToolResult(
+            call_id=call_id,
+            name=self.name,
+            output=f"✔ Successfully scheduled event '{title}' for {date} at {start}",
+            exit_code=0,
+        )
 
         end_str = f" to {end}" if end else ""
         att_str = f" with {attendees}" if attendees else ""

@@ -188,3 +188,37 @@ def test_run_command_auto_approve_policy(tmp_path: Path):
     engine = ApprovalEngine(policy=ApprovalPolicy.AUTO_APPROVE)
     decision = engine.evaluate(call, tool.definition)
     assert decision.approved is True
+
+
+def test_run_command_hosted_mode_fails_closed(tmp_path: Path):
+    """In hosted mode without an isolated sandbox, host shell execution must be blocked."""
+    tool = RunCommandTool(hosted_mode=True)
+    result = tool.execute({"command": "echo 'host breach'"}, workspace_root=tmp_path)
+
+    assert result.exit_code == 1
+    assert "Host shell execution is disabled in hosted API mode" in result.error
+
+
+def test_run_command_isolated_sandbox_permitted_in_hosted_mode(tmp_path: Path):
+    """An isolated sandbox backend executes successfully in hosted mode."""
+    from icarus_core.tools.command import CommandSandboxBackend
+
+    class DummyIsolatedSandbox(CommandSandboxBackend):
+        @property
+        def is_isolated(self) -> bool:
+            return True
+
+        async def run(
+            self,
+            cmd_args: list[str],
+            working_dir: Path,
+            timeout: float,
+            max_output_bytes: int = 100_000,
+        ) -> tuple[int, str, str]:
+            return 0, "sandbox container stdout output", ""
+
+    tool = RunCommandTool(hosted_mode=True, sandbox=DummyIsolatedSandbox())
+    result = tool.execute({"command": "ls -la"}, workspace_root=tmp_path)
+
+    assert result.exit_code == 0
+    assert "sandbox container stdout output" in result.output

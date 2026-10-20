@@ -74,11 +74,143 @@ def resolve_shell_args(command: str, shell: str | None = None) -> list[str]:
     return [sh, "-c", command]
 
 
+from abc import ABC, abstractmethod
+
+
+class CommandSandboxBackend(ABC):
+    """Abstract interface for isolated/sandboxed command execution."""
+
+    @property
+    @abstractmethod
+    def is_isolated(self) -> bool:
+        """Return True if this backend executes commands inside an isolated environment (e.g. container)."""
+        pass
+
+    @abstractmethod
+    async def run(
+        self,
+        cmd_args: list[str],
+        working_dir: Path,
+        timeout: float,
+        max_output_bytes: int = 100_000,
+    ) -> tuple[int, str, str]:
+        """Execute command inside sandbox and return (exit_code, stdout, stderr)."""
+        pass
+
+
+class LocalHostSandbox(CommandSandboxBackend):
+    """Direct host subprocess execution with timeouts, cancellation, and output limits."""
+
+    @property
+    def is_isolated(self) -> bool:
+        return False
+
+    async def run(
+        self,
+        cmd_args: list[str],
+        working_dir: Path,
+        timeout: float,
+        max_output_bytes: int = 100_000,
+    ) -> tuple[int, str, str]:
+        kwargs: dict[str, Any] = {
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "cwd": str(working_dir),
+        }
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True
+
+        process = await asyncio.create_subprocess_exec(*cmd_args, **kwargs)
+
+        try:
+            stdout_data, stderr_data = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            if sys.platform == "win32":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+            else:
+                try:
+                    import signal
+
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+
+            return 124, "", f"Command execution timed out after {timeout} seconds."
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            if sys.platform == "win32":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+            else:
+                try:
+                    import signal
+
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        process.kill()
+
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            raise
+
+        stdout_str = stdout_data.decode("utf-8", errors="replace")
+        stderr_str = stderr_data.decode("utf-8", errors="replace")
+
+        # Enforce output size limit
+        if len(stdout_str) > max_output_bytes:
+            stdout_str = (
+                stdout_str[:max_output_bytes]
+                + f"\n... [stdout truncated at {max_output_bytes} bytes]"
+            )
+        if len(stderr_str) > max_output_bytes:
+            stderr_str = (
+                stderr_str[:max_output_bytes]
+                + f"\n... [stderr truncated at {max_output_bytes} bytes]"
+            )
+
+        return (process.returncode or 0), stdout_str, stderr_str
+
+
 class RunCommandTool(BaseTool):
     """Tool enabling the agent to execute shell commands within the workspace directory."""
 
-    def __init__(self, default_shell: str | None = None) -> None:
+    def __init__(
+        self,
+        default_shell: str | None = None,
+        sandbox: CommandSandboxBackend | None = None,
+        hosted_mode: bool | None = None,
+        max_output_bytes: int = 100_000,
+    ) -> None:
         self.default_shell = default_shell
+        self.sandbox = sandbox or LocalHostSandbox()
+        self.hosted_mode = (
+            hosted_mode
+            if hosted_mode is not None
+            else os.environ.get("ICARUS_HOSTED_MODE", "false").lower() in ("true", "1")
+        )
+        self.max_output_bytes = max_output_bytes
 
     @property
     def definition(self) -> ToolDefinition:
@@ -172,19 +304,25 @@ class RunCommandTool(BaseTool):
                 exit_code=1,
             )
 
+        if self.hosted_mode and not self.sandbox.is_isolated:
+            return ToolResult(
+                call_id=call_id,
+                name="run_command",
+                output="",
+                error=(
+                    "Host shell execution is disabled in hosted API mode for security. "
+                    "An isolated container/sandbox execution backend must be configured."
+                ),
+                exit_code=1,
+            )
+
         shell_pref = arguments.get("shell") or self.default_shell
         cmd_args = resolve_shell_args(command, shell_pref)
 
-        kwargs: dict[str, Any] = {
-            "stdout": asyncio.subprocess.PIPE,
-            "stderr": asyncio.subprocess.PIPE,
-            "cwd": str(working_dir),
-        }
-        if sys.platform != "win32":
-            kwargs["start_new_session"] = True
-
         try:
-            process = await asyncio.create_subprocess_exec(*cmd_args, **kwargs)
+            returncode, stdout_str, stderr_str = await self.sandbox.run(
+                cmd_args, working_dir, timeout, self.max_output_bytes
+            )
         except Exception as exc:
             return ToolResult(
                 call_id=call_id,
@@ -193,69 +331,6 @@ class RunCommandTool(BaseTool):
                 error=f"Failed to spawn process: {exc}",
                 exit_code=1,
             )
-
-        try:
-            stdout_data, stderr_data = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            # Cleanly terminate runaway process
-            if sys.platform == "win32":
-                try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                        capture_output=True,
-                        timeout=5,
-                    )
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        process.kill()
-            else:
-                try:
-                    import signal
-
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        process.kill()
-
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(process.wait(), timeout=2.0)
-
-            return ToolResult(
-                call_id=call_id,
-                name="run_command",
-                output="",
-                error=f"Command execution timed out after {timeout} seconds.",
-                exit_code=124,
-            )
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            if sys.platform == "win32":
-                try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                        capture_output=True,
-                        timeout=5,
-                    )
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        process.kill()
-            else:
-                try:
-                    import signal
-
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        process.kill()
-
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(process.wait(), timeout=2.0)
-            raise
-
-        stdout_str = stdout_data.decode("utf-8", errors="replace")
-        stderr_str = stderr_data.decode("utf-8", errors="replace")
 
         if stdout_str and stderr_str:
             combined_output = f"{stdout_str}\n{stderr_str}".strip()
@@ -266,7 +341,6 @@ class RunCommandTool(BaseTool):
         else:
             combined_output = ""
 
-        returncode = process.returncode or 0
         error_msg = None
         if returncode != 0:
             error_msg = (

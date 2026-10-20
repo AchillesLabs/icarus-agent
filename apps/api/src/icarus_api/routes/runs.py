@@ -172,8 +172,11 @@ async def stream_session_run(
         )
 
     # 8. Setup agent loop, event queue, and observer
+    from icarus_core.tools.registry import create_default_registry
+
     agent_loop = AgentLoop(
         provider=provider,
+        tool_registry=create_default_registry(load_mcp=False, hosted_mode=True),
         approval_engine=approval_engine,
         model=effective_model,
         temperature=req.temperature if req.temperature is not None else 0.7,
@@ -493,8 +496,11 @@ async def create_session_run(
         )
 
     # 9. Setup agent loop and execute run with active run registration
+    from icarus_core.tools.registry import create_default_registry
+
     agent_loop = AgentLoop(
         provider=provider,
+        tool_registry=create_default_registry(load_mcp=False, hosted_mode=True),
         approval_engine=approval_engine,
         model=effective_model,
         temperature=req.temperature if req.temperature is not None else 0.7,

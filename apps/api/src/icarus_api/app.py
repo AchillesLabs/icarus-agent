@@ -12,6 +12,7 @@ from icarus_api.errors import register_error_handlers
 from icarus_api.lifespan import lifespan
 from icarus_api.rate_limit import RateLimitMiddleware
 from icarus_api.routes.health import router as health_router
+from icarus_api.routes.integrations import router as integrations_router
 from icarus_api.routes.runs import router as runs_router
 from icarus_api.routes.sessions import router as sessions_router
 from icarus_api.routes.tokens import router as tokens_router
@@ -56,10 +57,19 @@ def create_app(
     )
 
     # Configure CORS, rate limiting, and authentication middleware
+    cors_origins = list(resolved_settings.cors_origins)
+    allow_credentials = True
+    if "*" in cors_origins:
+        # Wildcard origins cannot be used with credentials per W3C/Fetch spec and security best practices
+        if len(cors_origins) == 1:
+            allow_credentials = False
+        else:
+            cors_origins = [o for o in cors_origins if o != "*"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=resolved_settings.cors_origins,
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -75,5 +85,6 @@ def create_app(
     app.include_router(runs_router)
     app.include_router(tokens_router)
     app.include_router(vault_router)
+    app.include_router(integrations_router)
 
     return app

@@ -13,6 +13,10 @@ from cryptography.fernet import Fernet, InvalidToken
 DEFAULT_DEV_VAULT_KEY = "icarus-insecure-dev-master-vault-key-32b"
 
 
+class MissingMasterKeyError(RuntimeError):
+    """Raised when CredentialVault is initialized without a configured master encryption key."""
+
+
 class VaultDecryptionError(Exception):
     """Raised when decrypting a vault secret fails due to tampering or invalid master key."""
 
@@ -67,8 +71,25 @@ class CredentialVault:
     derived from a dedicated master secret key.
     """
 
-    def __init__(self, master_key: str | bytes | None = None) -> None:
-        raw_key = master_key or os.environ.get("ICARUS_VAULT_MASTER_KEY") or DEFAULT_DEV_VAULT_KEY
+    def __init__(
+        self,
+        master_key: str | bytes | None = None,
+        allow_insecure_dev_key: bool = False,
+    ) -> None:
+        raw_key = master_key or os.environ.get("ICARUS_VAULT_MASTER_KEY")
+        if not raw_key:
+            dev_permitted = (
+                allow_insecure_dev_key
+                or os.environ.get("ICARUS_ALLOW_INSECURE_DEV_VAULT") == "1"
+            )
+            if not dev_permitted:
+                raise MissingMasterKeyError(
+                    "CredentialVault failed to initialize: No encryption master key provided. "
+                    "Set the ICARUS_VAULT_MASTER_KEY environment variable or pass master_key explicitly. "
+                    "Insecure default fallback keys are forbidden in production."
+                )
+            raw_key = DEFAULT_DEV_VAULT_KEY
+
         raw_bytes = raw_key.encode("utf-8") if isinstance(raw_key, str) else raw_key
 
         # Derive deterministic 32-byte urlsafe-base64 key suitable for Fernet
@@ -94,6 +115,20 @@ class CredentialVault:
                 "Failed to decrypt vault secret: invalid token or tampering detected"
             ) from exc
 
+    def rekey(self, ciphertext: str, new_vault: CredentialVault) -> str:
+        """Decrypt ciphertext with current vault and re-encrypt using new_vault for key rotation."""
+        plaintext = self.decrypt(ciphertext)
+        return new_vault.encrypt(plaintext)
+
     def mask(self, secret: str) -> str:
         """Convenience method delegating to mask_secret."""
         return mask_secret(secret)
+
+
+def rotate_secret(
+    ciphertext: str,
+    old_vault: CredentialVault,
+    new_vault: CredentialVault,
+) -> str:
+    """Convenience function to rotate an encrypted secret from old_vault to new_vault."""
+    return old_vault.rekey(ciphertext, new_vault)

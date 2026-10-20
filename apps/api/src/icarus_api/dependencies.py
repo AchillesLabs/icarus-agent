@@ -1,5 +1,7 @@
 """Dependency injection providers for FastAPI routes."""
 
+from __future__ import annotations
+
 from collections.abc import Generator
 from typing import Annotated
 
@@ -13,6 +15,7 @@ from icarus_core.persistence import (
     SessionRepository,
     TenantApiTokenRepository,
     TenantCredentialRepository,
+    TenantIntegrationRepository,
     TenantMessageRepository,
     TenantRunRepository,
     TenantSessionRepository,
@@ -164,6 +167,21 @@ def get_tenant_credential_repository(
 ) -> TenantCredentialRepository:
     """Provide a TenantCredentialRepository scoped to the authenticated tenant."""
     return TenantCredentialRepository(
+        db_manager=db_manager,
+        owner_id=identity.owner_id,
+        vault=vault,
+    )
+
+
+def get_tenant_integration_repository(
+    identity: Annotated[TenantIdentity, Depends(get_current_tenant)],
+    db_manager: Annotated[DatabaseManager, Depends(get_db_manager)],
+    vault: Annotated[CredentialVault, Depends(get_credential_vault)],
+) -> TenantIntegrationRepository:
+    """Provide a TenantIntegrationRepository scoped to the authenticated tenant."""
+    from icarus_core.persistence import TenantIntegrationRepository
+
+    return TenantIntegrationRepository(
         db_manager=db_manager,
         owner_id=identity.owner_id,
         vault=vault,

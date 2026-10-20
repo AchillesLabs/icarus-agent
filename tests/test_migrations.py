@@ -58,6 +58,8 @@ def test_migration_runner_on_file_db(tmp_path: Path):
         "scheduled_jobs",
         "tenant_api_tokens",
         "tenant_credentials",
+        "integration_connections",
+        "oauth_states",
         "alembic_version",
     }.issubset(table_names)
 
@@ -174,5 +176,7 @@ def test_migration_runner_on_memory_db():
         "scheduled_jobs",
         "tenant_api_tokens",
         "tenant_credentials",
+        "integration_connections",
+        "oauth_states",
         "alembic_version",
     }.issubset(table_names)

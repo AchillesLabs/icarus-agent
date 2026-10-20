@@ -108,10 +108,15 @@ class DatabaseManager:
         return self._session_factory
 
     @contextmanager
-    def session_scope(self) -> Generator[Session, None, None]:
-        """Provide a transactional scope around a series of operations."""
+    def session_scope(self, tenant_id: str | None = None) -> Generator[Session, None, None]:
+        """Provide a transactional scope around a series of operations with optional tenant context."""
         session = self.session_factory()
         try:
+            if tenant_id and self.is_postgres:
+                session.execute(
+                    text("SET LOCAL app.current_tenant = :tenant"),
+                    {"tenant": tenant_id},
+                )
             yield session
             session.commit()
         except Exception:

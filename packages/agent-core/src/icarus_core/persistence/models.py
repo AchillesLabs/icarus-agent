@@ -297,3 +297,76 @@ class TenantCredentialModel(Base):
             created_at=_ensure_utc(self.created_at) or now,
             updated_at=_ensure_utc(self.updated_at) or now,
         )
+
+
+class IntegrationConnectionModel(Base):
+    """Persistent connection for an authenticated external app integration (Google, Slack, etc.)."""
+
+    __tablename__ = "integration_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "provider",
+            name="uq_integration_connections_owner_provider",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_generate_uuid)
+    owner_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="default", index=True
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="disconnected")
+    encrypted_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_type: Mapped[str] = mapped_column(String(32), nullable=False, default="Bearer")
+    scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    account_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        onupdate=_utcnow,
+    )
+
+    def to_dto(self) -> Any:
+        from icarus_contracts.integrations import ConnectionStatus, IntegrationConnection
+
+        now = datetime.now(UTC)
+        return IntegrationConnection(
+            id=self.id,
+            owner_id=self.owner_id,
+            provider=self.provider,
+            status=ConnectionStatus(self.status),
+            scopes=self.scopes or [],
+            account_email=self.account_email,
+            token_type=self.token_type or "Bearer",
+            expires_at=_ensure_utc(self.expires_at),
+            created_at=_ensure_utc(self.created_at) or now,
+            updated_at=_ensure_utc(self.updated_at) or now,
+            metadata=self.metadata_json or {},
+        )
+
+
+class OAuthStateModel(Base):
+    """Temporary record for validating anti-forgery OAuth state and PKCE verifier."""
+
+    __tablename__ = "oauth_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_generate_uuid)
+    state: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    owner_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    code_verifier: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    redirect_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )

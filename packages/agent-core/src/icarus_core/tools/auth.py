@@ -2,29 +2,92 @@
 
 from __future__ import annotations
 
+import base64
+import contextlib
 import json
 import os
 from pathlib import Path
 from typing import Any
 
+from cryptography.fernet import Fernet
 from icarus_core.paths import get_icarus_home
 from icarus_core.theme import get_theme
 from rich.console import Console
 from rich.panel import Panel
 
 
+def _get_or_create_local_master_key() -> bytes:
+    """Retrieve or generate machine-local 32-byte key for local credential vault encryption."""
+    key_file = get_icarus_home() / ".credential_key"
+    if key_file.exists():
+        try:
+            content = key_file.read_bytes().strip()
+            if content:
+                return content
+        except Exception:
+            pass
+
+    key = Fernet.generate_key()
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(str(key_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with open(fd, "wb") as f:
+            f.write(key)
+    except Exception:
+        key_file.write_bytes(key)
+        with contextlib.suppress(Exception):
+            os.chmod(key_file, 0o600)
+    return key
+
+
 def get_credentials_file() -> Path:
-    """Return path to persistent credentials store."""
+    """Return path to persistent encrypted credentials store."""
+    return get_icarus_home() / "credentials.enc"
+
+
+def get_legacy_credentials_file() -> Path:
+    """Return path to legacy plaintext credentials store."""
     return get_icarus_home() / "credentials.json"
 
 
 def load_stored_credentials() -> dict[str, str]:
-    """Load stored service credentials dictionary."""
-    cred_file = get_credentials_file()
-    if not cred_file.exists():
+    """Load stored service credentials dictionary with automatic decryption and migration."""
+    legacy_file = get_legacy_credentials_file()
+    enc_file = get_credentials_file()
+
+    # 1. Automatic migration from legacy plaintext credentials.json
+    if legacy_file.exists() and not enc_file.exists():
+        try:
+            legacy_text = legacy_file.read_text(encoding="utf-8")
+            data = json.loads(legacy_text)
+            if isinstance(data, dict):
+                save_stored_credentials(data)
+                legacy_file.write_text(
+                    json.dumps({"_notice": "Credentials migrated to secure encrypted storage credentials.enc"}),
+                    encoding="utf-8",
+                )
+                with contextlib.suppress(Exception):
+                    os.chmod(legacy_file, 0o600)
+                return data
+        except Exception:
+            pass
+
+    if not enc_file.exists():
         return {}
+
     try:
-        data = json.loads(cred_file.read_text(encoding="utf-8"))
+        raw_ciphertext = enc_file.read_bytes().strip()
+        if not raw_ciphertext:
+            return {}
+        if raw_ciphertext.startswith(b"{"):
+            data = json.loads(raw_ciphertext.decode("utf-8"))
+            if isinstance(data, dict):
+                save_stored_credentials(data)
+                return data
+
+        fernet = Fernet(_get_or_create_local_master_key())
+        decrypted_bytes = fernet.decrypt(raw_ciphertext)
+        data = json.loads(decrypted_bytes.decode("utf-8"))
         if isinstance(data, dict):
             return data
     except Exception:
@@ -33,11 +96,22 @@ def load_stored_credentials() -> dict[str, str]:
 
 
 def save_stored_credentials(credentials: dict[str, str]) -> None:
-    """Persist credentials dictionary safely."""
-    cred_file = get_credentials_file()
-    cred_file.parent.mkdir(parents=True, exist_ok=True)
+    """Persist credentials dictionary encrypted at rest with restricted file permissions."""
+    enc_file = get_credentials_file()
+    enc_file.parent.mkdir(parents=True, exist_ok=True)
     try:
-        cred_file.write_text(json.dumps(credentials, indent=2), encoding="utf-8")
+        fernet = Fernet(_get_or_create_local_master_key())
+        serialized = json.dumps(credentials, indent=2).encode("utf-8")
+        ciphertext = fernet.encrypt(serialized)
+
+        try:
+            fd = os.open(str(enc_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "wb") as f:
+                f.write(ciphertext)
+        except Exception:
+            enc_file.write_bytes(ciphertext)
+            with contextlib.suppress(Exception):
+                os.chmod(enc_file, 0o600)
     except Exception:
         pass
 
@@ -104,7 +178,7 @@ class ToolAuthManager:
 
     @classmethod
     def get_token(cls, service: str) -> str | None:
-        """Resolve authorization token for service from env, keyring, or store."""
+        """Resolve authorization token for service from env, OS keyring, or encrypted store."""
         service_key = service.lower().strip()
 
         # 1. Check environment variables
@@ -114,12 +188,7 @@ class ToolAuthManager:
             if val and val.strip():
                 return val.strip()
 
-        # 2. Check local credentials store
-        stored = load_stored_credentials()
-        if service_key in stored and stored[service_key].strip():
-            return stored[service_key].strip()
-
-        # 3. Check OS keyring
+        # 2. Check OS keyring first (preferred secure storage)
         try:
             import keyring
             secret = keyring.get_password("icarus_services", service_key)
@@ -128,25 +197,109 @@ class ToolAuthManager:
         except Exception:
             pass
 
+        # 3. Check encrypted credentials store
+        stored = load_stored_credentials()
+        if service_key in stored and stored[service_key].strip():
+            return stored[service_key].strip()
+
         return None
 
     @classmethod
+    def get_access_token(cls, service: str) -> str | None:
+        """Resolve valid bearer access token for service, unpacking JSON or refreshing OAuth if needed."""
+        raw = cls.get_token(service)
+        if not raw:
+            return None
+        raw_str = raw.strip()
+        if raw_str.startswith("{"):
+            try:
+                data = json.loads(raw_str)
+                if isinstance(data, dict):
+                    if service.lower() == "google" and data.get("refresh_token"):
+                        from datetime import UTC, datetime, timedelta
+                        expires_at_str = data.get("expires_at")
+                        is_expired = False
+                        if expires_at_str:
+                            try:
+                                exp_dt = datetime.fromisoformat(expires_at_str)
+                                if datetime.now(UTC) >= exp_dt:
+                                    is_expired = True
+                            except Exception:
+                                pass
+                        if is_expired:
+                            try:
+                                from icarus_core.integrations.google import GoogleOAuthClient
+                                client = GoogleOAuthClient()
+                                if client.is_configured():
+                                    refreshed = client.refresh_access_token(data["refresh_token"])
+                                    data["access_token"] = refreshed.get("access_token", data["access_token"])
+                                    if "expires_in" in refreshed:
+                                        data["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(refreshed["expires_in"]))).isoformat()
+                                    cls.save_token(service, json.dumps(data))
+                            except Exception:
+                                pass
+                    return data.get("access_token") or raw_str
+            except Exception:
+                pass
+        return raw_str
+
+    @classmethod
     def save_token(cls, service: str, token: str) -> None:
-        """Save authorization token to credentials store and OS keyring."""
+        """Save authorization token to OS keyring and encrypted credentials store."""
         service_key = service.lower().strip()
         cleaned = token.strip()
         if not cleaned:
             return
 
-        stored = load_stored_credentials()
-        stored[service_key] = cleaned
-        save_stored_credentials(stored)
-
+        # 1. Prioritize OS keyring
         try:
             import keyring
             keyring.set_password("icarus_services", service_key, cleaned)
         except Exception:
             pass
+
+        # 2. Persist in encrypted local file store
+        stored = load_stored_credentials()
+        stored[service_key] = cleaned
+        save_stored_credentials(stored)
+
+        # 3. Synchronize in-process environment variables if currently active
+        candidates = cls.ENV_MAPPINGS.get(service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"])
+        for env_var in candidates:
+            if env_var in os.environ:
+                os.environ[env_var] = cleaned
+
+    @classmethod
+    def delete_token(cls, service: str) -> bool:
+        """Delete stored authorization token from OS keyring, encrypted store, and environment."""
+        service_key = service.lower().strip()
+        deleted = False
+
+        try:
+            import keyring
+            keyring.delete_password("icarus_services", service_key)
+            deleted = True
+        except Exception:
+            pass
+
+        stored = load_stored_credentials()
+        if service_key in stored:
+            del stored[service_key]
+            save_stored_credentials(stored)
+            deleted = True
+
+        candidates = cls.ENV_MAPPINGS.get(service_key, [f"{service_key.upper()}_API_KEY", f"{service_key.upper()}_TOKEN"])
+        for env_var in candidates:
+            if env_var in os.environ:
+                del os.environ[env_var]
+                deleted = True
+
+        return deleted
+
+    @classmethod
+    def has_token(cls, service: str) -> bool:
+        """Return True if an authorization token exists for the given service."""
+        return cls.get_token(service) is not None
 
     @classmethod
     def prompt_authorization(
