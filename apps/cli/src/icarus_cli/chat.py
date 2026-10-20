@@ -378,6 +378,7 @@ def _run_remote_chat(
                     table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                     table.add_column("Description")
                     table.add_row("/help", "Display available in-chat slash commands")
+                    table.add_row("/connect [id]", "Connect essential tools (browser, stripe, github, slack, etc.)")
                     table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
                     table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                     table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
@@ -385,6 +386,13 @@ def _run_remote_chat(
                     table.add_row("/session", "Show active session details and message count")
                     table.add_row("/exit", "Exit the chat REPL")
                     console.print(table)
+                    continue
+
+                if cleaned == "/connect" or cleaned.startswith("/connect "):
+                    parts = cleaned.split(maxsplit=1)
+                    conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+                    from icarus_cli.tools_cmd import connect_tool_interactive
+                    connect_tool_interactive(console, connector_id=conn_id)
                     continue
 
                 if cleaned == "/tools" or cleaned.startswith("/tools "):
@@ -738,6 +746,7 @@ def run_chat(
                 table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
+                table.add_row("/connect [id]", "Connect essential tools (browser, stripe, github, slack, etc.)")
                 table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
                 table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                 table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
@@ -746,6 +755,13 @@ def run_chat(
                 table.add_row("/session", "Show active session details and message count")
                 table.add_row("/exit", "Exit the chat REPL")
                 console.print(table)
+                continue
+
+            if cleaned == "/connect" or cleaned.startswith("/connect "):
+                parts = cleaned.split(maxsplit=1)
+                conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+                from icarus_cli.tools_cmd import connect_tool_interactive
+                connect_tool_interactive(console, connector_id=conn_id)
                 continue
 
             if cleaned == "/tools" or cleaned.startswith("/tools "):

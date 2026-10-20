@@ -172,9 +172,9 @@ def render_workspace_header(
     info_table.add_row("Model", f"[bold white]{model}[/bold white] [dim]({provider})[/dim]")
     info_table.add_row("Path", f"[dim]{cwd}[/dim]")
     info_table.add_row("Session", f"[dim]{session_id}[/dim]")
-    info_table.add_row("Tools", "[dim]file, shell, web, system, mcp (8+ tools)[/dim]")
+    info_table.add_row("Tools", "[dim]file, web, gmail, calendar, api, shell (21 tools)[/dim]")
     info_table.add_row("Skills", f"[dim]{skills_line}[/dim]")
-    info_table.add_row("Cmds", f"[dim]/help · /tools · /skills · /theme · /models[/dim]")
+    info_table.add_row("Cmds", f"[dim]/help · /tools · /connect · /skills · /theme[/dim]")
 
     main_grid = Table.grid(padding=(0, 2))
     main_grid.add_column(width=26)

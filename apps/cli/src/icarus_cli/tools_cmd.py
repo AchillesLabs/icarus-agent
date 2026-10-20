@@ -122,3 +122,128 @@ def show_tool(
 ) -> None:
     """Inspect parameters schema and description for a specific tool."""
     render_tool_detail(console, tool_name=name)
+
+
+def render_connectors_catalog(console: Console) -> None:
+    """Render the essential tool integrations catalog (Meta Muse / Manus style)."""
+    from icarus_core.mcp.config import McpConfigManager
+    from icarus_core.tools.catalog import ESSENTIAL_CATALOG
+
+    mgr = McpConfigManager()
+    configured_servers = set(mgr.get_servers().keys())
+    th = get_theme()
+
+    table = Table(
+        title="Essential Tool Connectors Catalog",
+        show_header=True,
+        header_style=f"bold {th.primary}",
+    )
+    table.add_column("Connector ID", style=f"bold {th.secondary}", width=16)
+    table.add_column("Name", style="bold white", width=28)
+    table.add_column("Category", width=18)
+    table.add_column("Status", width=16)
+    table.add_column("Description")
+
+    for conn in ESSENTIAL_CATALOG:
+        if conn.is_built_in:
+            status = "[bold green]● Built-in[/bold green]"
+        elif conn.id in configured_servers:
+            status = "[bold cyan]● Connected[/bold cyan]"
+        else:
+            status = "[dim]○ Available[/dim]"
+
+        table.add_row(conn.id, conn.name, conn.category, status, conn.description)
+
+    console.print(table)
+    console.print(
+        f"\n[dim]* To connect an essential tool: [bold {th.primary}]/connect <id>[/bold {th.primary}] or [bold {th.primary}]icarus connect <id>[/bold {th.primary}][/dim]"
+    )
+    console.print(
+        f"[dim]* Example: [bold {th.primary}]icarus connect browser[/bold {th.primary}] or [bold {th.primary}]icarus connect stripe[/bold {th.primary}][/dim]\n"
+    )
+
+
+def connect_tool_interactive(console: Console, connector_id: str | None = None) -> bool:
+    """Walk through connecting an essential tool connector from catalog."""
+    import os
+    from icarus_core.mcp.config import McpConfigManager, McpServerConfig
+    from icarus_core.tools.catalog import ESSENTIAL_CATALOG, get_connector
+
+    mgr = McpConfigManager()
+    th = get_theme()
+
+    if not connector_id:
+        render_connectors_catalog(console)
+        try:
+            val = console.input(f"[bold {th.primary}]Enter Connector ID to connect (or press Enter to cancel): [/bold {th.primary}]").strip()
+            if not val:
+                return False
+            connector_id = val
+        except (KeyboardInterrupt, EOFError):
+            return False
+
+    conn = get_connector(connector_id)
+    if not conn:
+        console.print(f"[bold red]Error:[/bold red] Unknown connector ID '{connector_id}'.")
+        console.print("[dim]Run `icarus tools catalog` to view supported connectors.[/dim]")
+        return False
+
+    if conn.is_built_in:
+        console.print(f"[bold green]✔ '{conn.name}' is already built-in and active out-of-the-box![/bold green]")
+        return True
+
+    console.print(f"\n[bold {th.primary}]Connecting {conn.name}...[/bold {th.primary}]")
+    console.print(f"[dim]{conn.description}[/dim]")
+    if conn.doc_url:
+        console.print(f"[dim]Docs: {conn.doc_url}[/dim]")
+
+    env_dict: dict[str, str] = {}
+    for ev in conn.env_vars:
+        existing = os.environ.get(ev)
+        prompt_label = f"Enter secret for [bold yellow]{ev}[/bold yellow]"
+        if existing:
+            prompt_label += " [dim](press Enter to keep existing)[/dim]"
+        prompt_label += ": "
+
+        try:
+            val = console.input(prompt_label, password=True).strip()
+            if val:
+                env_dict[ev] = val
+            elif existing:
+                env_dict[ev] = existing
+            else:
+                console.print(f"[yellow]Warning: {ev} was left empty. Tool may fail if required.[/yellow]")
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Connection cancelled.[/dim]")
+            return False
+
+    server_cfg = McpServerConfig(
+        command=conn.command,
+        args=conn.args,
+        env=env_dict,
+        transport="stdio",
+    )
+
+    try:
+        mgr.add_server(conn.id, server_cfg)
+        console.print(f"[bold green]✔ Successfully connected '{conn.name}'![/bold green]")
+        console.print(f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n")
+        return True
+    except Exception as exc:
+        console.print(f"[bold red]Failed to save connector:[/bold red] {exc}")
+        return False
+
+
+@tools_app.command(name="catalog")
+def catalog_tools() -> None:
+    """Browse the essential tools & connectors catalog (Meta Muse / Manus style)."""
+    render_connectors_catalog(console)
+
+
+@tools_app.command(name="connect")
+def connect_tool(
+    connector_id: Annotated[str | None, typer.Argument(help="Optional Connector ID (e.g. browser, github, stripe).")] = None,
+) -> None:
+    """Connect and authenticate an essential tool connector."""
+    connect_tool_interactive(console, connector_id=connector_id)
+

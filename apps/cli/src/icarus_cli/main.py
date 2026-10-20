@@ -85,6 +85,9 @@ app.add_typer(skills_app, name="skills")
 app.add_typer(theme_app, name="theme")
 app.add_typer(tools_app, name="tools")
 
+from icarus_cli.tools_cmd import connect_tool
+app.command(name="connect", help="Connect and authenticate essential tools (browser, stripe, github, slack, etc.)")(connect_tool)
+
 console = Console()
 
 

@@ -74,6 +74,30 @@ def create_default_registry(load_mcp: bool = True) -> ToolRegistry:
     registry.register(GetCurrentLocationTool())
 
     try:
+        from icarus_core.tools.browser import BrowserNavigateTool
+        from icarus_core.tools.calendar import CalendarCreateEventTool, CalendarEventsTool
+        from icarus_core.tools.github import GithubCreateIssueTool, GithubIssuesTool
+        from icarus_core.tools.gmail import GmailSearchTool, GmailSendTool
+        from icarus_core.tools.http import HttpRequestTool
+        from icarus_core.tools.slack import SlackSendMessageTool
+        from icarus_core.tools.stripe import StripePaymentLinkTool
+        from icarus_core.tools.weather import GetWeatherTool
+
+        registry.register(HttpRequestTool())
+        registry.register(GetWeatherTool())
+        registry.register(BrowserNavigateTool())
+        registry.register(GmailSearchTool())
+        registry.register(GmailSendTool())
+        registry.register(CalendarEventsTool())
+        registry.register(CalendarCreateEventTool())
+        registry.register(GithubIssuesTool())
+        registry.register(GithubCreateIssueTool())
+        registry.register(SlackSendMessageTool())
+        registry.register(StripePaymentLinkTool())
+    except Exception:
+        pass
+
+    try:
         from icarus_core.tools.reminders import ListRemindersTool, ScheduleReminderTool
 
         registry.register(ScheduleReminderTool())
