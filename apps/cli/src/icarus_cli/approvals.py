@@ -48,6 +48,34 @@ def format_action_preview(tool_call: ToolCall) -> str:
             f"[bold cyan]Timeout:[/bold cyan] {timeout}s"
         )
 
+    name_lower = tool_call.name.lower()
+    if any(k in name_lower for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")):
+        lines = [
+            "[bold red]CRITICAL FINANCIAL / PAYMENT ACTION[/bold red]",
+            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
+        ]
+        for key, val in args.items():
+            lines.append(f"[bold yellow]{key}:[/bold yellow] {val}")
+        return "\n".join(lines)
+
+    if any(k in name_lower for k in ("book", "reserve", "ticket", "flight", "hotel")):
+        lines = [
+            "[bold green]BOOKING / RESERVATION ACTION[/bold green]",
+            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
+        ]
+        for key, val in args.items():
+            lines.append(f"[bold cyan]{key}:[/bold cyan] {val}")
+        return "\n".join(lines)
+
+    if any(k in name_lower for k in ("schedule", "calendar", "event", "meeting", "invite")):
+        lines = [
+            "[bold magenta]CALENDAR / SCHEDULING ACTION[/bold magenta]",
+            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
+        ]
+        for key, val in args.items():
+            lines.append(f"[bold cyan]{key}:[/bold cyan] {val}")
+        return "\n".join(lines)
+
     formatted_args = json.dumps(args, indent=2)
     return (
         f"[bold cyan]Tool:[/bold cyan] {tool_call.name}\n"
@@ -65,11 +93,29 @@ def prompt_for_approval(
     cons = console or Console()
     preview_content = format_action_preview(tool_call)
 
+    name_lower = tool_call.name.lower()
+    if any(k in name_lower for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")):
+        title = "[bold red]⚠️ Financial Payment Approval Required[/bold red]"
+        border_style = "red"
+        subtitle = "[bold yellow]Verify amount, recipient, and payment authorization[/bold yellow]"
+    elif any(k in name_lower for k in ("book", "reserve", "ticket", "flight", "hotel")):
+        title = "[bold green]🎫 Booking / Reservation Approval Required[/bold green]"
+        border_style = "green"
+        subtitle = "[dim]Confirm booking details and pricing before proceeding[/dim]"
+    elif any(k in name_lower for k in ("schedule", "calendar", "event", "meeting", "invite")):
+        title = "[bold magenta]📅 Calendar / Schedule Approval Required[/bold magenta]"
+        border_style = "magenta"
+        subtitle = "[dim]Confirm date, attendees, and schedule details[/dim]"
+    else:
+        title = "[bold yellow]Safety Approval Required[/bold yellow]"
+        border_style = "yellow"
+        subtitle = "[dim]This operation modifies your workspace or environment[/dim]"
+
     panel = Panel(
         preview_content,
-        title="[bold yellow]Safety Approval Required[/bold yellow]",
-        border_style="yellow",
-        subtitle="[dim]This operation modifies your workspace[/dim]",
+        title=title,
+        border_style=border_style,
+        subtitle=subtitle,
     )
     cons.print(panel)
 

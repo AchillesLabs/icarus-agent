@@ -66,6 +66,27 @@ class McpToolAdapter(BaseTool):
         self.tool_schema = tool_schema
         self.timeout = timeout
         self._safety_category = safety_category
+        if safety_category == ToolSafetyCategory.SAFE_READ:
+            lower = tool_schema.name.lower()
+            if any(
+                k in lower
+                for k in (
+                    "pay",
+                    "buy",
+                    "book",
+                    "reserve",
+                    "schedule",
+                    "order",
+                    "charge",
+                    "transfer",
+                    "checkout",
+                    "delete",
+                    "remove",
+                    "write",
+                    "exec",
+                )
+            ):
+                self._safety_category = ToolSafetyCategory.REQUIRES_APPROVAL
 
         if tool_name:
             self._name = tool_name

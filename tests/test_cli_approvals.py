@@ -198,3 +198,65 @@ def test_create_cli_approval_engine_interactive_run_command_rejection(tmp_path: 
     assert result.exit_code == 1
     assert "rejected" in result.error.lower()
     assert not canary.exists()
+
+
+def test_payment_approval_displays_financial_warning_panel():
+    """Payment tool prompts display prominent financial warning panel and arguments."""
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, width=80)
+    stdin = io.StringIO("y\n")
+
+    call = ToolCall(
+        id="call_pay_1",
+        name="transfer_payment",
+        arguments={"amount": 499.00, "currency": "USD", "recipient": "Delta Airlines"},
+    )
+
+    approved = prompt_for_approval(tool_call=call, console=console, stdin=stdin)
+    assert approved is True
+    rendered = output.getvalue()
+    assert "Financial Payment Approval Required" in rendered
+    assert "CRITICAL FINANCIAL / PAYMENT ACTION" in rendered
+    assert "transfer_payment" in rendered
+    assert "499" in rendered
+    assert "Delta Airlines" in rendered
+
+
+def test_booking_approval_displays_reservation_panel():
+    """Booking tool prompts display green reservation confirmation panel."""
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, width=80)
+    stdin = io.StringIO("y\n")
+
+    call = ToolCall(
+        id="call_book_1",
+        name="book_flight",
+        arguments={"origin": "DEL", "destination": "PAT", "date": "2026-10-25"},
+    )
+
+    approved = prompt_for_approval(tool_call=call, console=console, stdin=stdin)
+    assert approved is True
+    rendered = output.getvalue()
+    assert "Booking / Reservation Approval Required" in rendered
+    assert "book_flight" in rendered
+    assert "PAT" in rendered
+
+
+def test_scheduling_approval_displays_calendar_panel():
+    """Scheduling tool prompts display calendar panel and event details."""
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False, width=80)
+    stdin = io.StringIO("y\n")
+
+    call = ToolCall(
+        id="call_sched_1",
+        name="create_calendar_event",
+        arguments={"title": "Sprint Review", "time": "2026-10-21 14:00"},
+    )
+
+    approved = prompt_for_approval(tool_call=call, console=console, stdin=stdin)
+    assert approved is True
+    rendered = output.getvalue()
+    assert "Calendar / Schedule Approval Required" in rendered
+    assert "Sprint Review" in rendered
+
