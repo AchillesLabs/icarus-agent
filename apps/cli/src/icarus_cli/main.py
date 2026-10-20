@@ -41,6 +41,7 @@ from icarus_cli.sessions_view import render_session_history, render_sessions_tab
 from icarus_cli.skills_cmd import skills_app
 from icarus_cli.theme_cmd import theme_app
 from icarus_cli.token_cmd import token_app
+from icarus_cli.tools_cmd import tools_app
 from icarus_cli.vault_cmd import vault_app
 
 
@@ -82,6 +83,7 @@ app.add_typer(token_app, name="token")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(skills_app, name="skills")
 app.add_typer(theme_app, name="theme")
+app.add_typer(tools_app, name="tools")
 
 console = Console()
 

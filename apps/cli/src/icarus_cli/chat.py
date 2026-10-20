@@ -378,12 +378,22 @@ def _run_remote_chat(
                     table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                     table.add_column("Description")
                     table.add_row("/help", "Display available in-chat slash commands")
+                    table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
                     table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                     table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
                     table.add_row("/clear", "Clear the terminal screen")
                     table.add_row("/session", "Show active session details and message count")
                     table.add_row("/exit", "Exit the chat REPL")
                     console.print(table)
+                    continue
+
+                if cleaned == "/tools" or cleaned.startswith("/tools "):
+                    parts = cleaned.split(maxsplit=1)
+                    from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+                    if len(parts) > 1 and parts[1].strip():
+                        render_tool_detail(console, tool_name=parts[1].strip())
+                    else:
+                        render_tools_table(console)
                     continue
 
                 if cleaned == "/theme" or cleaned.startswith("/theme "):
@@ -728,6 +738,7 @@ def run_chat(
                 table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
                 table.add_column("Description")
                 table.add_row("/help", "Display available in-chat slash commands")
+                table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
                 table.add_row("/skills [pull <src>]", "List skills or pull/install from URL or repo")
                 table.add_row("/theme [name]", "Change UI accent color (purple, cyan, green, amber, red, or hex)")
                 table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
@@ -735,6 +746,15 @@ def run_chat(
                 table.add_row("/session", "Show active session details and message count")
                 table.add_row("/exit", "Exit the chat REPL")
                 console.print(table)
+                continue
+
+            if cleaned == "/tools" or cleaned.startswith("/tools "):
+                parts = cleaned.split(maxsplit=1)
+                from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+                if len(parts) > 1 and parts[1].strip():
+                    render_tool_detail(console, tool_name=parts[1].strip())
+                else:
+                    render_tools_table(console)
                 continue
 
             if cleaned == "/theme" or cleaned.startswith("/theme "):

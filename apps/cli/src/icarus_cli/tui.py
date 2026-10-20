@@ -94,17 +94,14 @@ BANNER_ART = """█ █▀▀ ▄▀█ █▀█ █ █ ▄▀▀ ▄▄ ▄�
 █ █▄▄ █▀█ █▀▄ █▄█ ▄▄█    █▀█ █▄█ ██▄ █ ▀█  █ """
 
 SPRITE_ART = """
-      ▄▄             ▄▄
-    ▄███▀   ▄▄█▄▄   ▀███▄
-▄▄ ▄███▀  ▄██▀█▀██▄  ▀███▄ ▄▄
- ▀████▀  ███ ▄█▄ ███  ▀████▀
-  █████▄  ▀███████▀  ▄█████
-▄▄ ▀█████▄ ▀█████▀ ▄█████▀ ▄▄
- ▀██▄▄▀████▄▀███▀▄████▀▄▄██▀
-   ▀████████████████████▀
-      ▀█████████████▀
-         ▀███████▀
-            ▀█▀"""
+       ▄▄   ▄   ▄▄
+     ▄███▀ ▄█▄ ▀███▄
+ ▄▄ ▄███▀ ▄███▄ ▀███▄ ▄▄
+  ▀████▄▄███████▄▄████▀
+   ▀█████████████████▀
+     ▀█████████████▀
+        ▀███████▀
+           ▀█▀"""
 
 
 def get_banner(theme: UITheme | None = None) -> str:
@@ -151,12 +148,6 @@ def render_workspace_header(
         f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
     )
 
-    meta_text = (
-        f"[bold {th.secondary}]{model}[/bold {th.secondary}] [dim]· {provider}[/dim]\n"
-        f"[dim]{cwd}[/dim]\n"
-        f"[dim]Session: {session_id}[/dim]"
-    )
-
     from icarus_core.skills import discover_skills
 
     try:
@@ -174,29 +165,21 @@ def render_workspace_header(
     else:
         skills_line = "None loaded (.agents/skills/)"
 
-    right_text = (
-        f"[bold {th.primary}]Available Tools[/bold {th.primary}]\n"
-        "[dim]file: read, write, search\n"
-        "shell: run_command\n"
-        "web: web_search, fetch_webpage\n"
-        "system: location, reminders (8 tools)[/dim]\n\n"
-        f"[bold {th.primary}]Available Skills[/bold {th.primary}]\n"
-        f"[dim]{skills_line}[/dim]\n\n"
-        f"[bold {th.primary}]Shortcuts[/bold {th.primary}]\n"
-        f"[bold {th.primary}]/help[/bold {th.primary}] [dim]Commands[/dim] · "
-        f"[bold {th.primary}]/skills[/bold {th.primary}] [dim]Skills[/dim] · "
-        f"[bold {th.primary}]/theme[/bold {th.primary}] [dim]Colors[/dim] · "
-        f"[bold {th.primary}]/models[/bold {th.primary}] [dim]Switch[/dim]"
-    )
+    info_table = Table.grid(padding=(0, 2))
+    info_table.add_column(style=f"bold {th.primary}", width=7)
+    info_table.add_column()
 
-    left_table = Table.grid(padding=(0, 0))
-    left_table.add_row(get_sprite(th))
-    left_table.add_row(meta_text)
+    info_table.add_row("Model", f"[bold white]{model}[/bold white] [dim]({provider})[/dim]")
+    info_table.add_row("Path", f"[dim]{cwd}[/dim]")
+    info_table.add_row("Session", f"[dim]{session_id}[/dim]")
+    info_table.add_row("Tools", "[dim]file, shell, web, system, mcp (8+ tools)[/dim]")
+    info_table.add_row("Skills", f"[dim]{skills_line}[/dim]")
+    info_table.add_row("Cmds", f"[dim]/help · /tools · /skills · /theme · /models[/dim]")
 
-    main_grid = Table.grid(padding=(0, 3))
+    main_grid = Table.grid(padding=(0, 2))
+    main_grid.add_column(width=26)
     main_grid.add_column()
-    main_grid.add_column()
-    main_grid.add_row(left_table, right_text)
+    main_grid.add_row(get_sprite(th), info_table)
 
     panel = Panel(
         main_grid,
