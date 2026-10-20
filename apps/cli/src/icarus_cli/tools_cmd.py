@@ -164,9 +164,11 @@ def render_connectors_catalog(console: Console) -> None:
 
 
 def connect_tool_interactive(console: Console, connector_id: str | None = None) -> bool:
-    """Walk through connecting an essential tool connector from catalog."""
+    """Walk through connecting an essential tool connector from catalog with auto-browser launch."""
     import os
+    import webbrowser
     from icarus_core.mcp.config import McpConfigManager, McpServerConfig
+    from icarus_core.tools.auth import ToolAuthManager
     from icarus_core.tools.catalog import ESSENTIAL_CATALOG, get_connector
 
     mgr = McpConfigManager()
@@ -188,18 +190,85 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
         console.print("[dim]Run `icarus tools catalog` to view supported connectors.[/dim]")
         return False
 
-    if conn.is_built_in:
+    # Fully zero-config built-ins without credentials
+    if conn.is_built_in and not conn.env_vars:
         console.print(f"[bold green]✔ '{conn.name}' is already built-in and active out-of-the-box![/bold green]")
         return True
 
     console.print(f"\n[bold {th.primary}]Connecting {conn.name}...[/bold {th.primary}]")
     console.print(f"[dim]{conn.description}[/dim]")
-    if conn.doc_url:
-        console.print(f"[dim]Docs: {conn.doc_url}[/dim]")
 
+    # Auto-launch default browser for OAuth / developer keys
+    if conn.doc_url:
+        console.print(f"\n[bold cyan]🌐 Opening authorization page in your default browser...[/bold cyan]")
+        console.print(f"   👉 [bold underline blue]{conn.doc_url}[/bold underline blue]\n")
+        try:
+            webbrowser.open(conn.doc_url)
+        except Exception:
+            pass
+
+    # Special handling for Gmail
+    if conn.id == "gmail":
+        console.print("[bold white]Google Account Security -> App Passwords:[/bold white]")
+        console.print("[dim]1. Enter app name 'Icarus' and click Create.[/dim]")
+        console.print("[dim]2. Copy the 16-character password (e.g., 'abcd efgh ijkl mnop').[/dim]")
+        console.print("[dim]Tip: For 1-click OAuth without app passwords, connect Composio: `icarus connect composio`[/dim]\n")
+
+        try:
+            email_addr = console.input("[bold yellow]Enter your Gmail address (e.g. you@gmail.com): [/bold yellow]").strip()
+            pwd = console.input("[bold yellow]Enter your 16-char App Password: [/bold yellow]", password=True).strip()
+            if not pwd:
+                console.print("\n[dim]Connection cancelled.[/dim]")
+                return False
+            
+            combined = f"{email_addr}:{pwd}" if email_addr else pwd
+            ToolAuthManager.save_token("gmail", combined)
+            os.environ["GMAIL_APP_PASSWORD"] = combined
+            console.print(f"[bold green]✔ Successfully connected Gmail ({email_addr or 'default'})![/bold green]")
+            console.print("[dim]Tools `gmail_search` and `gmail_send` are now ready for your commands.[/dim]\n")
+            return True
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Connection cancelled.[/dim]")
+            return False
+
+    # Special handling for Google Calendar
+    if conn.id == "calendar":
+        console.print("[bold white]Google Calendar Credentials:[/bold white]")
+        console.print("[dim]Use your Google App Password or Calendar API token to authorize events & scheduling.[/dim]\n")
+        try:
+            pwd = console.input("[bold yellow]Enter Google App Password or Token: [/bold yellow]", password=True).strip()
+            if not pwd:
+                console.print("\n[dim]Connection cancelled.[/dim]")
+                return False
+            ToolAuthManager.save_token("calendar", pwd)
+            os.environ["GOOGLE_CALENDAR_TOKEN"] = pwd
+            console.print(f"[bold green]✔ Successfully connected Google Calendar![/bold green]")
+            console.print("[dim]Tools `calendar_events` and `calendar_create_event` are now ready.[/dim]\n")
+            return True
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Connection cancelled.[/dim]")
+            return False
+
+    # Zero-secret MCP servers (e.g., Puppeteer browser automation)
+    if not conn.env_vars:
+        server_cfg = McpServerConfig(
+            command=conn.command,
+            args=conn.args,
+            transport="stdio",
+        )
+        try:
+            mgr.add_server(conn.id, server_cfg)
+            console.print(f"[bold green]✔ Successfully connected '{conn.name}' (Zero keys required)![/bold green]")
+            console.print(f"[dim]Tools from '{conn.id}' are now active. Run `/tools` or `icarus tools list` to inspect.[/dim]\n")
+            return True
+        except Exception as exc:
+            console.print(f"[bold red]Failed to save connector:[/bold red] {exc}")
+            return False
+
+    # Collect required secrets
     env_dict: dict[str, str] = {}
     for ev in conn.env_vars:
-        existing = os.environ.get(ev)
+        existing = os.environ.get(ev) or ToolAuthManager.get_token(conn.id)
         prompt_label = f"Enter secret for [bold yellow]{ev}[/bold yellow]"
         if existing:
             prompt_label += " [dim](press Enter to keep existing)[/dim]"
@@ -209,6 +278,7 @@ def connect_tool_interactive(console: Console, connector_id: str | None = None) 
             val = console.input(prompt_label, password=True).strip()
             if val:
                 env_dict[ev] = val
+                ToolAuthManager.save_token(conn.id, val)
             elif existing:
                 env_dict[ev] = existing
             else:

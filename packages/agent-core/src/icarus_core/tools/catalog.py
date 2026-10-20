@@ -23,7 +23,42 @@ class ToolConnector:
 
 
 ESSENTIAL_CATALOG: list[ToolConnector] = [
-    # 1. Web & Browser Automation
+    # 1. Communication & Personal Productivity
+    ToolConnector(
+        id="gmail",
+        name="Gmail (Search, Read & Send)",
+        category="Communication",
+        description="Search inbox, read email threads, and send messages with interactive approval (Free Google App Password or OAuth).",
+        package="built-in & mcp",
+        command="built-in",
+        env_vars=["GMAIL_APP_PASSWORD"],
+        doc_url="https://myaccount.google.com/apppasswords",
+        is_built_in=True,
+    ),
+    ToolConnector(
+        id="calendar",
+        name="Google Calendar & Agenda",
+        category="Scheduling & Calendar",
+        description="Search agenda, view upcoming events, and schedule meetings on your calendar.",
+        package="built-in & mcp",
+        command="built-in",
+        env_vars=["GOOGLE_CALENDAR_TOKEN"],
+        doc_url="https://myaccount.google.com/apppasswords",
+        is_built_in=True,
+    ),
+    # 2. 1-Click Ecosystem & Managed OAuth
+    ToolConnector(
+        id="composio",
+        name="Composio Tool Hub (250+ Free Apps)",
+        category="App Ecosystem & OAuth",
+        description="Connect 250+ apps (Gmail, Calendar, Notion, Jira, Slack, GitHub) with 1-click browser OAuth (no API key hassle).",
+        package="composio-core",
+        command="npx",
+        args=["-y", "composio-core", "mcp"],
+        env_vars=["COMPOSIO_API_KEY"],
+        doc_url="https://app.composio.dev",
+    ),
+    # 3. Web & Browser Automation
     ToolConnector(
         id="browser",
         name="Browser Automation (Puppeteer)",
@@ -45,7 +80,7 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
         env_vars=["BRAVE_API_KEY"],
         doc_url="https://brave.com/search/api/",
     ),
-    # 2. Payments & Commerce
+    # 4. Payments & Commerce
     ToolConnector(
         id="stripe",
         name="Stripe Payments & Invoicing",
@@ -55,9 +90,9 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
         command="npx",
         args=["-y", "@stripe/mcp"],
         env_vars=["STRIPE_SECRET_KEY"],
-        doc_url="https://stripe.com/docs/api",
+        doc_url="https://dashboard.stripe.com/apikeys",
     ),
-    # 3. Developer & Code
+    # 5. Developer & Code
     ToolConnector(
         id="github",
         name="GitHub Operations",
@@ -90,7 +125,7 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
         args=["mcp-server-sqlite", "--db-path", "database.db"],
         doc_url="https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
     ),
-    # 4. Communication & Messaging
+    # 6. Communication & Messaging
     ToolConnector(
         id="slack",
         name="Slack Workspaces",
@@ -102,7 +137,7 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
         env_vars=["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
         doc_url="https://api.slack.com/apps",
     ),
-    # 5. Maps & Travel
+    # 7. Maps & Travel
     ToolConnector(
         id="google-maps",
         name="Google Maps & Places",
@@ -114,7 +149,7 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
         env_vars=["GOOGLE_MAPS_API_KEY"],
         doc_url="https://developers.google.com/maps",
     ),
-    # 6. Built-in Core Essentials
+    # 8. Built-in Core Essentials
     ToolConnector(
         id="http-request",
         name="Universal REST & Webhooks",
@@ -144,10 +179,54 @@ ESSENTIAL_CATALOG: list[ToolConnector] = [
     ),
 ]
 
+CONNECTOR_ALIASES: dict[str, str] = {
+    "gmail": "gmail",
+    "email": "gmail",
+    "mail": "gmail",
+    "google-mail": "gmail",
+    "gsuite": "gmail",
+    "google": "gmail",
+    "calendar": "calendar",
+    "cal": "calendar",
+    "gcal": "calendar",
+    "google-calendar": "calendar",
+    "composio": "composio",
+    "composio-mcp": "composio",
+    "apps": "composio",
+    "oauth": "composio",
+    "browser": "browser",
+    "puppeteer": "browser",
+    "chrome": "browser",
+    "web": "browser",
+    "github": "github",
+    "gh": "github",
+    "git": "github",
+    "stripe": "stripe",
+    "pay": "stripe",
+    "payment": "stripe",
+    "payments": "stripe",
+    "slack": "slack",
+    "maps": "google-maps",
+    "google-maps": "google-maps",
+    "places": "google-maps",
+    "postgres": "postgres",
+    "postgresql": "postgres",
+    "pg": "postgres",
+    "sqlite": "sqlite",
+    "sql": "sqlite",
+    "weather": "weather",
+    "http": "http-request",
+    "http-request": "http-request",
+    "search": "web-search",
+    "web-search": "web-search",
+}
+
 
 def get_connector(connector_id: str) -> ToolConnector | None:
-    """Retrieve connector specification by ID."""
+    """Retrieve connector specification by ID or alias."""
+    cid = connector_id.lower().strip()
+    canonical = CONNECTOR_ALIASES.get(cid, cid)
     for c in ESSENTIAL_CATALOG:
-        if c.id.lower() == connector_id.lower():
+        if c.id.lower() == canonical:
             return c
     return None
