@@ -147,11 +147,18 @@ def main(
             is_eager=True,
         ),
     ] = None,
+    no_banner: Annotated[
+        bool,
+        typer.Option(
+            "--no-banner",
+            help="Disable the startup ASCII banner for a compact interface.",
+        ),
+    ] = False,
 ) -> None:
     """Icarus root CLI command callback."""
     ensure_database_migrated()
     if ctx.invoked_subcommand is None:
-        chat_cmd()
+        chat_cmd(no_banner=no_banner)
 
 
 @app.command(name="doctor")
@@ -445,6 +452,13 @@ def chat_cmd(
             help="Override UI color theme (purple, cyan, green, amber, red, blue, pink, or custom hex).",
         ),
     ] = None,
+    no_banner: Annotated[
+        bool,
+        typer.Option(
+            "--no-banner",
+            help="Disable the startup ASCII banner for a compact interface.",
+        ),
+    ] = False,
 ) -> None:
     """Launch an interactive streaming chat REPL session."""
     target_session = session or session_arg
@@ -471,6 +485,7 @@ def chat_cmd(
             server_name=server,
             local=local,
             theme_name=theme,
+            no_banner=no_banner,
         )
     except ValueError as exc:
         raise typer.Exit(code=1) from exc

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import TextIO
 
 from icarus_contracts.tools import ToolCall, ToolDefinition
@@ -11,133 +10,10 @@ from icarus_core.agent.approvals import (
     ApprovalPolicy,
 )
 from rich.console import Console
-from rich.panel import Panel
 
-
-def format_action_preview(tool_call: ToolCall) -> str:
-    """Format a readable preview of the action being requested."""
-    args = tool_call.get_arguments_dict()
-
-    if tool_call.name == "write_file":
-        path = args.get("path", "(unknown path)")
-        content = str(args.get("content", ""))
-        lines = content.splitlines()
-        preview_lines = lines[:15]
-        preview_text = "\n".join(preview_lines)
-        if len(lines) > 15:
-            preview_text += f"\n... ({len(lines) - 15} more lines)"
-
-        byte_size = len(content.encode("utf-8"))
-        line_count = len(lines)
-        return (
-            f"[bold cyan]Action:[/bold cyan] Write / Overwrite Workspace File\n"
-            f"[bold cyan]Target Path:[/bold cyan] [bold white]{path}[/bold white]\n"
-            f"[bold cyan]Size:[/bold cyan] {byte_size} bytes ({line_count} lines)\n\n"
-            f"[bold]Content Preview:[/bold]\n"
-            f"{preview_text}"
-        )
-
-    if tool_call.name == "run_command":
-        cmd = args.get("command", "(unknown command)")
-        cwd = args.get("cwd", ".")
-        timeout = args.get("timeout", 30.0)
-        return (
-            f"[bold cyan]Action:[/bold cyan] Execute Shell Command\n"
-            f"[bold cyan]Command:[/bold cyan] [bold white]{cmd}[/bold white]\n"
-            f"[bold cyan]Working Directory:[/bold cyan] {cwd}\n"
-            f"[bold cyan]Timeout:[/bold cyan] {timeout}s"
-        )
-
-    name_lower = tool_call.name.lower()
-    if any(
-        k in name_lower
-        for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")
-    ):
-        lines = [
-            "[bold red]CRITICAL FINANCIAL / PAYMENT ACTION[/bold red]",
-            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
-        ]
-        for key, val in args.items():
-            lines.append(f"[bold yellow]{key}:[/bold yellow] {val}")
-        return "\n".join(lines)
-
-    if any(k in name_lower for k in ("book", "reserve", "ticket", "flight", "hotel")):
-        lines = [
-            "[bold green]BOOKING / RESERVATION ACTION[/bold green]",
-            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
-        ]
-        for key, val in args.items():
-            lines.append(f"[bold cyan]{key}:[/bold cyan] {val}")
-        return "\n".join(lines)
-
-    if any(k in name_lower for k in ("schedule", "calendar", "event", "meeting", "invite")):
-        lines = [
-            "[bold magenta]CALENDAR / SCHEDULING ACTION[/bold magenta]",
-            f"[bold cyan]Tool:[/bold cyan] [bold white]{tool_call.name}[/bold white]",
-        ]
-        for key, val in args.items():
-            lines.append(f"[bold cyan]{key}:[/bold cyan] {val}")
-        return "\n".join(lines)
-
-    formatted_args = json.dumps(args, indent=2)
-    return (
-        f"[bold cyan]Tool:[/bold cyan] {tool_call.name}\n"
-        f"[bold cyan]Arguments:[/bold cyan]\n{formatted_args}"
-    )
-
-
-def prompt_for_approval(
-    tool_call: ToolCall,
-    tool_definition: ToolDefinition | None = None,
-    console: Console | None = None,
-    stdin: TextIO | None = None,
-) -> bool:
-    """Display styled Rich panel with action preview and collect [y/N] confirmation."""
-    cons = console or Console()
-    preview_content = format_action_preview(tool_call)
-
-    name_lower = tool_call.name.lower()
-    if any(
-        k in name_lower
-        for k in ("pay", "purchase", "charge", "transfer", "checkout", "transaction")
-    ):
-        title = "[bold red]⚠️ Financial Payment Approval Required[/bold red]"
-        border_style = "red"
-        subtitle = "[bold yellow]Verify amount, recipient, and payment authorization[/bold yellow]"
-    elif any(k in name_lower for k in ("book", "reserve", "ticket", "flight", "hotel")):
-        title = "[bold green]🎫 Booking / Reservation Approval Required[/bold green]"
-        border_style = "green"
-        subtitle = "[dim]Confirm booking details and pricing before proceeding[/dim]"
-    elif any(k in name_lower for k in ("schedule", "calendar", "event", "meeting", "invite")):
-        title = "[bold magenta]📅 Calendar / Schedule Approval Required[/bold magenta]"
-        border_style = "magenta"
-        subtitle = "[dim]Confirm date, attendees, and schedule details[/dim]"
-    else:
-        title = "[bold yellow]Safety Approval Required[/bold yellow]"
-        border_style = "yellow"
-        subtitle = "[dim]This operation modifies your workspace or environment[/dim]"
-
-    panel = Panel(
-        preview_content,
-        title=title,
-        border_style=border_style,
-        subtitle=subtitle,
-    )
-    cons.print(panel)
-
-    prompt_label = "[bold yellow]Approve execution? [y/N]: [/bold yellow]"
-    try:
-        if stdin is not None:
-            cons.print(prompt_label, end="")
-            response = stdin.readline()
-        else:
-            response = cons.input(prompt_label)
-    except (KeyboardInterrupt, EOFError):
-        cons.print("\n[dim]Approval cancelled by user.[/dim]")
-        return False
-
-    normalized = response.strip().lower()
-    return normalized in ("y", "yes")
+from icarus_cli.ui.approvals import (
+    prompt_for_approval,
+)
 
 
 def create_cli_approval_engine(

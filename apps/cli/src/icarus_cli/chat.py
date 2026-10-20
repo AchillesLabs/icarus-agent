@@ -1,6 +1,7 @@
 """Interactive Chat REPL implementation with streaming markdown and session persistence."""
 
 import asyncio
+import contextlib
 import random
 import sys
 import time
@@ -38,24 +39,354 @@ from icarus_cli.models_view import render_models_table, select_model_interactive
 from icarus_cli.observer import RichAgentObserver
 from icarus_cli.remote import RemoteAgentClient
 from icarus_cli.tui import AlternateScreenBuffer, InteractivePrompt, render_workspace_header
+from icarus_cli.ui.formatters import render_error
+from icarus_cli.ui.status import render_status_bar
 
-ACHILLES_WAR_VERBS = (
-    "Strategos deliberated for",
-    "Phalanx marshalled for",
-    "Myrmidons deployed in",
-    "War Council resolved in",
-    "Achilles' vanguard struck in",
-    "Tactical maneuver waged for",
-    "Forged in the Aegis for",
+ICARUS_TIMING_VERBS = (
+    "Completed in",
+    "Reasoned in",
+    "Synthesized in",
+    "Executed in",
 )
 
 
-def _render_timing_banner(elapsed: float) -> str:
-    """Format post-turn Greek war thinking/execution duration with Achilles imagery."""
+def _render_timing_banner(elapsed: float, tokens: int | None = None) -> str:
+    """Format post-turn execution duration and metrics."""
     elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.05 else "0s"
     time_str = datetime.now().strftime("%I:%M %p").lstrip("0")
-    verb = random.choice(ACHILLES_WAR_VERBS)
-    return f"[dim]⚔ {verb} {elapsed_str} · done {time_str}[/dim]\n"
+    token_str = f" · {tokens:,} tokens" if tokens and tokens > 0 else ""
+    verb = random.choice(ICARUS_TIMING_VERBS)
+    return f"[dim]✓ {verb} {elapsed_str}{token_str} · {time_str}[/dim]\n"
+
+
+def _handle_chat_slash_command(
+    cleaned: str,
+    console: Console,
+    active_theme: UITheme,
+    prompt_session: InteractivePrompt,
+    effective_model: str,
+    effective_provider: str,
+    session_id: str,
+    session_title: str = "",
+    messages_count: int = 0,
+    tokens_count: int = 0,
+    cfg_manager: ConfigManager | None = None,
+    is_remote: bool = False,
+) -> tuple[bool, str, UITheme]:
+    """Handle interactive in-chat slash commands.
+
+    Returns (handled, effective_model, active_theme).
+    If not a slash command, returns (False, effective_model, active_theme).
+    """
+    if cleaned in ("/exit", "/quit"):
+        return False, effective_model, active_theme
+
+    if cleaned == "/help":
+        table = Table(
+            title="Available Slash Commands",
+            show_header=True,
+            header_style=f"bold {active_theme.primary}",
+        )
+        table.add_column("Command", style=f"bold {active_theme.secondary}", width=24)
+        table.add_column("Description")
+        table.add_row("/help", "Display all in-chat slash commands and usage")
+        table.add_row("/model [id]", "Switch active LLM model or inspect active model")
+        table.add_row("/models", "View and select from all available models (Free vs Paid)")
+        table.add_row(
+            "/toolsets [list|enable|disable|reset]",
+            "Manage modular toolsets (enable/disable categories)",
+        )
+        table.add_row(
+            "/integrations [connect|status|disconnect|doctor]",
+            "Manage connected external integrations (OAuth/Tokens)",
+        )
+        table.add_row(
+            "/connect [id]",
+            "Connect essential tools (browser, stripe, github, slack, etc.)",
+        )
+        table.add_row("/tools [name]", "List all tools (core & MCP) or inspect parameter schemas")
+        table.add_row("/skills [list|pull <src>]", "List skills or pull/install from URL or repo")
+        table.add_row(
+            "/theme [name]",
+            "Change UI accent color (amber, cyan, purple, green, red, or hex)",
+        )
+        table.add_row("/clear", "Clear the terminal screen buffer")
+        table.add_row("/session", "Show active session details, message count, and tokens")
+        table.add_row("/exit, /quit", "Exit the chat REPL session")
+        console.print(table)
+        console.print()
+        return True, effective_model, active_theme
+
+    if cleaned == "/model" or cleaned.startswith("/model "):
+        parts = cleaned.split(maxsplit=1)
+        if len(parts) > 1 and parts[1].strip():
+            new_m = parts[1].strip()
+            effective_model = new_m
+            if cfg_manager:
+                try:
+                    cfg = cfg_manager.load_config()
+                    cfg.model = new_m
+                    cfg_manager.save_config(cfg)
+                except Exception:
+                    pass
+            console.print(
+                f"[bold green]✔ Active model switched to[/bold green] [bold white]{effective_model}[/bold white]\n"
+            )
+        else:
+            console.print(
+                f"Active model: [bold white]{effective_model}[/bold white] [dim]({effective_provider})[/dim]"
+            )
+            console.print(
+                f"[dim]* Type [bold {active_theme.primary}]/model <id>[/bold {active_theme.primary}] to switch or [bold {active_theme.primary}]/models[/bold {active_theme.primary}] to browse catalog.[/dim]\n"
+            )
+        return True, effective_model, active_theme
+
+    if cleaned == "/models":
+        try:
+            cred = CredentialResolver().resolve(effective_provider)
+            with console.status(f"[cyan]Fetching models for '{effective_provider}'...[/cyan]"):
+                models_list = fetch_provider_models(effective_provider, api_key=cred.secret)
+            if not models_list:
+                console.print(
+                    f"[yellow]No models found for provider '{effective_provider}'.[/yellow]\n"
+                )
+            else:
+                render_models_table(
+                    models_list, current_model=effective_model, provider=effective_provider
+                )
+                chosen = select_model_interactive(models_list, current_model=effective_model)
+                if chosen and chosen != effective_model:
+                    effective_model = chosen
+                    if cfg_manager:
+                        try:
+                            cfg = cfg_manager.load_config()
+                            cfg.model = chosen
+                            cfg_manager.save_config(cfg)
+                        except Exception:
+                            pass
+                    console.print(
+                        f"[bold green]✔ Switched active model to '{chosen}'![/bold green]\n"
+                    )
+        except Exception as exc:
+            console.print(f"[bold red]Models error:[/bold red] {exc}\n")
+        return True, effective_model, active_theme
+
+    if cleaned == "/toolsets" or cleaned.startswith("/toolsets "):
+        from icarus_cli.toolsets_cmd import (
+            disable_toolset,
+            enable_toolset,
+            list_toolsets,
+            reset_toolsets,
+        )
+
+        parts = cleaned.split(maxsplit=2)
+        subaction = parts[1].lower() if len(parts) > 1 else "list"
+        target = parts[2].strip() if len(parts) > 2 else ""
+        if subaction == "list":
+            list_toolsets()
+        elif subaction == "enable":
+            if not target:
+                console.print("[yellow]Usage: /toolsets enable <name>[/yellow]\n")
+            else:
+                enable_toolset(target)
+        elif subaction == "disable":
+            if not target:
+                console.print("[yellow]Usage: /toolsets disable <name>[/yellow]\n")
+            else:
+                disable_toolset(target)
+        elif subaction == "reset":
+            reset_toolsets()
+        else:
+            console.print(
+                f"[yellow]Unknown toolsets action '{subaction}'. Usage: /toolsets <list|enable|disable|reset>[/yellow]\n"
+            )
+        return True, effective_model, active_theme
+
+    if cleaned == "/integrations" or cleaned.startswith("/integrations "):
+        from icarus_cli.integrations_cmd import (
+            connect_integration,
+            disconnect_integration,
+            doctor_integration,
+        )
+        from icarus_cli.integrations_cmd import (
+            status as integrations_status,
+        )
+
+        parts = cleaned.split(maxsplit=2)
+        subaction = parts[1].lower() if len(parts) > 1 else "status"
+        target = parts[2].strip() if len(parts) > 2 else ""
+        if subaction in ("status", "list"):
+            integrations_status(provider=target or None)
+        elif subaction == "connect":
+            if not target:
+                console.print("[yellow]Usage: /integrations connect <provider>[/yellow]\n")
+            else:
+                connect_integration(target)
+        elif subaction == "disconnect":
+            if not target:
+                console.print("[yellow]Usage: /integrations disconnect <provider>[/yellow]\n")
+            else:
+                disconnect_integration(target)
+        elif subaction == "doctor":
+            doctor_integration(provider=target or None)
+        else:
+            console.print(
+                f"[yellow]Unknown integrations action '{subaction}'. Usage: /integrations <connect|status|disconnect|doctor>[/yellow]\n"
+            )
+        return True, effective_model, active_theme
+
+    if cleaned == "/connect" or cleaned.startswith("/connect "):
+        parts = cleaned.split(maxsplit=1)
+        conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+        from icarus_cli.tools_cmd import connect_tool_interactive
+
+        connect_tool_interactive(console, connector_id=conn_id)
+        return True, effective_model, active_theme
+
+    if cleaned == "/tools" or cleaned.startswith("/tools "):
+        parts = cleaned.split(maxsplit=1)
+        from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
+
+        if len(parts) > 1 and parts[1].strip():
+            render_tool_detail(console, tool_name=parts[1].strip())
+        else:
+            render_tools_table(console)
+        return True, effective_model, active_theme
+
+    if cleaned == "/theme" or cleaned.startswith("/theme "):
+        parts = cleaned.split(maxsplit=1)
+        if len(parts) > 1 and parts[1].strip():
+            new_theme_name = parts[1].strip()
+            try:
+                active_theme = set_theme(new_theme_name)
+                prompt_session.theme = active_theme
+                console.print(
+                    f"\n[bold green]✔ UI theme changed to[/bold green] [bold {active_theme.primary}]'{active_theme.name}'[/bold {active_theme.primary}]!\n"
+                )
+            except Exception as exc:
+                console.print(f"[bold red]Theme error:[/bold red] {exc}\n")
+        else:
+            table = Table(
+                title="Available UI Color Themes",
+                show_header=True,
+                header_style=f"bold {active_theme.primary}",
+            )
+            table.add_column("Theme", style="bold", width=14)
+            table.add_column("Swatch", width=14)
+            table.add_column("Hex", width=12)
+            table.add_column("Description")
+            table.add_column("Status", width=12)
+            for th_name, th in list_themes().items():
+                is_active = th_name == active_theme.name
+                status = (
+                    "[bold green]✔ active[/bold green]" if is_active else "[dim]available[/dim]"
+                )
+                table.add_row(
+                    f"[{th.primary}]{th.name}[/{th.primary}]",
+                    f"[{th.primary}]████████[/{th.primary}]",
+                    th.primary,
+                    th.description,
+                    status,
+                )
+            console.print(table)
+            console.print(
+                f"[dim]* Type [bold {active_theme.primary}]/theme <name_or_hex>[/bold {active_theme.primary}] to switch theme.[/dim]\n"
+            )
+        return True, effective_model, active_theme
+
+    if cleaned == "/skills" or cleaned.startswith("/skills "):
+        from icarus_core.skills import discover_skills, pull_skill
+
+        parts = cleaned.split(maxsplit=2)
+        subaction = parts[1].lower() if len(parts) > 1 else "list"
+        if subaction in ("pull", "install", "add"):
+            if len(parts) < 3 or not parts[2].strip():
+                console.print("[yellow]Usage: /skills pull <url_or_repo_or_path>[/yellow]\n")
+                return True, effective_model, active_theme
+            pull_src = parts[2].strip()
+            with console.status(
+                f"[bold {active_theme.primary}]Pulling external skill from '{pull_src}'...[/bold {active_theme.primary}]"
+            ):
+                try:
+                    installed_skills = pull_skill(
+                        source=pull_src,
+                        workspace_dir=Path.cwd(),
+                        overwrite=True,
+                    )
+                    console.print(
+                        f"\n[bold green]✔ Successfully installed {len(installed_skills)} skill(s) into workspace (.agents/skills/):[/bold green]"
+                    )
+                    for sk in installed_skills:
+                        console.print(
+                            f"  • [bold {active_theme.secondary}]{sk.name}[/bold {active_theme.secondary}] - {sk.description}\n    [dim]({sk.path})[/dim]"
+                        )
+                    console.print()
+                except Exception as exc:
+                    console.print(f"[bold red]Error pulling skill:[/bold red] {exc}\n")
+            return True, effective_model, active_theme
+
+        skills_list = discover_skills(Path.cwd())
+        table = Table(
+            title="Available Skills",
+            show_header=True,
+            header_style=f"bold {active_theme.primary}",
+        )
+        table.add_column("Skill Name", style=f"bold {active_theme.secondary}", width=22)
+        table.add_column("Scope", style="dim", width=12)
+        table.add_column("Description")
+        if not skills_list:
+            table.add_row(
+                "No skills loaded",
+                "-",
+                "Add a folder with SKILL.md to .agents/skills/ or ~/.icarus/skills/",
+            )
+        else:
+            for sk in skills_list:
+                desc_snip = sk.description[:80] + ("..." if len(sk.description) > 80 else "")
+                table.add_row(sk.name, sk.scope, desc_snip)
+        console.print(table)
+        console.print()
+        return True, effective_model, active_theme
+
+    if cleaned == "/session":
+        title_text = "Active Remote Session Details" if is_remote else "Active Session Details"
+        table = Table(
+            title=title_text,
+            show_header=True,
+            header_style=f"bold {active_theme.primary}",
+        )
+        table.add_column("Property", style=f"bold {active_theme.secondary}", width=18)
+        table.add_column("Value")
+        table.add_row("Session ID", session_id)
+        if session_title:
+            table.add_row("Title", session_title)
+        table.add_row("Active Model", f"{effective_model} ({effective_provider})")
+        table.add_row("Messages Recorded", str(messages_count))
+        if tokens_count > 0:
+            table.add_row("Estimated Tokens", f"{tokens_count:,}")
+        table.add_row("Resume Command", f"icarus chat --resume {session_id}")
+        console.print(table)
+        console.print()
+        return True, effective_model, active_theme
+
+    if cleaned == "/clear":
+        console.clear()
+        return True, effective_model, active_theme
+
+    if cleaned.startswith("/"):
+        render_error(
+            f"Unknown command: '{cleaned}'",
+            reason="The specified command is not recognized.",
+            next_steps=[
+                "Type /help to see all available in-chat slash commands.",
+                "Enter regular text without a leading '/' to send a message to the agent.",
+            ],
+            console=console,
+        )
+        console.print()
+        return True, effective_model, active_theme
+
+    return False, effective_model, active_theme
 
 
 def format_duration(seconds: float) -> str:
@@ -223,6 +554,7 @@ def _run_remote_chat(
     cfg: Any,
     cfg_manager: ConfigManager,
     theme_name: str | None = None,
+    no_banner: bool = False,
 ) -> None:
     """Execute the interactive chat REPL loop against a remote Icarus API server."""
     should_close = False
@@ -305,6 +637,7 @@ def _run_remote_chat(
             mode=f"Icarus Interactive Chat (Remote: {server_label} - {server_url})",
             remote_url=server_url,
             theme=active_theme,
+            no_banner=no_banner,
         )
 
         if was_resumed:
@@ -347,12 +680,16 @@ def _run_remote_chat(
         prompt_session = InteractivePrompt(console=console, stdin=stdin, theme=active_theme)
         try:
             while True:
-                status_bar = (
-                    f"[bold {active_theme.primary}]⚡ {effective_model}[/bold {active_theme.primary}] [dim]│[/dim] "
-                    f"[dim]REMOTE ({server_label})[/dim] [dim]│[/dim] "
-                    f"[dim]/help for commands[/dim]"
+                render_status_bar(
+                    model=effective_model,
+                    provider=effective_provider,
+                    tokens_used=0,
+                    token_budget=128000,
+                    session_id=remote_session_id,
+                    mode=f"remote ({server_label})",
+                    theme=active_theme,
+                    console=console,
                 )
-                console.print(status_bar)
                 try:
                     user_input = prompt_session.read_input(
                         "> ", rprompt_text=f"{effective_model} · {effective_provider}"
@@ -369,181 +706,41 @@ def _run_remote_chat(
                 if cleaned in ("/exit", "/quit"):
                     break
 
-                if cleaned == "/help":
-                    table = Table(
-                        title="Available Slash Commands",
-                        show_header=True,
-                        header_style=f"bold {active_theme.primary}",
-                    )
-                    table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
-                    table.add_column("Description")
-                    table.add_row("/help", "Display available in-chat slash commands")
-                    table.add_row(
-                        "/connect [id]",
-                        "Connect essential tools (browser, stripe, github, slack, etc.)",
-                    )
-                    table.add_row(
-                        "/tools [name]", "List all tools (core & MCP) or inspect parameter schemas"
-                    )
-                    table.add_row(
-                        "/skills [pull <src>]", "List skills or pull/install from URL or repo"
-                    )
-                    table.add_row(
-                        "/theme [name]",
-                        "Change UI accent color (purple, cyan, green, amber, red, or hex)",
-                    )
-                    table.add_row("/clear", "Clear the terminal screen")
-                    table.add_row("/session", "Show active session details and message count")
-                    table.add_row("/exit", "Exit the chat REPL")
-                    console.print(table)
-                    continue
+                msgs_count = 0
+                with contextlib.suppress(Exception):
+                    msgs_count = len(asyncio.run(remote_client.list_messages(remote_session_id)))
 
-                if cleaned == "/connect" or cleaned.startswith("/connect "):
-                    parts = cleaned.split(maxsplit=1)
-                    conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
-                    from icarus_cli.tools_cmd import connect_tool_interactive
-
-                    connect_tool_interactive(console, connector_id=conn_id)
-                    continue
-
-                if cleaned == "/tools" or cleaned.startswith("/tools "):
-                    parts = cleaned.split(maxsplit=1)
-                    from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
-
-                    if len(parts) > 1 and parts[1].strip():
-                        render_tool_detail(console, tool_name=parts[1].strip())
-                    else:
-                        render_tools_table(console)
-                    continue
-
-                if cleaned == "/theme" or cleaned.startswith("/theme "):
-                    parts = cleaned.split(maxsplit=1)
-                    if len(parts) > 1 and parts[1].strip():
-                        new_theme_name = parts[1].strip()
-                        try:
-                            active_theme = set_theme(new_theme_name)
-                            prompt_session.theme = active_theme
-                            console.print(
-                                f"\n[bold green]✔ UI theme changed to[/bold green] [bold {active_theme.primary}]'{active_theme.name}'[/bold {active_theme.primary}]!\n"
-                            )
-                        except Exception as exc:
-                            console.print(f"[bold red]Theme error:[/bold red] {exc}")
-                    else:
-                        table = Table(
-                            title="Available UI Color Themes",
-                            show_header=True,
-                            header_style=f"bold {active_theme.primary}",
-                        )
-                        table.add_column("Theme", style="bold", width=14)
-                        table.add_column("Swatch", width=14)
-                        table.add_column("Hex", width=12)
-                        table.add_column("Description")
-                        table.add_column("Status", width=12)
-                        for th_name, th in list_themes().items():
-                            is_active = th_name == active_theme.name
-                            status = (
-                                "[bold green]✔ active[/bold green]"
-                                if is_active
-                                else "[dim]available[/dim]"
-                            )
-                            table.add_row(
-                                f"[{th.primary}]{th.name}[/{th.primary}]",
-                                f"[{th.primary}]████████[/{th.primary}]",
-                                th.primary,
-                                th.description,
-                                status,
-                            )
-                        console.print(table)
-                        console.print(
-                            f"[dim]* Type [bold {active_theme.primary}]/theme <name_or_hex>[/bold {active_theme.primary}] to switch theme (e.g. /theme cyan or /theme #FF007F).[/dim]\n"
+                handled, effective_model, active_theme = _handle_chat_slash_command(
+                    cleaned=cleaned,
+                    console=console,
+                    active_theme=active_theme,
+                    prompt_session=prompt_session,
+                    effective_model=effective_model,
+                    effective_provider=effective_provider,
+                    session_id=remote_session_id,
+                    session_title=session_title,
+                    messages_count=msgs_count,
+                    tokens_count=0,
+                    cfg_manager=cfg_manager,
+                    is_remote=True,
+                )
+                if handled:
+                    if cleaned == "/clear":
+                        render_workspace_header(
+                            console=console,
+                            model=effective_model,
+                            provider=effective_provider,
+                            session_id=remote_session_id,
+                            tokens_used=0,
+                            token_budget=128000,
+                            mode=f"Icarus Interactive Chat (Remote: {server_label} - {server_url})",
+                            remote_url=server_url,
+                            theme=active_theme,
+                            no_banner=no_banner,
                         )
                     continue
 
-                if cleaned == "/skills" or cleaned.startswith("/skills "):
-                    from icarus_core.skills import discover_skills, pull_skill
-
-                    parts = cleaned.split(maxsplit=2)
-                    subaction = parts[1].lower() if len(parts) > 1 else ""
-
-                    if subaction in ("pull", "install", "add"):
-                        if len(parts) < 3 or not parts[2].strip():
-                            console.print(
-                                "[yellow]Usage: [bold #C084FC]/skills pull <url_or_repo_or_path>[/bold #C084FC][/yellow]"
-                            )
-                            continue
-
-                        pull_src = parts[2].strip()
-                        with console.status(
-                            f"[bold #C084FC]Pulling external skill from '{pull_src}'...[/bold #C084FC]"
-                        ):
-                            try:
-                                installed_skills = pull_skill(
-                                    source=pull_src,
-                                    workspace_dir=Path.cwd(),
-                                    overwrite=True,
-                                )
-                                console.print(
-                                    f"\n[bold green]✔ Successfully installed {len(installed_skills)} skill(s) into workspace (.agents/skills/):[/bold green]"
-                                )
-                                for sk in installed_skills:
-                                    console.print(
-                                        f"  • [bold #E9D5FF]{sk.name}[/bold #E9D5FF] - {sk.description}\n    [dim]({sk.path})[/dim]"
-                                    )
-                                console.print()
-                            except Exception as exc:
-                                console.print(f"[bold red]Error pulling skill:[/bold red] {exc}")
-                        continue
-
-                    skills_list = discover_skills(Path.cwd())
-                    table = Table(
-                        title="Available Skills", show_header=True, header_style="bold #C084FC"
-                    )
-                    table.add_column("Skill Name", style="bold #E9D5FF", width=22)
-                    table.add_column("Scope", style="dim", width=12)
-                    table.add_column("Description")
-                    if not skills_list:
-                        table.add_row(
-                            "No skills loaded",
-                            "-",
-                            "Add a folder with SKILL.md to .agents/skills/ or ~/.icarus/skills/",
-                        )
-                    else:
-                        for sk in skills_list:
-                            desc_snip = sk.description[:80] + (
-                                "..." if len(sk.description) > 80 else ""
-                            )
-                            table.add_row(sk.name, sk.scope, desc_snip)
-                    console.print(table)
-                    continue
-
-                if cleaned == "/session":
-                    try:
-                        msgs = asyncio.run(remote_client.list_messages(remote_session_id))
-                        details = (
-                            f"[bold cyan]Active Remote Session Details[/bold cyan]\n"
-                            f"Server: [green]{server_label}[/green] ({server_url})\n"
-                            f"ID: [yellow]{remote_session_id}[/yellow]\n"
-                            f"Title: {session_title}\n"
-                            f"Messages: {len(msgs)}"
-                        )
-                        console.print(Panel(details, border_style="cyan"))
-                    except Exception as exc:
-                        console.print(f"[bold red]Error fetching session info:[/bold red] {exc}")
-                    continue
-
-                if cleaned == "/clear":
-                    console.clear()
-                    render_workspace_header(
-                        console=console,
-                        model=effective_model,
-                        provider=effective_provider,
-                        session_id=remote_session_id,
-                        tokens_used=0,
-                        token_budget=128000,
-                        remote_url=server_url,
-                        theme=active_theme,
-                    )
-                    continue
+                console.print(f"\n[bold white]You[/bold white] [dim]›[/dim] {cleaned}\n")
 
                 observer = RichAgentObserver(
                     console=console, stream_tokens=True, theme=active_theme
@@ -611,6 +808,7 @@ def run_chat(
     local: bool = False,
     client: RemoteAgentClient | None = None,
     theme_name: str | None = None,
+    no_banner: bool = False,
 ) -> None:
     """Execute the interactive chat REPL loop."""
     console = console or Console()
@@ -637,6 +835,7 @@ def run_chat(
             cfg=cfg,
             cfg_manager=cfg_manager,
             theme_name=theme_name,
+            no_banner=no_banner,
         )
         return
 
@@ -685,6 +884,7 @@ def run_chat(
             tokens_used=total_tokens,
             token_budget=getattr(cfg, "max_tokens_budget", 128000),
             theme=active_theme,
+            no_banner=no_banner,
         )
 
         # Load existing messages for context and replay if resumed
@@ -725,14 +925,16 @@ def run_chat(
         while True:
             total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
             token_budget = getattr(cfg, "max_tokens_budget", 128000)
-            pct = (total_tokens / token_budget * 100) if token_budget > 0 else 0.0
-            status_bar = (
-                f"[bold {active_theme.primary}]⚡ {effective_model}[/bold {active_theme.primary}] [dim]│[/dim] "
-                f"[bold {active_theme.secondary}]{total_tokens:,}[/bold {active_theme.secondary}][dim]/{token_budget:,} ({pct:.1f}%)[/dim] [dim]│[/dim] "
-                f"[dim]LOCAL RUNTIME[/dim] [dim]│[/dim] "
-                f"[dim]/help for commands[/dim]"
+            render_status_bar(
+                model=effective_model,
+                provider=effective_provider,
+                tokens_used=total_tokens,
+                token_budget=token_budget,
+                session_id=session.id,
+                mode="local",
+                theme=active_theme,
+                console=console,
             )
-            console.print(status_bar)
             try:
                 user_input = prompt_session.read_input(
                     "> ", rprompt_text=f"{effective_model} · {effective_provider}"
@@ -749,209 +951,34 @@ def run_chat(
             if cleaned in ("/exit", "/quit"):
                 break
 
-            if cleaned == "/help":
-                table = Table(
-                    title="Available Slash Commands",
-                    show_header=True,
-                    header_style=f"bold {active_theme.primary}",
-                )
-                table.add_column("Command", style=f"bold {active_theme.secondary}", width=20)
-                table.add_column("Description")
-                table.add_row("/help", "Display available in-chat slash commands")
-                table.add_row(
-                    "/connect [id]",
-                    "Connect essential tools (browser, stripe, github, slack, etc.)",
-                )
-                table.add_row(
-                    "/tools [name]", "List all tools (core & MCP) or inspect parameter schemas"
-                )
-                table.add_row(
-                    "/skills [pull <src>]", "List skills or pull/install from URL or repo"
-                )
-                table.add_row(
-                    "/theme [name]",
-                    "Change UI accent color (purple, cyan, green, amber, red, or hex)",
-                )
-                table.add_row("/models", "View and switch active model (Free vs Paid tiers)")
-                table.add_row("/clear", "Clear the terminal screen")
-                table.add_row("/session", "Show active session details and message count")
-                table.add_row("/exit", "Exit the chat REPL")
-                console.print(table)
-                continue
-
-            if cleaned == "/connect" or cleaned.startswith("/connect "):
-                parts = cleaned.split(maxsplit=1)
-                conn_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
-                from icarus_cli.tools_cmd import connect_tool_interactive
-
-                connect_tool_interactive(console, connector_id=conn_id)
-                continue
-
-            if cleaned == "/tools" or cleaned.startswith("/tools "):
-                parts = cleaned.split(maxsplit=1)
-                from icarus_cli.tools_cmd import render_tool_detail, render_tools_table
-
-                if len(parts) > 1 and parts[1].strip():
-                    render_tool_detail(console, tool_name=parts[1].strip())
-                else:
-                    render_tools_table(console)
-                continue
-
-            if cleaned == "/theme" or cleaned.startswith("/theme "):
-                parts = cleaned.split(maxsplit=1)
-                if len(parts) > 1 and parts[1].strip():
-                    new_theme_name = parts[1].strip()
-                    try:
-                        active_theme = set_theme(new_theme_name)
-                        prompt_session.theme = active_theme
-                        console.print(
-                            f"\n[bold green]✔ UI theme changed to[/bold green] [bold {active_theme.primary}]'{active_theme.name}'[/bold {active_theme.primary}]!\n"
-                        )
-                    except Exception as exc:
-                        console.print(f"[bold red]Theme error:[/bold red] {exc}")
-                else:
-                    table = Table(
-                        title="Available UI Color Themes",
-                        show_header=True,
-                        header_style=f"bold {active_theme.primary}",
-                    )
-                    table.add_column("Theme", style="bold", width=14)
-                    table.add_column("Swatch", width=14)
-                    table.add_column("Hex", width=12)
-                    table.add_column("Description")
-                    table.add_column("Status", width=12)
-                    for th_name, th in list_themes().items():
-                        is_active = th_name == active_theme.name
-                        status = (
-                            "[bold green]✔ active[/bold green]"
-                            if is_active
-                            else "[dim]available[/dim]"
-                        )
-                        table.add_row(
-                            f"[{th.primary}]{th.name}[/{th.primary}]",
-                            f"[{th.primary}]████████[/{th.primary}]",
-                            th.primary,
-                            th.description,
-                            status,
-                        )
-                    console.print(table)
-                    console.print(
-                        f"[dim]* Type [bold {active_theme.primary}]/theme <name_or_hex>[/bold {active_theme.primary}] to switch theme (e.g. /theme cyan or /theme #FF007F).[/dim]\n"
+            handled, effective_model, active_theme = _handle_chat_slash_command(
+                cleaned=cleaned,
+                console=console,
+                active_theme=active_theme,
+                prompt_session=prompt_session,
+                effective_model=effective_model,
+                effective_provider=effective_provider,
+                session_id=session.id,
+                session_title=session.title,
+                messages_count=len(session_mgr.get_messages(session.id)),
+                tokens_count=total_tokens,
+                cfg_manager=cfg_manager,
+            )
+            if handled:
+                if cleaned == "/clear":
+                    render_workspace_header(
+                        console=console,
+                        model=effective_model,
+                        provider=effective_provider,
+                        session_id=session.id,
+                        tokens_used=total_tokens,
+                        token_budget=token_budget,
+                        theme=active_theme,
+                        no_banner=no_banner,
                     )
                 continue
 
-            if cleaned == "/skills" or cleaned.startswith("/skills "):
-                from icarus_core.skills import discover_skills, pull_skill
-
-                parts = cleaned.split(maxsplit=2)
-                subaction = parts[1].lower() if len(parts) > 1 else ""
-
-                if subaction in ("pull", "install", "add"):
-                    if len(parts) < 3 or not parts[2].strip():
-                        console.print(
-                            "[yellow]Usage: [bold #C084FC]/skills pull <url_or_repo_or_path>[/bold #C084FC][/yellow]\n"
-                            "[dim]Example: /skills pull https://github.com/owner/skill-repo[/dim]\n"
-                            "[dim]Example: /skills pull https://raw.githubusercontent.com/.../SKILL.md[/dim]"
-                        )
-                        continue
-
-                    pull_src = parts[2].strip()
-                    with console.status(
-                        f"[bold #C084FC]Pulling external skill from '{pull_src}'...[/bold #C084FC]"
-                    ):
-                        try:
-                            installed_skills = pull_skill(
-                                source=pull_src,
-                                workspace_dir=Path.cwd(),
-                                overwrite=True,
-                            )
-                            console.print(
-                                f"\n[bold green]✔ Successfully installed {len(installed_skills)} skill(s) into workspace (.agents/skills/):[/bold green]"
-                            )
-                            for sk in installed_skills:
-                                console.print(
-                                    f"  • [bold #E9D5FF]{sk.name}[/bold #E9D5FF] - {sk.description}\n    [dim]({sk.path})[/dim]"
-                                )
-                            console.print()
-                        except Exception as exc:
-                            console.print(f"[bold red]Error pulling skill:[/bold red] {exc}")
-                    continue
-
-                skills_list = discover_skills(Path.cwd())
-                table = Table(
-                    title="Available Skills", show_header=True, header_style="bold #C084FC"
-                )
-                table.add_column("Skill Name", style="bold #E9D5FF", width=22)
-                table.add_column("Scope", style="dim", width=12)
-                table.add_column("Description")
-                if not skills_list:
-                    table.add_row(
-                        "No skills loaded",
-                        "-",
-                        "Add a folder with SKILL.md to .agents/skills/ or ~/.icarus/skills/",
-                    )
-                else:
-                    for sk in skills_list:
-                        desc_snip = sk.description[:80] + (
-                            "..." if len(sk.description) > 80 else ""
-                        )
-                        table.add_row(sk.name, sk.scope, desc_snip)
-                console.print(table)
-                console.print(
-                    "[dim]* To pull an external skill, run: [bold #C084FC]/skills pull <url_or_repo>[/bold #C084FC][/dim]\n"
-                    "[dim]* To create a skill, run: [bold #C084FC]icarus skills new <name>[/bold #C084FC].[/dim]\n"
-                )
-                continue
-
-            if cleaned == "/models":
-                cred = CredentialResolver().resolve(effective_provider)
-                with console.status(f"[cyan]Fetching models for '{effective_provider}'...[/cyan]"):
-                    models_list = fetch_provider_models(effective_provider, api_key=cred.secret)
-                if not models_list:
-                    console.print(
-                        f"[yellow]No models found for provider '{effective_provider}'.[/yellow]"
-                    )
-                else:
-                    render_models_table(
-                        models_list, current_model=effective_model, provider=effective_provider
-                    )
-                    chosen = select_model_interactive(models_list, current_model=effective_model)
-                    if chosen and chosen != effective_model:
-                        effective_model = chosen
-                        cfg = cfg_manager.load_config()
-                        cfg.model = chosen
-                        cfg_manager.save_config(cfg)
-                        console.print(
-                            f"[bold green]Switched active model to '{chosen}'![/bold green]"
-                        )
-                continue
-
-            if cleaned == "/session":
-                active_msgs = session_mgr.get_messages(session.id)
-                details = (
-                    f"[bold cyan]Active Session Details[/bold cyan]\n"
-                    f"ID: [yellow]{session.id}[/yellow]\n"
-                    f"Title: {session.title}\n"
-                    f"Mode: {session.mode}\n"
-                    f"Created At: {session.created_at.isoformat()}\n"
-                    f"Messages: {len(active_msgs)}"
-                )
-                console.print(Panel(details, border_style="cyan"))
-                continue
-
-            if cleaned == "/clear":
-                console.clear()
-                total_tokens = session_mgr.message_repo.get_session_token_total(session.id)
-                render_workspace_header(
-                    console=console,
-                    model=effective_model,
-                    provider=effective_provider,
-                    session_id=session.id,
-                    tokens_used=total_tokens,
-                    token_budget=getattr(cfg, "max_tokens_budget", 128000),
-                    theme=active_theme,
-                )
-                continue
+            console.print(f"\n[bold white]You[/bold white] [dim]›[/dim] {cleaned}\n")
 
             # Persist user message
             session_mgr.append_message(session.id, MessageRole.USER, cleaned)

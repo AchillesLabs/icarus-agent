@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, TextIO
 
 from icarus_contracts.tools import ToolCall, ToolResult
@@ -30,6 +31,7 @@ class RichAgentObserver:
         self._current_status = None
         self._active_step_lines = 0
         self._assistant_header_printed = False
+        self._tool_start_times: dict[str, float] = {}
 
     def on_token(self, delta: str) -> None:
         """Stream token deltas directly to configured output stream."""
@@ -134,11 +136,12 @@ class RichAgentObserver:
 
     def on_tool_start(self, tool_call: ToolCall) -> None:
         """Display step banner when a tool begins execution."""
+        self._tool_start_times[tool_call.id] = time.monotonic()
         args = tool_call.get_arguments_dict()
         action, detail, _ = self._format_action_labels(tool_call.name, args)
 
         self.console.print(
-            f"  [bold cyan]●[/bold cyan] [bold white]{action}[/bold white] [dim]v[/dim]\n"
+            f"  [bold {self.theme.primary}]◉[/bold {self.theme.primary}] [bold white]{action}[/bold white] [dim]v[/dim]\n"
             f"    [dim]{detail}[/dim]",
             highlight=False,
         )
@@ -158,6 +161,13 @@ class RichAgentObserver:
                 pass
             self._active_step_lines = 0
 
+        start_time = self._tool_start_times.pop(tool_result.call_id, None)
+        dur_str = ""
+        if start_time is not None:
+            elapsed = max(0.0, time.monotonic() - start_time)
+            if elapsed >= 0.1:
+                dur_str = f" [dim]({elapsed:.1f}s)[/dim]"
+
         _, _, completed_verb = self._format_action_labels(tool_result.name, {})
 
         if tool_result.error:
@@ -165,7 +175,7 @@ class RichAgentObserver:
             if len(err_snip) > 60:
                 err_snip = err_snip[:57] + "..."
             self.console.print(
-                f"  [bold red]✖[/bold red] [bold red]{tool_result.name} failed[/bold red] [dim]›[/dim] [red]{err_snip}[/red]",
+                f"  [bold red]✗[/bold red] [bold red]{tool_result.name} failed[/bold red]{dur_str} [dim]›[/dim] [red]{err_snip}[/red]",
                 highlight=False,
             )
             return
@@ -184,13 +194,13 @@ class RichAgentObserver:
             if summary_parts:
                 loc_summary = " ".join(summary_parts)
                 self.console.print(
-                    f"  [bold green]✔[/bold green] [bold white]Resolved location[/bold white] [dim]›[/dim] [cyan]{loc_summary}[/cyan]",
+                    f"  [bold green]✓[/bold green] [bold white]Resolved location[/bold white]{dur_str} [dim]›[/dim] [cyan]{loc_summary}[/cyan]",
                     highlight=False,
                 )
                 return
 
         self.console.print(
-            f"  [bold green]✔[/bold green] [bold white]{completed_verb}[/bold white]",
+            f"  [bold green]✓[/bold green] [bold white]{completed_verb}[/bold white]{dur_str}",
             highlight=False,
         )
 

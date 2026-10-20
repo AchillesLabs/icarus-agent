@@ -14,14 +14,27 @@ from typing import Any, TextIO
 from icarus_core.paths import get_icarus_home
 from icarus_core.theme import UITheme, get_theme
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.styles import Style
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from icarus_cli import __version__
+from icarus_cli.ui.branding import (
+    ICARUS_EMBLEM_ART,
+    ICARUS_LOGO_ASCII,
+)
+from icarus_cli.ui.branding import (
+    get_banner as _ui_get_banner,
+)
+from icarus_cli.ui.branding import (
+    get_sprite as _ui_get_sprite,
+)
+from icarus_cli.ui.branding import (
+    render_banner as _ui_render_banner,
+)
+from icarus_cli.ui.completion import IcarusSlashCompleter
 
 # Standard ANSI escape codes for alternate screen buffer
 ESC_ENTER_ALT_SCREEN = "\033[?1049h"
@@ -90,28 +103,16 @@ class AlternateScreenBuffer:
         self.exit()
 
 
-BANNER_ART = """█ █▀▀ ▄▀█ █▀█ █ █ ▄▀▀ ▄▄ ▄▀█ █▀▀ █▀▀ █▄ █ ▀█▀
-█ █▄▄ █▀█ █▀▄ █▄█ ▄▄█    █▀█ █▄█ ██▄ █ ▀█  █ """
-
-SPRITE_ART = """
-       ▄▄   ▄   ▄▄
-     ▄███▀ ▄█▄ ▀███▄
- ▄▄ ▄███▀ ▄███▄ ▀███▄ ▄▄
-  ▀████▄▄███████▄▄████▀
-   ▀█████████████████▀
-     ▀█████████████▀
-        ▀███████▀
-           ▀█▀"""
+BANNER_ART = ICARUS_LOGO_ASCII
+SPRITE_ART = ICARUS_EMBLEM_ART
 
 
 def get_banner(theme: UITheme | None = None) -> str:
-    th = theme or get_theme()
-    return f"[bold {th.primary}]{BANNER_ART}[/bold {th.primary}]"
+    return _ui_get_banner(theme=theme)
 
 
 def get_sprite(theme: UITheme | None = None) -> str:
-    th = theme or get_theme()
-    return f"[bold {th.primary}]{SPRITE_ART}[/bold {th.primary}]"
+    return _ui_get_sprite(theme=theme)
 
 
 ICARUS_BANNER = get_banner()
@@ -128,78 +129,21 @@ def render_workspace_header(
     mode: str = "Autonomous Personal Agent",
     remote_url: str | None = None,
     theme: UITheme | None = None,
+    no_banner: bool = False,
 ) -> None:
     """Render the top status dashboard with customizable theme accent and dynamic skills."""
-    th = theme or get_theme()
-    pct = (tokens_used / token_budget * 100) if token_budget > 0 else 0.0
-
-    try:
-        cwd = str(Path.cwd().resolve())
-    except Exception:
-        cwd = "Workspace"
-
-    status_badge = (
-        f"[bold cyan]REMOTE ({remote_url})[/bold cyan]"
-        if remote_url
-        else f"[bold {th.primary}]LOCAL RUNTIME[/bold {th.primary}]"
+    _ui_render_banner(
+        console=console,
+        model=model,
+        provider=provider,
+        session_id=session_id,
+        tokens_used=tokens_used,
+        token_budget=token_budget,
+        mode=mode,
+        remote_url=remote_url,
+        theme=theme,
+        no_banner=no_banner,
     )
-    tokens_info = (
-        f"[bold {th.secondary}]{tokens_used:,}[/bold {th.secondary}] / "
-        f"[dim]{token_budget:,}[/dim] [dim]({pct:.1f}%)[/dim]"
-    )
-
-    from icarus_core.skills import discover_skills
-
-    try:
-        discovered_skills = discover_skills(Path(cwd))
-    except Exception:
-        discovered_skills = []
-
-    if discovered_skills:
-        skill_names = [s.name for s in discovered_skills]
-        if len(skill_names) <= 3:
-            skills_preview = ", ".join(skill_names)
-        else:
-            skills_preview = f"{', '.join(skill_names[:3])}, +{len(skill_names) - 3} more"
-        skills_line = f"{skills_preview} ({len(discovered_skills)} skills)"
-    else:
-        skills_line = "None loaded (.agents/skills/)"
-
-    info_table = Table.grid(padding=(0, 2))
-    info_table.add_column(style=f"bold {th.primary}", width=7)
-    info_table.add_column()
-
-    info_table.add_row("Model", f"[bold white]{model}[/bold white] [dim]({provider})[/dim]")
-    info_table.add_row("Path", f"[dim]{cwd}[/dim]")
-    info_table.add_row("Session", f"[dim]{session_id}[/dim]")
-    info_table.add_row("Tools", "[dim]file, web, gmail, calendar, api, shell (21 tools)[/dim]")
-    info_table.add_row("Skills", f"[dim]{skills_line}[/dim]")
-    info_table.add_row("Cmds", "[dim]/help · /tools · /connect · /skills · /theme[/dim]")
-
-    main_grid = Table.grid(padding=(0, 2))
-    main_grid.add_column(width=26)
-    main_grid.add_column()
-    main_grid.add_row(get_sprite(th), info_table)
-
-    panel = Panel(
-        main_grid,
-        border_style=th.border,
-        title=f"[bold {th.secondary}]─── ICARUS AGENT CHAT v{__version__} ───[/bold {th.secondary}]",
-        subtitle=f"[dim]{mode}  •  {status_badge}  •  {tokens_info}[/dim]",
-        padding=(0, 1),
-    )
-
-    console.print()
-    console.print(get_banner(th))
-    console.print()
-    console.print(panel)
-    console.print(
-        f"[dim]Welcome to Icarus Agent! Type your message or [bold {th.primary}]/help[/bold {th.primary}] for commands.[/dim]"
-    )
-    console.print(
-        "[dim]* Tip: Icarus can search live flights, weather, compare prices, edit code, and manage tasks.[/dim]"
-    )
-    console.print()
 
 
 def get_history_file() -> Path:
@@ -210,7 +154,7 @@ def get_history_file() -> Path:
 
 
 class InteractivePrompt:
-    """Wraps prompt_toolkit.PromptSession with persistent history and keybindings.
+    """Wraps prompt_toolkit.PromptSession with persistent history, completion, and keybindings.
 
     Falls back cleanly to console.input or stdin in non-interactive/test environments.
     """
@@ -221,11 +165,13 @@ class InteractivePrompt:
         stdin: TextIO | None = None,
         history_file: Path | None = None,
         theme: UITheme | None = None,
+        completer: Completer | None = None,
     ) -> None:
         self.console = console or Console()
         self.stdin = stdin or sys.stdin
         self.history_path = history_file or get_history_file()
         self.theme = theme or get_theme()
+        self.completer = completer if completer is not None else IcarusSlashCompleter()
         self._session: PromptSession[str] | None = None
 
         if self.is_interactive:
@@ -240,7 +186,7 @@ class InteractivePrompt:
             return False
 
     def _init_prompt_toolkit(self) -> None:
-        """Initialize prompt_toolkit PromptSession with custom keybindings."""
+        """Initialize prompt_toolkit PromptSession with custom keybindings and autocomplete."""
         kb = KeyBindings()
 
         @kb.add("c-c")
@@ -253,10 +199,24 @@ class InteractivePrompt:
                 event.cli.output.write("\n")
                 raise KeyboardInterrupt
 
+        style = Style.from_dict(
+            {
+                "completion-menu.completion": "bg:#1e1e2e #cdd6f4",
+                "completion-menu.completion.current": "bg:#f59e0b #11111b bold",
+                "completion-menu.meta.completion": "bg:#181825 #a6adc8",
+                "completion-menu.meta.completion.current": "bg:#d97706 #11111b",
+                "scrollbar.background": "bg:#11111b",
+                "scrollbar.button": "bg:#45475a",
+            }
+        )
+
         try:
             self._session = PromptSession(
                 history=FileHistory(str(self.history_path)),
                 key_bindings=kb,
+                completer=self.completer,
+                complete_while_typing=True,
+                style=style,
             )
         except Exception:
             self._session = None
